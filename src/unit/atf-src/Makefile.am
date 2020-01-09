@@ -1,7 +1,4 @@
-#
-# Automated Testing Framework (atf)
-#
-# Copyright (c) 2007, 2008, 2009, 2010 The NetBSD Foundation, Inc.
+# Copyright (c) 2007 The NetBSD Foundation, Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -25,10 +22,11 @@
 # IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
 
+atf_aclocal_DATA =
 BUILT_SOURCES =
 CLEANFILES =
+DIST_HOOKS =
 EXTRA_DIST =
 bin_PROGRAMS =
 dist_man_MANS =
@@ -38,20 +36,23 @@ libexec_PROGRAMS =
 man_MANS =
 noinst_DATA =
 noinst_LTLIBRARIES =
+INSTALLCHECK_TARGETS =
+PHONY_TARGETS =
 
 ACLOCAL_AMFLAGS = -I m4
+AM_DISTCHECK_CONFIGURE_FLAGS = --enable-tools
 
 include admin/Makefile.am.inc
 include atf-c/Makefile.am.inc
 include atf-c++/Makefile.am.inc
-include atf-config/Makefile.am.inc
-include atf-report/Makefile.am.inc
-include atf-run/Makefile.am.inc
 include atf-sh/Makefile.am.inc
-include atf-version/Makefile.am.inc
 include bootstrap/Makefile.am.inc
 include doc/Makefile.am.inc
 include test-programs/Makefile.am.inc
+
+if ENABLE_TOOLS
+include tools/Makefile.am.inc
+endif
 
 #
 # Top-level distfile documents.
@@ -68,11 +69,16 @@ EXTRA_DIST += $(doc_DATA) INSTALL README
 TESTS_ENVIRONMENT = PATH=$(prefix)/bin:$${PATH} \
                     PKG_CONFIG_PATH=$(prefix)/lib/pkgconfig
 
-testsdir = $(exec_prefix)/tests
-pkgtestsdir = $(testsdir)/atf
+# Allow the caller to override the configuration file to passed to our
+# test runs below.
+KYUA_TEST_CONFIG_FILE = none
 
-installcheck-local: installcheck-atf
-.PHONY: installcheck-atf
+testsdir = $(exec_prefix)/tests
+pkgtestsdir = $(testsdir)/$(PACKAGE)
+
+if ENABLE_TOOLS
+INSTALLCHECK_TARGETS += installcheck-atf
+PHONY_TARGETS += installcheck-atf
 installcheck-atf:
 	logfile=$$(pwd)/installcheck.log; \
 	fifofile=$$(pwd)/installcheck.fifo; \
@@ -89,33 +95,65 @@ installcheck-atf:
 	     "installcheck.log; exit was $${res}"; \
 	test $${res} -eq 0
 CLEANFILES += installcheck.fifo installcheck.log
+endif
 
-pkgtests_DATA = Atffile
+PHONY_TARGETS += installcheck-kyua
+if HAVE_KYUA
+if !ENABLE_TOOLS
+INSTALLCHECK_TARGETS += installcheck-kyua
+endif
+installcheck-kyua:
+	cd $(pkgtestsdir) && $(TESTS_ENVIRONMENT) \
+	    $(KYUA) --config='$(KYUA_TEST_CONFIG_FILE)' test
+endif
+
+installcheck-local: $(INSTALLCHECK_TARGETS)
+
+pkgtests_DATA = Kyuafile
+if ENABLE_TOOLS
+pkgtests_DATA += Atffile
+endif
 EXTRA_DIST += $(pkgtests_DATA)
 
 BUILD_SH_TP = \
-	echo "Creating $${dst}"; \
-	echo "\#! $(bindir)/atf-sh" >$${dst}; \
-	cat $${src} >>$${dst}; \
-	chmod +x $${dst}
+	test -d "$$(dirname "$${dst}")" || mkdir -p "$$(dirname "$${dst}")"; \
+	echo "\#! $(bindir)/atf-sh" >"$${dst}"; \
+	if [ -n "$${substs}" ]; then \
+	    cat $${src} | sed $${substs} >>"$${dst}"; \
+	else \
+	    cat $${src} >>"$${dst}"; \
+	fi; \
+	chmod +x "$${dst}"
 
 #
 # Custom targets.
 #
 
-.PHONY:	depend
-depend:
+DIST_HOOKS += forbid-dist
+if ENABLE_TOOLS
+forbid-dist:
+	@true
+else
+forbid-dist:
+	@echo "Sorry; cannot make dist without the tools enabled."
+	@echo "Please reconfigure with --enable-tools."
+	@false
+endif
 
-.PHONY: clean-all
+PHONY_TARGETS += clean-all
 clean-all:
-	MTN="$(MTN)" $(SH) $(srcdir)/admin/clean-all.sh
+	GIT="$(GIT)" $(SH) $(srcdir)/admin/clean-all.sh
 
-.PHONY: release
-release:
-	$(SH) $(srcdir)/admin/release.sh $(PACKAGE_VERSION) $(DIST_ARCHIVES)
+.PHONY: $(PHONY_TARGETS)
 
-.PHONY: release-test
-release-test:
-	$(SH) $(srcdir)/admin/release-test.sh $(DIST_ARCHIVES)
+# TODO(jmmv): Remove after atf 0.22.
+install-data-hook:
+	cd $(DESTDIR)$(man3dir) && \
+	for binding in c c++ sh; do \
+	    rm -f "atf-$${binding}-api.3"; \
+	    $(LN_S) "atf-$${binding}.3" "atf-$${binding}-api.3"; \
+	done
+
+dist-hook: $(DIST_HOOKS)
 
 # vim: syntax=make:noexpandtab:shiftwidth=8:softtabstop=8

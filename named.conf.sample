@@ -86,7 +86,7 @@ logging
         channel default_debug {
                 file "data/named.run";
                 severity dynamic;
-        };	
+        };
 };
 
 /*
@@ -171,7 +171,7 @@ view "internal"
 		allow-update { key ddns_key; };
 		file "dynamic/my.ddns.internal.zone.db";
 		// put dynamically updateable zones in the slaves/ directory so named can update them
-	};			
+	};
 };
 
 key ddns_key

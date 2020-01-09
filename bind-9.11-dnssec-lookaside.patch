@@ -1,0 +1,49 @@
+From d5ca0a8f5d31dad4e77bdb8316853f703e68b60f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20Men=C5=A1=C3=ADk?= <pemensik@redhat.com>
+Date: Tue, 29 Jan 2019 21:26:33 +0100
+Subject: [PATCH 4/5] Accept dnssec-lookaside yes;
+
+Thread it the same way as "auto" value. Print a warning and ignore it.
+---
+ bin/named/server.c | 3 ++-
+ lib/bind9/check.c  | 8 +++++---
+ 2 files changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/bin/named/server.c b/bin/named/server.c
+index 0c8939d..93f9417 100644
+--- a/bin/named/server.c
++++ b/bin/named/server.c
+@@ -4615,7 +4615,8 @@ configure_view(dns_view_t *view, dns_viewlist_t *viewlist,
+ 			/* If "no", skip; if "auto", log warning */
+ 			if (!strcasecmp(dom, "no")) {
+ 				result = ISC_R_NOTFOUND;
+-			} else if (!strcasecmp(dom, "auto")) {
++			} else if (!strcasecmp(dom, "auto")
++			           || !strcasecmp(dom, "yes")) {
+ 				/*
+ 				 * Warning logged by libbind9.
+ 				 */
+diff --git a/lib/bind9/check.c b/lib/bind9/check.c
+index 1a3d534..f075de0 100644
+--- a/lib/bind9/check.c
++++ b/lib/bind9/check.c
+@@ -1176,11 +1176,13 @@ check_options(const cfg_obj_t *options, isc_log_t *logctx, isc_mem_t *mctx,
+ 				if (!strcasecmp(dlv, "no")) {
+ 					continue;
+ 				}
+-				if (!strcasecmp(dlv, "auto")) {
++				if (!strcasecmp(dlv, "auto")
++				    || !strcasecmp(dlv, "yes")) {
+ 					cfg_obj_log(obj, logctx,
+ 						    ISC_LOG_WARNING,
+-						    "dnssec-lookaside 'auto' "
+-						    "is no longer supported");
++						    "dnssec-lookaside '%s' "
++						    "is no longer supported",
++					            dlv);
+ 					continue;
+ 				}
+ 			}
+-- 
+2.20.1
+

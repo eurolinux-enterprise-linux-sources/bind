@@ -1,0 +1,41 @@
+From e1da251de9647872d776b70078556f4e3e21cad8 Mon Sep 17 00:00:00 2001
+From: Petr Mensik <pemensik@redhat.com>
+Date: Thu, 21 Feb 2019 12:36:17 +0100
+Subject: [PATCH] Disable autodetected ED448 algorithm support
+
+Implementation is broken in bind, disabled also in more recent versions.
+Makes bin/tests/system/dnssec fail.
+---
+ configure.in | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/configure.in b/configure.in
+index 1397c50..475ab9e 100644
+--- a/configure.in
++++ b/configure.in
+@@ -1964,6 +1964,9 @@ int main() {
+ }
+ ],
+ 		[AC_MSG_RESULT(yes)
++		# ED448 support is broken in BIND
++		# https://gitlab.isc.org/isc-projects/bind9/issues/225
++		# disable if autodetected, can be enabled by --with-eddsa=all
+ 		have_ed448="yes"],
+ 		[AC_MSG_RESULT(no)
+ 		have_ed448="no"],
+@@ -1976,8 +1979,10 @@ int main() {
+ 		esac
+ 		case $have_ed448 in
+ 		yes)
+-			AC_DEFINE(HAVE_OPENSSL_ED448, 1,
+-				  [Define if your OpenSSL version supports Ed448.])
++		# ED448 support is broken in BIND
++		# https://gitlab.isc.org/isc-projects/bind9/issues/225
++		#	AC_DEFINE(HAVE_OPENSSL_ED448, 1,
++		#		  [Define if your OpenSSL version supports Ed448.])
+ 			;;	   
+ 		*)
+ 			;;
+-- 
+2.20.1
+

@@ -15,7 +15,6 @@
  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: bdb.c,v 1.2 2011/10/11 00:09:02 each Exp $ */
 
 /*
  * BIND 9.1.x simple database driver
@@ -229,7 +228,8 @@ bdb_init(void)
 		NULL,
 		bdb_allnodes,
 		bdb_create,
-		bdb_destroy
+		bdb_destroy,
+		NULL /* lookup2 */
 	};
 
 	return dns_sdb_register(DRIVERNAME, &bdb_methods, NULL, 0, ns_g_mctx,

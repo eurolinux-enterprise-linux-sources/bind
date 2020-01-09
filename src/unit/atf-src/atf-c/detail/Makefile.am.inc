@@ -1,7 +1,4 @@
-#
-# Automated Testing Framework (atf)
-#
-# Copyright (c) 2007, 2008, 2009, 2010 The NetBSD Foundation, Inc.
+# Copyright (c) 2007 The NetBSD Foundation, Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -25,7 +22,6 @@
 # IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
 
 libatf_c_la_SOURCES += atf-c/detail/dynstr.c \
                        atf-c/detail/dynstr.h \
@@ -47,14 +43,16 @@ libatf_c_la_SOURCES += atf-c/detail/dynstr.c \
                        atf-c/detail/user.c \
                        atf-c/detail/user.h
 
-tests_atf_c_detail_DATA = atf-c/detail/Atffile
+tests_atf_c_detail_DATA = atf-c/detail/Atffile \
+                          atf-c/detail/Kyuafile
 tests_atf_c_detaildir = $(pkgtestsdir)/atf-c/detail
 EXTRA_DIST += $(tests_atf_c_detail_DATA)
 
 noinst_LTLIBRARIES += atf-c/detail/libtest_helpers.la
 atf_c_detail_libtest_helpers_la_SOURCES = atf-c/detail/test_helpers.c \
                                           atf-c/detail/test_helpers.h
-atf_c_detail_libtest_helpers_la_CPPFLAGS = -I$(srcdir)/atf-c
+atf_c_detail_libtest_helpers_la_CPPFLAGS = -I$(srcdir)/atf-c \
+                                           -DATF_INCLUDEDIR=\"$(includedir)\"
 
 tests_atf_c_detail_PROGRAMS = atf-c/detail/dynstr_test
 atf_c_detail_dynstr_test_SOURCES = atf-c/detail/dynstr_test.c
@@ -67,11 +65,6 @@ atf_c_detail_env_test_LDADD = atf-c/detail/libtest_helpers.la libatf-c.la
 tests_atf_c_detail_PROGRAMS += atf-c/detail/fs_test
 atf_c_detail_fs_test_SOURCES = atf-c/detail/fs_test.c
 atf_c_detail_fs_test_LDADD = atf-c/detail/libtest_helpers.la libatf-c.la
-
-tests_atf_c_detail_PROGRAMS += atf-c/detail/test_helpers_test
-atf_c_detail_test_helpers_test_SOURCES = atf-c/detail/test_helpers_test.c
-atf_c_detail_test_helpers_test_LDADD = atf-c/detail/libtest_helpers.la \
-                                       libatf-c.la
 
 tests_atf_c_detail_PROGRAMS += atf-c/detail/list_test
 atf_c_detail_list_test_SOURCES = atf-c/detail/list_test.c
@@ -99,5 +92,8 @@ atf_c_detail_text_test_LDADD = atf-c/detail/libtest_helpers.la libatf-c.la
 tests_atf_c_detail_PROGRAMS += atf-c/detail/user_test
 atf_c_detail_user_test_SOURCES = atf-c/detail/user_test.c
 atf_c_detail_user_test_LDADD = atf-c/detail/libtest_helpers.la libatf-c.la
+
+tests_atf_c_detail_PROGRAMS += atf-c/detail/version_helper
+atf_c_detail_version_helper_SOURCES = atf-c/detail/version_helper.c
 
 # vim: syntax=make:noexpandtab:shiftwidth=8:softtabstop=8

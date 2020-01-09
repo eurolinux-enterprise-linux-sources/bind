@@ -1,7 +1,4 @@
-#
-# Automated Testing Framework (atf)
-#
-# Copyright (c) 2007, 2008, 2010 The NetBSD Foundation, Inc.
+# Copyright (c) 2007 The NetBSD Foundation, Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -25,7 +22,6 @@
 # IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
 
 atf_test_case srcdir
 srcdir_head()
@@ -44,7 +40,7 @@ helper_subr() {
 EOF
 
     atf_check -s eq:0 -o match:'Calling helper' \
-        -o match:'This is a helper subroutine' -e empty ./work/misc_helpers \
+        -o match:'This is a helper subroutine' -e ignore ./work/misc_helpers \
         -s "$(pwd)"/work tp_srcdir
 }
 

@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: dst.h,v 1.34 2011/10/20 21:20:02 marka Exp $ */
 
 #ifndef DST_DST_H
 #define DST_DST_H 1
@@ -29,6 +21,8 @@
 #include <dns/log.h>
 #include <dns/name.h>
 #include <dns/secalg.h>
+#include <dns/ds.h>
+#include <dns/dsdigest.h>
 
 #include <dst/gssapi.h>
 
@@ -62,6 +56,8 @@ typedef struct dst_context 	dst_context_t;
 #define DST_ALG_ECCGOST		12
 #define DST_ALG_ECDSA256	13
 #define DST_ALG_ECDSA384	14
+#define DST_ALG_ED25519		15
+#define DST_ALG_ED448		16
 #define DST_ALG_HMACMD5		157
 #define DST_ALG_GSSAPI		160
 #define DST_ALG_HMACSHA1	161	/* XXXMPA */
@@ -69,6 +65,7 @@ typedef struct dst_context 	dst_context_t;
 #define DST_ALG_HMACSHA256	163	/* XXXMPA */
 #define DST_ALG_HMACSHA384	164	/* XXXMPA */
 #define DST_ALG_HMACSHA512	165	/* XXXMPA */
+#define DST_ALG_INDIRECT	252
 #define DST_ALG_PRIVATE		254
 #define DST_ALG_EXPAND		255
 #define DST_MAX_ALGS		255
@@ -95,7 +92,9 @@ typedef struct dst_context 	dst_context_t;
 #define DST_TIME_INACTIVE	4
 #define DST_TIME_DELETE 	5
 #define DST_TIME_DSPUBLISH 	6
-#define DST_MAX_TIMES		6
+#define DST_TIME_SYNCPUBLISH 	7
+#define DST_TIME_SYNCDELETE 	8
+#define DST_MAX_TIMES		8
 
 /* Numeric metadata definitions */
 #define DST_NUM_PREDECESSOR	0
@@ -168,6 +167,16 @@ dst_algorithm_supported(unsigned int alg);
  * \li	ISC_FALSE
  */
 
+isc_boolean_t
+dst_ds_digest_supported(unsigned int digest_type);
+/*%<
+ * Checks that a given digest algorithm is supported by DST.
+ *
+ * Returns:
+ * \li	ISC_TRUE
+ * \li	ISC_FALSE
+ */
+
 isc_result_t
 dst_context_create(dst_key_t *key, isc_mem_t *mctx, dst_context_t **dctxp);
 
@@ -175,6 +184,15 @@ isc_result_t
 dst_context_create2(dst_key_t *key, isc_mem_t *mctx,
 		    isc_logcategory_t *category, dst_context_t **dctxp);
 
+isc_result_t
+dst_context_create3(dst_key_t *key, isc_mem_t *mctx,
+		    isc_logcategory_t *category, isc_boolean_t useforsigning,
+		    dst_context_t **dctxp);
+
+isc_result_t
+dst_context_create4(dst_key_t *key, isc_mem_t *mctx,
+		    isc_logcategory_t *category, isc_boolean_t useforsigning,
+		    int maxbits, dst_context_t **dctxp);
 /*%<
  * Creates a context to be used for a sign or verify operation.
  *
@@ -278,6 +296,29 @@ dst_key_computesecret(const dst_key_t *pub, const dst_key_t *priv,
  *
  * Ensures:
  * \li	If successful, secret will contain the derived shared secret.
+ */
+
+isc_result_t
+dst_key_getfilename(dns_name_t *name, dns_keytag_t id, unsigned int alg,
+		    int type, const char *directory,
+		    isc_mem_t *mctx, isc_buffer_t *buf);
+/*%<
+ * Generates a key filename for the name, algorithm, and
+ * id, and places it in the buffer 'buf'. If directory is NULL, the
+ * current directory is assumed.
+ *
+ * Requires:
+ * \li	"name" is a valid absolute dns name.
+ * \li	"id" is a valid key tag identifier.
+ * \li	"alg" is a supported key algorithm.
+ * \li	"type" is DST_TYPE_PUBLIC, DST_TYPE_PRIVATE, or the bitwise union.
+ *		  DST_TYPE_KEY look for a KEY record otherwise DNSKEY
+ * \li	"mctx" is a valid memory context.
+ * \li	"buf" is not NULL.
+ *
+ * Returns:
+ * \li	ISC_R_SUCCESS
+ * \li	any other result indicates failure
  */
 
 isc_result_t
@@ -940,6 +981,12 @@ dst_key_setinactive(dst_key_t *key, isc_boolean_t inactive);
  * Requires:
  *	'key' to be valid.
  */
+
+void
+dst_key_setexternal(dst_key_t *key, isc_boolean_t value);
+
+isc_boolean_t
+dst_key_isexternal(dst_key_t *key);
 
 ISC_LANG_ENDDECLS
 

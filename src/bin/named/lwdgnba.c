@@ -1,18 +1,12 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2008  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /* $Id: lwdgnba.c,v 1.22 2008/01/14 23:46:56 tbox Exp $ */
@@ -226,12 +220,12 @@ ns_lwdclient_processgnba(ns_lwdclient_t *client, lwres_buffer_t *b) {
 		client->na.family = AF_INET;
 		if (req->addr.length != 4)
 			goto out;
-		memcpy(&client->na.type.in, req->addr.address, 4);
+		memmove(&client->na.type.in, req->addr.address, 4);
 	} else if (req->addr.family == LWRES_ADDRTYPE_V6) {
 		client->na.family = AF_INET6;
 		if (req->addr.length != 16)
 			goto out;
-		memcpy(&client->na.type.in6, req->addr.address, 16);
+		memmove(&client->na.type.in6, req->addr.address, 16);
 	} else {
 		goto out;
 	}

@@ -1,21 +1,16 @@
 /*
- * Copyright (C) 2004-2009  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: ifiter_ioctl.c,v 1.62 2009/01/18 23:48:14 tbox Exp $ */
+
+#include <isc/print.h>
 
 /*! \file
  * \brief
@@ -398,7 +393,7 @@ isc_interfaceiter_create(isc_mem_t *mctx, isc_interfaceiter_t **iterp) {
 static void
 get_inaddr(isc_netaddr_t *dst, struct in_addr *src) {
 	dst->family = AF_INET;
-	memcpy(&dst->type.in, src, sizeof(struct in_addr));
+	memmove(&dst->type.in, src, sizeof(struct in_addr));
 }
 
 static isc_result_t
@@ -409,7 +404,8 @@ internal_current_clusteralias(isc_interfaceiter_t *iter) {
 	memset(&iter->current, 0, sizeof(iter->current));
 	iter->current.af = iter->clua_sa.sa_family;
 	memset(iter->current.name, 0, sizeof(iter->current.name));
-	sprintf(iter->current.name, "clua%d", ci.aliasid);
+	snprintf(iter->current.name, sizeof(iter->current.name),
+		 "clua%d", ci.aliasid);
 	iter->current.flags = INTERFACE_F_UP;
 	get_inaddr(&iter->current.address, &ci.addr);
 	get_inaddr(&iter->current.netmask, &ci.netmask);
@@ -454,7 +450,7 @@ internal_current4(isc_interfaceiter_t *iter) {
 	ifrp = (struct ifreq *)((char *) iter->ifc.ifc_req + iter->pos);
 
 	memset(&ifreq, 0, sizeof(ifreq));
-	memcpy(&ifreq, ifrp, sizeof(ifreq));
+	memmove(&ifreq, ifrp, sizeof(ifreq));
 
 	family = ifreq.ifr_addr.sa_family;
 #if defined(ISC_PLATFORM_HAVEIPV6)
@@ -469,7 +465,7 @@ internal_current4(isc_interfaceiter_t *iter) {
 
 	INSIST(sizeof(ifreq.ifr_name) <= sizeof(iter->current.name));
 	memset(iter->current.name, 0, sizeof(iter->current.name));
-	memcpy(iter->current.name, ifreq.ifr_name, sizeof(ifreq.ifr_name));
+	memmove(iter->current.name, ifreq.ifr_name, sizeof(ifreq.ifr_name));
 
 	get_addr(family, &iter->current.address,
 		 (struct sockaddr *)&ifrp->ifr_addr, ifreq.ifr_name);
@@ -524,8 +520,8 @@ internal_current4(isc_interfaceiter_t *iter) {
 
 #if !defined(ISC_PLATFORM_HAVEIF_LADDRREQ) && defined(SIOCGLIFADDR)
 	memset(&lifreq, 0, sizeof(lifreq));
-	memcpy(lifreq.lifr_name, iter->current.name, sizeof(lifreq.lifr_name));
-	memcpy(&lifreq.lifr_addr, &iter->current.address.type.in6,
+	memmove(lifreq.lifr_name, iter->current.name, sizeof(lifreq.lifr_name));
+	memmove(&lifreq.lifr_addr, &iter->current.address.type.in6,
 	       sizeof(iter->current.address.type.in6));
 
 	if (ioctl(iter->socket, SIOCGLIFADDR, &lifreq) < 0) {
@@ -561,7 +557,8 @@ internal_current4(isc_interfaceiter_t *iter) {
 			bits = 8 - prefixlen;
 			prefixlen = 0;
 		}
-		iter->current.netmask.type.in6.s6_addr[i] = (~0 << bits) & 0xff;
+		iter->current.netmask.type.in6.s6_addr[i] =
+			(~0U << bits) & 0xff;
 	}
 	return (ISC_R_SUCCESS);
 
@@ -599,7 +596,7 @@ internal_current4(isc_interfaceiter_t *iter) {
 	 * Get the network mask.
 	 */
 	memset(&ifreq, 0, sizeof(ifreq));
-	memcpy(&ifreq, ifrp, sizeof(ifreq));
+	memmove(&ifreq, ifrp, sizeof(ifreq));
 	/*
 	 * Ignore the HP/UX warning about "integer overflow during
 	 * conversion.  It comes from its own macro definition,
@@ -637,7 +634,7 @@ internal_current6(isc_interfaceiter_t *iter) {
 	ifrp = (struct LIFREQ *)((char *) iter->lifc.lifc_req + iter->pos6);
 
 	memset(&lifreq, 0, sizeof(lifreq));
-	memcpy(&lifreq, ifrp, sizeof(lifreq));
+	memmove(&lifreq, ifrp, sizeof(lifreq));
 
 	family = lifreq.lifr_addr.ss_family;
 #ifdef ISC_PLATFORM_HAVEIPV6
@@ -652,7 +649,7 @@ internal_current6(isc_interfaceiter_t *iter) {
 
 	INSIST(sizeof(lifreq.lifr_name) <= sizeof(iter->current.name));
 	memset(iter->current.name, 0, sizeof(iter->current.name));
-	memcpy(iter->current.name, lifreq.lifr_name, sizeof(lifreq.lifr_name));
+	memmove(iter->current.name, lifreq.lifr_name, sizeof(lifreq.lifr_name));
 
 	get_addr(family, &iter->current.address,
 		 (struct sockaddr *)&lifreq.lifr_addr, lifreq.lifr_name);
@@ -739,7 +736,7 @@ internal_current6(isc_interfaceiter_t *iter) {
 	 * Get the network mask.  Netmask already zeroed.
 	 */
 	memset(&lifreq, 0, sizeof(lifreq));
-	memcpy(&lifreq, ifrp, sizeof(lifreq));
+	memmove(&lifreq, ifrp, sizeof(lifreq));
 
 #ifdef lifr_addrlen
 	/*
@@ -755,7 +752,7 @@ internal_current6(isc_interfaceiter_t *iter) {
 			bits = lifreq.lifr_addrlen - i;
 			bits = (bits < 8) ? (8 - bits) : 0;
 			iter->current.netmask.type.in6.s6_addr[i / 8] =
-				(~0 << bits) & 0xff;
+				(~0U << bits) & 0xff;
 		}
 
 		return (ISC_R_SUCCESS);

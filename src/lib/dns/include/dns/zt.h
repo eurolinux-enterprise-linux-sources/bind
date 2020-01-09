@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007, 2011  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: zt.h,v 1.40 2011/09/02 23:46:32 tbox Exp $ */
 
 #ifndef DNS_ZT_H
 #define DNS_ZT_H 1
@@ -90,7 +83,7 @@ dns_zt_unmount(dns_zt_t *zt, dns_zone_t *zone);
  */
 
 isc_result_t
-dns_zt_find(dns_zt_t *zt, dns_name_t *name, unsigned int options,
+dns_zt_find(dns_zt_t *zt, const dns_name_t *name, unsigned int options,
 	    dns_name_t *foundname, dns_zone_t **zone);
 /*%<
  * Find the best match for 'name' in 'zt'.  If foundname is non NULL
@@ -208,6 +201,26 @@ dns_zt_loadspending(dns_zt_t *zt);
  *
  * Requires:
  * \li	'zt' to be valid.
+ */
+
+void
+dns_zt_setviewcommit(dns_zt_t *zt);
+/*%<
+ * Commit dns_zone_setview() calls previously made for all zones in this
+ * zone table.
+ *
+ * Requires:
+ *\li	'view' to be valid.
+ */
+
+void
+dns_zt_setviewrevert(dns_zt_t *zt);
+/*%<
+ * Revert dns_zone_setview() calls previously made for all zones in this
+ * zone table.
+ *
+ * Requires:
+ *\li	'view' to be valid.
  */
 
 ISC_LANG_ENDDECLS

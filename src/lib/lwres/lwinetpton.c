@@ -1,18 +1,12 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1996-2001  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /*! \file lwinetpton.c
@@ -90,11 +84,12 @@ inet_pton4(const char *src, unsigned char *dst) {
 		const char *pch;
 
 		if ((pch = strchr(digits, ch)) != NULL) {
-			unsigned int new = *tp * 10 + (pch - digits);
+			unsigned int byte = *tp * 10;
 
-			if (new > 255)
+			byte += (unsigned int)(pch - digits);
+			if (byte > 255)
 				return (0);
-			*tp = new;
+			*tp = byte;
 			if (! saw_digit) {
 				if (++octets > 4)
 					return (0);
@@ -115,7 +110,7 @@ inet_pton4(const char *src, unsigned char *dst) {
 	}
 	if (octets < 4)
 		return (0);
-	memcpy(dst, tmp, NS_INADDRSZ);
+	memmove(dst, tmp, NS_INADDRSZ);
 	return (1);
 }
 
@@ -198,7 +193,7 @@ inet_pton6(const char *src, unsigned char *dst) {
 		 * Since some memmove()'s erroneously fail to handle
 		 * overlapping regions, we'll do the shift by hand.
 		 */
-		const int n = tp - colonp;
+		const int n = (int)(tp - colonp);
 		int i;
 
 		for (i = 1; i <= n; i++) {
@@ -209,6 +204,6 @@ inet_pton6(const char *src, unsigned char *dst) {
 	}
 	if (tp != endp)
 		return (0);
-	memcpy(dst, tmp, NS_IN6ADDRSZ);
+	memmove(dst, tmp, NS_IN6ADDRSZ);
 	return (1);
 }

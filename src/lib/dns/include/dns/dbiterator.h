@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2001  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: dbiterator.h,v 1.25 2007/06/19 23:47:16 tbox Exp $ */
 
 #ifndef DNS_DBITERATOR_H
 #define DNS_DBITERATOR_H 1
@@ -166,6 +159,8 @@ dns_dbiterator_seek(dns_dbiterator_t *iterator, dns_name_t *name);
  * Returns:
  *\li	#ISC_R_SUCCESS
  *\li	#ISC_R_NOTFOUND
+ *\li	#DNS_R_PARTIALMATCH
+ *	(node is at name above requested named when name has children)
  *
  *\li	Other results are possible, depending on the DB implementation.
  */
@@ -286,7 +281,7 @@ dns_dbiterator_setcleanmode(dns_dbiterator_t *iterator, isc_boolean_t mode);
  * Indicate that the given iterator is/is not cleaning the DB.
  *
  * Notes:
- *\li	When 'mode' is ISC_TRUE, 
+ *\li	When 'mode' is ISC_TRUE,
  *
  * Requires:
  *\li	'iterator' is a valid iterator.

@@ -1,28 +1,22 @@
 #!/bin/sh
 #
-# Copyright (C) 2013  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
-# Permission to use, copy, modify, and/or distribute this software for any
-# purpose with or without fee is hereby granted, provided that the above
-# copyright notice and this permission notice appear in all copies.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
-# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-# AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
-# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
-# OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-# PERFORMANCE OF THIS SOFTWARE.
+# See the COPYRIGHT file distributed with this work for additional
+# information regarding copyright ownership.
 
 SYSTEMTESTTOP=..
 . $SYSTEMTESTTOP/conf.sh
 
-KEYGEN="$KEYGEN -qr random.data"
+KEYGEN="$KEYGEN -qr $RANDFILE"
 
-sh clean.sh
+$SHELL clean.sh
 
 ln -s $CHECKZONE named-compilezone
-../../../tools/genrandom 400 random.data
 
 # Test 1: KSK goes inactive before successor is active
 dir=01-ksk-inactive
@@ -104,4 +98,34 @@ $SETTIME -K $dir -I +9mo -D +1y $zsk1 > /dev/null 2>&1
 zsk2=`$KEYGEN -K $dir -S $zsk1`
 # allow only 1 day between publication and activation
 $SETTIME -K $dir -P +269d $zsk2 > /dev/null 2>&1
+ksk1=`$KEYGEN -K $dir -3fk example.com`
+
+# Test 9: KSK goes inactive before successor is active, but checking ZSKs
+dir=09-check-zsk
+rm -f $dir/K*.key
+rm -f $dir/K*.private
+ksk1=`$KEYGEN -K $dir -3fk example.com`
+$SETTIME -K $dir -I +9mo -D +1y $ksk1 > /dev/null 2>&1
+ksk2=`$KEYGEN -K $dir -S $ksk1`
+$SETTIME -K $dir -I +7mo $ksk1 > /dev/null 2>&1
+zsk1=`$KEYGEN -K $dir -3 example.com`
+
+# Test 10: ZSK goes inactive before successor is active, but checking KSKs
+dir=10-check-ksk
+rm -f $dir/K*.key
+rm -f $dir/K*.private
+zsk1=`$KEYGEN -K $dir -3 example.com`
+$SETTIME -K $dir -I +9mo -D +1y $zsk1 > /dev/null 2>&1
+zsk2=`$KEYGEN -K $dir -S $zsk1`
+$SETTIME -K $dir -I +7mo $zsk1 > /dev/null 2>&1
+ksk1=`$KEYGEN -K $dir -3fk example.com`
+
+# Test 11: ZSK goes inactive before successor is active, but after cutoff
+dir=11-cutoff
+rm -f $dir/K*.key
+rm -f $dir/K*.private
+zsk1=`$KEYGEN -K $dir -3 example.com`
+$SETTIME -K $dir -I +18mo -D +2y $zsk1 > /dev/null 2>&1
+zsk2=`$KEYGEN -K $dir -S $zsk1`
+$SETTIME -K $dir -I +16mo $zsk1 > /dev/null 2>&1
 ksk1=`$KEYGEN -K $dir -3fk example.com`

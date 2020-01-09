@@ -1,21 +1,15 @@
 /*
- * Copyright (C) 2004-2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
+/* $Id: client.h,v 1.96 2012/01/31 23:47:31 tbox Exp $ */
 
 #ifndef NAMED_CLIENT_H
 #define NAMED_CLIENT_H 1
@@ -115,6 +109,7 @@ struct ns_client {
 	dns_tcpmsg_t		tcpmsg;
 	isc_boolean_t		tcpmsg_valid;
 	isc_timer_t *		timer;
+	isc_timer_t *		delaytimer;
 	isc_boolean_t 		timerset;
 	dns_message_t *		message;
 	isc_socketevent_t *	sendevent;
@@ -128,21 +123,31 @@ struct ns_client {
 	void			(*shutdown)(void *arg, isc_result_t result);
 	void 			*shutdown_arg;
 	ns_query_t		query;
-	isc_stdtime_t		requesttime;
+	isc_time_t		requesttime;
 	isc_stdtime_t		now;
+	isc_time_t		tnow;
 	dns_name_t		signername;   /*%< [T]SIG key name */
 	dns_name_t *		signer;	      /*%< NULL if not valid sig */
 	isc_boolean_t		mortal;	      /*%< Die after handling request */
+	isc_boolean_t		pipelined;   /*%< TCP queries not in sequence */
 	isc_quota_t		*tcpquota;
 	isc_quota_t		*recursionquota;
 	ns_interface_t		*interface;
+
 	isc_sockaddr_t		peeraddr;
 	isc_boolean_t		peeraddr_valid;
 	isc_netaddr_t		destaddr;
+	isc_sockaddr_t		destsockaddr;
+
+	isc_netaddr_t		ecs_addr;	/*%< EDNS client subnet */
+	isc_uint8_t		ecs_addrlen;
+	isc_uint8_t		ecs_scope;
+
 	struct in6_pktinfo	pktinfo;
+	isc_dscp_t		dscp;
 	isc_event_t		ctlevent;
-#ifdef ALLOW_FILTER_AAAA_ON_V4
-	dns_v4_aaaa_t		filter_aaaa;
+#ifdef ALLOW_FILTER_AAAA
+	dns_aaaa_t		filter_aaaa;
 #endif
 	/*%
 	 * Information about recent FORMERR response(s), for
@@ -159,6 +164,10 @@ struct ns_client {
 	ISC_LINK(ns_client_t)	link;
 	ISC_LINK(ns_client_t)	rlink;
 	ISC_QLINK(ns_client_t)	ilink;
+	unsigned char		cookie[8];
+	isc_uint32_t		expire;
+	unsigned char		*keytag;
+	isc_uint16_t		keytag_len;
 };
 
 typedef ISC_QUEUE(ns_client_t) client_queue_t;
@@ -167,17 +176,33 @@ typedef ISC_LIST(ns_client_t) client_list_t;
 #define NS_CLIENT_MAGIC			ISC_MAGIC('N','S','C','c')
 #define NS_CLIENT_VALID(c)		ISC_MAGIC_VALID(c, NS_CLIENT_MAGIC)
 
-#define NS_CLIENTATTR_TCP		0x001
-#define NS_CLIENTATTR_RA		0x002 /*%< Client gets recursive service */
-#define NS_CLIENTATTR_PKTINFO		0x004 /*%< pktinfo is valid */
-#define NS_CLIENTATTR_MULTICAST		0x008 /*%< recv'd from multicast */
-#define NS_CLIENTATTR_WANTDNSSEC	0x010 /*%< include dnssec records */
-#define NS_CLIENTATTR_WANTNSID          0x020 /*%< include nameserver ID */
-#ifdef ALLOW_FILTER_AAAA_ON_V4
-#define NS_CLIENTATTR_FILTER_AAAA	0x040 /*%< suppress AAAAs */
-#define NS_CLIENTATTR_FILTER_AAAA_RC	0x080 /*%< recursing for A against AAAA */
+#define NS_CLIENTATTR_TCP		0x0001
+#define NS_CLIENTATTR_RA		0x0002 /*%< Client gets recursive service */
+#define NS_CLIENTATTR_PKTINFO		0x0004 /*%< pktinfo is valid */
+#define NS_CLIENTATTR_MULTICAST		0x0008 /*%< recv'd from multicast */
+#define NS_CLIENTATTR_WANTDNSSEC	0x0010 /*%< include dnssec records */
+#define NS_CLIENTATTR_WANTNSID          0x0020 /*%< include nameserver ID */
+#ifdef ALLOW_FILTER_AAAA
+#define NS_CLIENTATTR_FILTER_AAAA	0x0040 /*%< suppress AAAAs */
+#define NS_CLIENTATTR_FILTER_AAAA_RC	0x0080 /*%< recursing for A against AAAA */
 #endif
-#define NS_CLIENTATTR_WANTAD		0x100 /*%< want AD in response if possible */
+#define NS_CLIENTATTR_WANTAD		0x0100 /*%< want AD in response if possible */
+#define NS_CLIENTATTR_WANTCOOKIE	0x0200 /*%< return a COOKIE */
+#define NS_CLIENTATTR_HAVECOOKIE	0x0400 /*%< has a valid COOKIE */
+#define NS_CLIENTATTR_WANTEXPIRE	0x0800 /*%< return seconds to expire */
+#define NS_CLIENTATTR_HAVEEXPIRE	0x1000 /*%< return seconds to expire */
+#define NS_CLIENTATTR_WANTOPT		0x2000 /*%< add opt to reply */
+#define NS_CLIENTATTR_HAVEECS		0x4000 /*%< received an ECS option */
+
+#define NS_CLIENTATTR_NOSETFC		0x8000 /*%< don't set servfail cache */
+
+/*
+ * Flag to use with the SERVFAIL cache to indicate
+ * that a query had the CD bit set.
+ */
+#define NS_FAILCACHE_CD		0x01
+
+
 
 extern unsigned int ns_client_requests;
 
@@ -284,6 +309,13 @@ ns_client_getsockaddr(ns_client_t *client);
  * currently being processed.
  */
 
+isc_sockaddr_t *
+ns_client_getdestaddr(ns_client_t *client);
+/*%<
+ * Get the destination address (server) for the request that is
+ * currently being processed.
+ */
+
 isc_result_t
 ns_client_checkaclsilent(ns_client_t *client, isc_netaddr_t *netaddr,
 			 dns_acl_t *acl, isc_boolean_t default_allow);
@@ -383,5 +415,9 @@ ns_client_isself(dns_view_t *myview, dns_tsigkey_t *mykey,
 
 isc_result_t
 ns_client_sourceip(dns_clientinfo_t *ci, isc_sockaddr_t **addrp);
+
+isc_result_t
+ns_client_addopt(ns_client_t *client, dns_message_t *message,
+		 dns_rdataset_t **opt);
 
 #endif /* NAMED_CLIENT_H */

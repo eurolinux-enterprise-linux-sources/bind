@@ -1,20 +1,13 @@
 /*
- * Copyright (C) 2007-2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: dnssec-keyfromlabel.c,v 1.38 2011/11/30 00:48:51 marka Exp $ */
 
 /*! \file */
 
@@ -32,6 +25,8 @@
 #include <isc/string.h>
 #include <isc/util.h>
 
+#include <pk11/site.h>
+
 #include <dns/dnssec.h>
 #include <dns/fixedname.h>
 #include <dns/keyvalues.h>
@@ -42,6 +37,10 @@
 #include <dns/secalg.h>
 
 #include <dst/dst.h>
+
+#ifdef PKCS11CRYPTO
+#include <pk11/result.h>
+#endif
 
 #include "dnssectool.h"
 
@@ -56,7 +55,8 @@ int verbose;
 static const char *algs = "RSA | RSAMD5 | DH | DSA | RSASHA1 |"
 			  " NSEC3DSA | NSEC3RSASHA1 |"
 			  " RSASHA256 | RSASHA512 | ECCGOST |"
-			  " ECDSAP256SHA256 | ECDSAP384SHA384";
+			  " ECDSAP256SHA256 | ECDSAP384SHA384 |"
+			  " ED25519 | ED448";
 
 ISC_PLATFORM_NORETURN_PRE static void
 usage(void) ISC_PLATFORM_NORETURN_POST;
@@ -76,10 +76,15 @@ usage(void) {
 			       "NSEC3RSASHA1 if using -3)\n");
 	fprintf(stderr, "    -3: use NSEC3-capable algorithm\n");
 	fprintf(stderr, "    -c class (default: IN)\n");
-#ifdef USE_PKCS11
-	fprintf(stderr, "    -E enginename (default: pkcs11)\n");
+	fprintf(stderr, "    -E <engine>:\n");
+#if defined(PKCS11CRYPTO)
+	fprintf(stderr, "        path to PKCS#11 provider library "
+				"(default is %s)\n", PK11_LIB_LOCATION);
+#elif defined(USE_PKCS11)
+	fprintf(stderr, "        name of an OpenSSL engine to use "
+				"(default is \"pkcs11\")\n");
 #else
-	fprintf(stderr, "    -E enginename\n");
+	fprintf(stderr, "        name of an OpenSSL engine to use\n");
 #endif
 	fprintf(stderr, "    -f keyflag: KSK | REVOKE\n");
 	fprintf(stderr, "    -K directory: directory in which to place "
@@ -94,15 +99,25 @@ usage(void) {
 		"(default: AUTHCONF)\n");
 	fprintf(stderr, "    -y: permit keys that might collide\n");
 	fprintf(stderr, "    -v verbose level\n");
+	fprintf(stderr, "    -V: print version information\n");
 	fprintf(stderr, "Date options:\n");
 	fprintf(stderr, "    -P date/[+-]offset: set key publication date\n");
+	fprintf(stderr, "    -P sync date/[+-]offset: set CDS and CDNSKEY "
+			"publication date\n");
 	fprintf(stderr, "    -A date/[+-]offset: set key activation date\n");
 	fprintf(stderr, "    -R date/[+-]offset: set key revocation date\n");
 	fprintf(stderr, "    -I date/[+-]offset: set key inactivation date\n");
 	fprintf(stderr, "    -D date/[+-]offset: set key deletion date\n");
+	fprintf(stderr, "    -D sync date/[+-]offset: set CDS and CDNSKEY "
+			"deletion date\n");
 	fprintf(stderr, "    -G: generate key only; do not set -P or -A\n");
 	fprintf(stderr, "    -C: generate a backward-compatible key, omitting"
 			" all dates\n");
+	fprintf(stderr, "    -S <key>: generate a successor to an existing "
+				      "key\n");
+	fprintf(stderr, "    -i <interval>: prepublication interval for "
+					   "successor key "
+					   "(default: 30 days)\n");
 	fprintf(stderr, "Output:\n");
 	fprintf(stderr, "     K<name>+<alg>+<id>.key, "
 			"K<name>+<alg>+<id>.private\n");
@@ -115,8 +130,10 @@ main(int argc, char **argv) {
 	char		*algname = NULL, *freeit = NULL;
 	char		*nametype = NULL, *type = NULL;
 	const char	*directory = NULL;
+	const char	*predecessor = NULL;
+	dst_key_t	*prevkey = NULL;
 #ifdef USE_PKCS11
-	const char	*engine = "pkcs11";
+	const char	*engine = PKCS11_ENGINE;
 #else
 	const char	*engine = NULL;
 #endif
@@ -142,8 +159,9 @@ main(int argc, char **argv) {
 	char		*label = NULL;
 	dns_ttl_t	ttl = 0;
 	isc_stdtime_t	publish = 0, activate = 0, revoke = 0;
-	isc_stdtime_t	inactive = 0, delete = 0;
+	isc_stdtime_t	inactive = 0, deltime = 0;
 	isc_stdtime_t	now;
+	int		prepub = -1;
 	isc_boolean_t	setpub = ISC_FALSE, setact = ISC_FALSE;
 	isc_boolean_t	setrev = ISC_FALSE, setinact = ISC_FALSE;
 	isc_boolean_t	setdel = ISC_FALSE, setttl = ISC_FALSE;
@@ -155,21 +173,26 @@ main(int argc, char **argv) {
 	isc_boolean_t   avoid_collisions = ISC_TRUE;
 	isc_boolean_t	exact;
 	unsigned char	c;
+	isc_stdtime_t	syncadd = 0, syncdel = 0;
+	isc_boolean_t	unsetsyncadd = ISC_FALSE, setsyncadd = ISC_FALSE;
+	isc_boolean_t	unsetsyncdel = ISC_FALSE, setsyncdel = ISC_FALSE;
 
 	if (argc == 1)
 		usage();
 
 	RUNTIME_CHECK(isc_mem_create(0, 0, &mctx) == ISC_R_SUCCESS);
 
+#ifdef PKCS11CRYPTO
+	pk11_result_register();
+#endif
 	dns_result_register();
 
 	isc_commandline_errprint = ISC_FALSE;
 
 	isc_stdtime_get(&now);
 
-	while ((ch = isc_commandline_parse(argc, argv,
-			"3a:Cc:E:f:K:kl:L:n:p:t:v:yFhGP:A:R:I:D:")) != -1)
-	{
+#define CMDLINE_FLAGS "3A:a:Cc:D:E:Ff:GhI:i:kK:L:l:n:P:p:R:S:t:v:Vy"
+	while ((ch = isc_commandline_parse(argc, argv, CMDLINE_FLAGS)) != -1) {
 	    switch (ch) {
 		case '3':
 			use_nsec3 = ISC_TRUE;
@@ -207,10 +230,7 @@ main(int argc, char **argv) {
 			options |= DST_TYPE_KEY;
 			break;
 		case 'L':
-			if (strcmp(isc_commandline_argument, "none") == 0)
-				ttl = 0;
-			else
-				ttl = strtottl(isc_commandline_argument);
+			ttl = strtottl(isc_commandline_argument);
 			setttl = ISC_TRUE;
 			break;
 		case 'l':
@@ -240,64 +260,76 @@ main(int argc, char **argv) {
 			genonly = ISC_TRUE;
 			break;
 		case 'P':
+			/* -Psync ? */
+			if (isoptarg("sync", argv, usage)) {
+				if (unsetsyncadd || setsyncadd)
+					fatal("-P sync specified more than "
+					      "once");
+
+				syncadd = strtotime(isc_commandline_argument,
+						   now, now, &setsyncadd);
+				unsetsyncadd = !setsyncadd;
+				break;
+			}
+			/* -Pdnskey ? */
+			(void)isoptarg("dnskey", argv, usage);
 			if (setpub || unsetpub)
 				fatal("-P specified more than once");
 
-			if (strcasecmp(isc_commandline_argument, "none")) {
-				setpub = ISC_TRUE;
-				publish = strtotime(isc_commandline_argument,
-						    now, now);
-			} else {
-				unsetpub = ISC_TRUE;
-			}
+			publish = strtotime(isc_commandline_argument,
+					    now, now, &setpub);
+			unsetpub = !setpub;
 			break;
 		case 'A':
 			if (setact || unsetact)
 				fatal("-A specified more than once");
 
-			if (strcasecmp(isc_commandline_argument, "none")) {
-				setact = ISC_TRUE;
-				activate = strtotime(isc_commandline_argument,
-						     now, now);
-			} else {
-				unsetact = ISC_TRUE;
-			}
+			activate = strtotime(isc_commandline_argument,
+					     now, now, &setact);
+			unsetact = !setact;
 			break;
 		case 'R':
 			if (setrev || unsetrev)
 				fatal("-R specified more than once");
 
-			if (strcasecmp(isc_commandline_argument, "none")) {
-				setrev = ISC_TRUE;
-				revoke = strtotime(isc_commandline_argument,
-						   now, now);
-			} else {
-				unsetrev = ISC_TRUE;
-			}
+			revoke = strtotime(isc_commandline_argument,
+					   now, now, &setrev);
+			unsetrev = !setrev;
 			break;
 		case 'I':
 			if (setinact || unsetinact)
 				fatal("-I specified more than once");
 
-			if (strcasecmp(isc_commandline_argument, "none")) {
-				setinact = ISC_TRUE;
-				inactive = strtotime(isc_commandline_argument,
-						     now, now);
-			} else {
-				unsetinact = ISC_TRUE;
-			}
+			inactive = strtotime(isc_commandline_argument,
+					     now, now, &setinact);
+			unsetinact = !setinact;
 			break;
 		case 'D':
+			/* -Dsync ? */
+			if (isoptarg("sync", argv, usage)) {
+				if (unsetsyncdel || setsyncdel)
+					fatal("-D sync specified more than "
+					      "once");
+
+				syncdel = strtotime(isc_commandline_argument,
+						   now, now, &setsyncdel);
+				unsetsyncdel = !setsyncdel;
+				break;
+			}
+			/* -Ddnskey ? */
+			(void)isoptarg("dnskey", argv, usage);
 			if (setdel || unsetdel)
 				fatal("-D specified more than once");
 
-			if (strcasecmp(isc_commandline_argument, "none")) {
-				setdel = ISC_TRUE;
-				delete = strtotime(isc_commandline_argument,
-						   now, now);
-			} else {
-				unsetdel = ISC_TRUE;
-			}
+			deltime = strtotime(isc_commandline_argument,
+					    now, now, &setdel);
+			unsetdel = !setdel;
+			break;
+		case 'S':
+			predecessor = isc_commandline_argument;
+			break;
+		case 'i':
+			prepub = strtottl(isc_commandline_argument);
 			break;
 		case 'F':
 			/* Reserved for FIPS mode */
@@ -308,7 +340,12 @@ main(int argc, char **argv) {
 					program, isc_commandline_option);
 			/* FALLTHROUGH */
 		case 'h':
+			/* Does not return. */
 			usage();
+
+		case 'V':
+			/* Does not return. */
+			version(program);
 
 		default:
 			fprintf(stderr, "%s: unhandled option -%c\n",
@@ -325,80 +362,207 @@ main(int argc, char **argv) {
 		fatal("could not initialize dst: %s",
 		      isc_result_totext(ret));
 
-	setup_logging(verbose, mctx, &log);
+	setup_logging(mctx, &log);
 
-	if (label == NULL)
-		fatal("the key label was not specified");
-	if (argc < isc_commandline_index + 1)
-		fatal("the key name was not specified");
-	if (argc > isc_commandline_index + 1)
-		fatal("extraneous arguments");
+	if (predecessor == NULL) {
+		if (label == NULL)
+			fatal("the key label was not specified");
+		if (argc < isc_commandline_index + 1)
+			fatal("the key name was not specified");
+		if (argc > isc_commandline_index + 1)
+			fatal("extraneous arguments");
 
-	if (strchr(label, ':') == NULL &&
-	    engine != NULL && strlen(engine) != 0U) {
-		char *l;
-		int len;
-
-		len = strlen(label) + strlen(engine) + 2;
-		l = isc_mem_allocate(mctx, len);
-		if (l == NULL)
-			fatal("cannot allocate memory");
-		snprintf(l, len, "%s:%s", engine, label);
-		isc_mem_free(mctx, label);
-		label = l;
-	}
-
-	if (algname == NULL) {
-		if (use_nsec3)
-			algname = strdup(DEFAULT_NSEC3_ALGORITHM);
-		else
-			algname = strdup(DEFAULT_ALGORITHM);
-		if (algname == NULL)
-			fatal("strdup failed");
-		freeit = algname;
-		if (verbose > 0)
-			fprintf(stderr, "no algorithm specified; "
-				"defaulting to %s\n", algname);
-	}
-
-	if (strcasecmp(algname, "RSA") == 0) {
-		fprintf(stderr, "The use of RSA (RSAMD5) is not recommended.\n"
-				"If you still wish to use RSA (RSAMD5) please "
-				"specify \"-a RSAMD5\"\n");
-		if (freeit != NULL)
-			free(freeit);
-		return (1);
-	} else {
-		r.base = algname;
-		r.length = strlen(algname);
-		ret = dns_secalg_fromtext(&alg, &r);
+		name = dns_fixedname_initname(&fname);
+		isc_buffer_init(&buf, argv[isc_commandline_index],
+				strlen(argv[isc_commandline_index]));
+		isc_buffer_add(&buf, strlen(argv[isc_commandline_index]));
+		ret = dns_name_fromtext(name, &buf, dns_rootname, 0, NULL);
 		if (ret != ISC_R_SUCCESS)
-			fatal("unknown algorithm %s", algname);
-		if (alg == DST_ALG_DH)
-			options |= DST_TYPE_KEY;
-	}
+			fatal("invalid key name %s: %s",
+			      argv[isc_commandline_index],
+			      isc_result_totext(ret));
 
-	if (use_nsec3 &&
-	    alg != DST_ALG_NSEC3DSA && alg != DST_ALG_NSEC3RSASHA1 &&
-	    alg != DST_ALG_RSASHA256 && alg != DST_ALG_RSASHA512 &&
-	    alg != DST_ALG_ECCGOST &&
-	    alg != DST_ALG_ECDSA256 && alg != DST_ALG_ECDSA384) {
-		fatal("%s is incompatible with NSEC3; "
-		      "do not use the -3 option", algname);
-	}
+		if (strchr(label, ':') == NULL) {
+			char *l;
+			int len;
 
-	if (type != NULL && (options & DST_TYPE_KEY) != 0) {
-		if (strcasecmp(type, "NOAUTH") == 0)
-			flags |= DNS_KEYTYPE_NOAUTH;
-		else if (strcasecmp(type, "NOCONF") == 0)
-			flags |= DNS_KEYTYPE_NOCONF;
-		else if (strcasecmp(type, "NOAUTHCONF") == 0) {
-			flags |= (DNS_KEYTYPE_NOAUTH | DNS_KEYTYPE_NOCONF);
+			len = strlen(label) + 8;
+			l = isc_mem_allocate(mctx, len);
+			if (l == NULL)
+				fatal("cannot allocate memory");
+			snprintf(l, len, "pkcs11:%s", label);
+			isc_mem_free(mctx, label);
+			label = l;
 		}
-		else if (strcasecmp(type, "AUTHCONF") == 0)
-			/* nothing */;
-		else
-			fatal("invalid type %s", type);
+
+		if (algname == NULL) {
+			if (use_nsec3)
+				algname = strdup(DEFAULT_NSEC3_ALGORITHM);
+			else
+				algname = strdup(DEFAULT_ALGORITHM);
+			if (algname == NULL)
+				fatal("strdup failed");
+			freeit = algname;
+			if (verbose > 0)
+				fprintf(stderr, "no algorithm specified; "
+					"defaulting to %s\n", algname);
+		}
+
+		if (strcasecmp(algname, "RSA") == 0) {
+#ifndef PK11_MD5_DISABLE
+			fprintf(stderr, "The use of RSA (RSAMD5) is not "
+					"recommended.\nIf you still wish to "
+					"use RSA (RSAMD5) please specify "
+					"\"-a RSAMD5\"\n");
+#else
+			fprintf(stderr,
+				"The use of RSA (RSAMD5) was disabled\n");
+			if (freeit != NULL)
+				free(freeit);
+			return (1);
+		} else if (strcasecmp(algname, "RSAMD5") == 0) {
+			fprintf(stderr, "The use of RSAMD5 was disabled\n");
+#endif
+			if (freeit != NULL)
+				free(freeit);
+			return (1);
+		} else {
+			r.base = algname;
+			r.length = strlen(algname);
+			ret = dns_secalg_fromtext(&alg, &r);
+			if (ret != ISC_R_SUCCESS)
+				fatal("unknown algorithm %s", algname);
+			if (alg == DST_ALG_DH)
+				options |= DST_TYPE_KEY;
+		}
+
+		if (use_nsec3 &&
+		    alg != DST_ALG_NSEC3DSA && alg != DST_ALG_NSEC3RSASHA1 &&
+		    alg != DST_ALG_RSASHA256 && alg != DST_ALG_RSASHA512 &&
+		    alg != DST_ALG_ECCGOST &&
+		    alg != DST_ALG_ECDSA256 && alg != DST_ALG_ECDSA384 &&
+		    alg != DST_ALG_ED25519 && alg != DST_ALG_ED448) {
+			fatal("%s is incompatible with NSEC3; "
+			      "do not use the -3 option", algname);
+		}
+
+		if (type != NULL && (options & DST_TYPE_KEY) != 0) {
+			if (strcasecmp(type, "NOAUTH") == 0)
+				flags |= DNS_KEYTYPE_NOAUTH;
+			else if (strcasecmp(type, "NOCONF") == 0)
+				flags |= DNS_KEYTYPE_NOCONF;
+			else if (strcasecmp(type, "NOAUTHCONF") == 0)
+				flags |= (DNS_KEYTYPE_NOAUTH |
+					  DNS_KEYTYPE_NOCONF);
+			else if (strcasecmp(type, "AUTHCONF") == 0)
+				/* nothing */;
+			else
+				fatal("invalid type %s", type);
+		}
+
+		if (!oldstyle && prepub > 0) {
+			if (setpub && setact && (activate - prepub) < publish)
+				fatal("Activation and publication dates "
+				      "are closer together than the\n\t"
+				      "prepublication interval.");
+
+			if (!setpub && !setact) {
+				setpub = setact = ISC_TRUE;
+				publish = now;
+				activate = now + prepub;
+			} else if (setpub && !setact) {
+				setact = ISC_TRUE;
+				activate = publish + prepub;
+			} else if (setact && !setpub) {
+				setpub = ISC_TRUE;
+				publish = activate - prepub;
+			}
+
+			if ((activate - prepub) < now)
+				fatal("Time until activation is shorter "
+				      "than the\n\tprepublication interval.");
+		}
+	} else {
+		char keystr[DST_KEY_FORMATSIZE];
+		isc_stdtime_t when;
+		int major, minor;
+
+		if (prepub == -1)
+			prepub = (30 * 86400);
+
+		if (algname != NULL)
+			fatal("-S and -a cannot be used together");
+		if (nametype != NULL)
+			fatal("-S and -n cannot be used together");
+		if (type != NULL)
+			fatal("-S and -t cannot be used together");
+		if (setpub || unsetpub)
+			fatal("-S and -P cannot be used together");
+		if (setact || unsetact)
+			fatal("-S and -A cannot be used together");
+		if (use_nsec3)
+			fatal("-S and -3 cannot be used together");
+		if (oldstyle)
+			fatal("-S and -C cannot be used together");
+		if (genonly)
+			fatal("-S and -G cannot be used together");
+
+		ret = dst_key_fromnamedfile(predecessor, directory,
+					    DST_TYPE_PUBLIC | DST_TYPE_PRIVATE,
+					    mctx, &prevkey);
+		if (ret != ISC_R_SUCCESS)
+			fatal("Invalid keyfile %s: %s",
+			      predecessor, isc_result_totext(ret));
+		if (!dst_key_isprivate(prevkey))
+			fatal("%s is not a private key", predecessor);
+
+		name = dst_key_name(prevkey);
+		alg = dst_key_alg(prevkey);
+		flags = dst_key_flags(prevkey);
+
+#ifdef PK11_MD5_DISABLE
+		if (alg == DST_ALG_RSAMD5)
+			fatal("Key %s uses disabled RSAMD5", predecessor);
+#endif
+
+		dst_key_format(prevkey, keystr, sizeof(keystr));
+		dst_key_getprivateformat(prevkey, &major, &minor);
+		if (major != DST_MAJOR_VERSION || minor < DST_MINOR_VERSION)
+			fatal("Key %s has incompatible format version %d.%d\n\t"
+			      "It is not possible to generate a successor key.",
+			      keystr, major, minor);
+
+		ret = dst_key_gettime(prevkey, DST_TIME_ACTIVATE, &when);
+		if (ret != ISC_R_SUCCESS)
+			fatal("Key %s has no activation date.\n\t"
+			      "You must use dnssec-settime -A to set one "
+			      "before generating a successor.", keystr);
+
+		ret = dst_key_gettime(prevkey, DST_TIME_INACTIVE, &activate);
+		if (ret != ISC_R_SUCCESS)
+			fatal("Key %s has no inactivation date.\n\t"
+			      "You must use dnssec-settime -I to set one "
+			      "before generating a successor.", keystr);
+
+		publish = activate - prepub;
+		if (publish < now)
+			fatal("Key %s becomes inactive\n\t"
+			      "sooner than the prepublication period "
+			      "for the new key ends.\n\t"
+			      "Either change the inactivation date with "
+			      "dnssec-settime -I,\n\t"
+			      "or use the -i option to set a shorter "
+			      "prepublication interval.", keystr);
+
+		ret = dst_key_gettime(prevkey, DST_TIME_DELETE, &when);
+		if (ret != ISC_R_SUCCESS)
+			fprintf(stderr, "%s: WARNING: Key %s has no removal "
+					"date;\n\t it will remain in the zone "
+					"indefinitely after rollover.\n\t "
+					"You can use dnssec-settime -D to "
+					"change this.\n", program, keystr);
+
+		setpub = setact = ISC_TRUE;
 	}
 
 	if (nametype == NULL) {
@@ -446,21 +610,16 @@ main(int argc, char **argv) {
 		fatal("a key with algorithm '%s' cannot be a zone key",
 		      algname);
 
-	dns_fixedname_init(&fname);
-	name = dns_fixedname_name(&fname);
-	isc_buffer_init(&buf, argv[isc_commandline_index],
-			strlen(argv[isc_commandline_index]));
-	isc_buffer_add(&buf, strlen(argv[isc_commandline_index]));
-	ret = dns_name_fromtext(name, &buf, dns_rootname, 0, NULL);
-	if (ret != ISC_R_SUCCESS)
-		fatal("invalid key name %s: %s", argv[isc_commandline_index],
-		      isc_result_totext(ret));
-
 	isc_buffer_init(&buf, filename, sizeof(filename) - 1);
 
 	/* associate the key */
-	ret = dst_key_fromlabel(name, alg, flags, protocol,
-				rdclass, engine, label, NULL, mctx, &key);
+	ret = dst_key_fromlabel(name, alg, flags, protocol, rdclass,
+#ifdef PKCS11CRYPTO
+				"pkcs11",
+#else
+				engine,
+#endif
+				label, NULL, mctx, &key);
 	isc_entropy_stopcallbacksources(ectx);
 
 	if (ret != ISC_R_SUCCESS) {
@@ -468,7 +627,7 @@ main(int argc, char **argv) {
 		char algstr[DNS_SECALG_FORMATSIZE];
 		dns_name_format(name, namestr, sizeof(namestr));
 		dns_secalg_format(alg, algstr, sizeof(algstr));
-		fatal("failed to get key %s/%s: %s\n",
+		fatal("failed to get key %s/%s: %s",
 		      namestr, algstr, isc_result_totext(ret));
 		/* NOTREACHED */
 		exit(-1);
@@ -512,11 +671,17 @@ main(int argc, char **argv) {
 			dst_key_settime(key, DST_TIME_INACTIVE, inactive);
 
 		if (setdel)
-			dst_key_settime(key, DST_TIME_DELETE, delete);
+			dst_key_settime(key, DST_TIME_DELETE, deltime);
+	if (setsyncadd)
+		dst_key_settime(key, DST_TIME_SYNCPUBLISH, syncadd);
+	if (setsyncdel)
+		dst_key_settime(key, DST_TIME_SYNCDELETE, syncdel);
+
 	} else {
 		if (setpub || setact || setrev || setinact ||
 		    setdel || unsetpub || unsetact ||
-		    unsetrev || unsetinact || unsetdel || genonly)
+		    unsetrev || unsetinact || unsetdel || genonly ||
+		    setsyncadd || setsyncdel)
 			fatal("cannot use -C together with "
 			      "-P, -A, -R, -I, -D, or -G options");
 		/*
@@ -570,6 +735,8 @@ main(int argc, char **argv) {
 		      isc_result_totext(ret));
 	printf("%s\n", filename);
 	dst_key_free(&key);
+	if (prevkey != NULL)
+		dst_key_free(&prevkey);
 
 	cleanup_logging(&log);
 	cleanup_entropy(&ectx);

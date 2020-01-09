@@ -1,20 +1,13 @@
 /*
- * Copyright (C) 2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
 
 /*! \file resconf.c */
 
@@ -41,12 +34,14 @@
 
 #include <config.h>
 
+#ifndef WIN32
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
+#endif
 
 #include <ctype.h>
 #include <errno.h>
-#include <netdb.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -57,6 +52,7 @@
 #include <isc/sockaddr.h>
 #include <isc/util.h>
 
+#include <irs/netdb.h>
 #include <irs/resconf.h>
 
 #define IRS_RESCONF_MAGIC		ISC_MAGIC('R', 'E', 'S', 'c')
@@ -78,10 +74,10 @@
  * resolv.conf parameters
  */
 
-#define RESCONFMAXNAMESERVERS 3		/*%< max 3 "nameserver" entries */
-#define RESCONFMAXSEARCH 8		/*%< max 8 domains in "search" entry */
-#define RESCONFMAXLINELEN 256		/*%< max size of a line */
-#define RESCONFMAXSORTLIST 10		/*%< max 10 */
+#define RESCONFMAXNAMESERVERS 3U	/*%< max 3 "nameserver" entries */
+#define RESCONFMAXSEARCH 8U		/*%< max 8 domains in "search" entry */
+#define RESCONFMAXLINELEN 256U		/*%< max size of a line */
+#define RESCONFMAXSORTLIST 10U		/*%< max 10 */
 
 /*!
  * configuration data structure
@@ -170,11 +166,12 @@ eatwhite(FILE *fp) {
 static int
 getword(FILE *fp, char *buffer, size_t size) {
 	int ch;
-	char *p = buffer;
+	char *p;
 
 	REQUIRE(buffer != NULL);
 	REQUIRE(size > 0U);
 
+	p = buffer;
 	*p = '\0';
 
 	ch = eatwhite(fp);
@@ -224,7 +221,7 @@ add_server(isc_mem_t *mctx, const char *address_str,
 
 		v4 = &((struct sockaddr_in *)res->ai_addr)->sin_addr;
 		if (memcmp(v4, zeroaddress, 4) == 0)
-			memcpy(v4, loopaddress, 4);
+			memmove(v4, loopaddress, 4);
 	}
 
 	address = isc_mem_get(mctx, sizeof(*address));
@@ -237,8 +234,8 @@ add_server(isc_mem_t *mctx, const char *address_str,
 		result = ISC_R_RANGE;
 		goto cleanup;
 	}
-	address->length = res->ai_addrlen;
-	memcpy(&address->type.ss, res->ai_addr, res->ai_addrlen);
+	address->length = (unsigned int)res->ai_addrlen;
+	memmove(&address->type.ss, res->ai_addr, res->ai_addrlen);
 	ISC_LINK_INIT(address, link);
 	ISC_LIST_APPEND(*nameservers, address, link);
 
@@ -258,14 +255,14 @@ create_addr(const char *buffer, isc_netaddr_t *addr, int convert_zero) {
 			unsigned char zeroaddress[] = {0, 0, 0, 0};
 			unsigned char loopaddress[] = {127, 0, 0, 1};
 			if (memcmp(&v4, zeroaddress, 4) == 0)
-				memcpy(&v4, loopaddress, 4);
+				memmove(&v4, loopaddress, 4);
 		}
 		addr->family = AF_INET;
-		memcpy(&addr->type.in, &v4, NS_INADDRSZ);
+		memmove(&addr->type.in, &v4, NS_INADDRSZ);
 		addr->zone = 0;
 	} else if (inet_pton(AF_INET6, buffer, &v6) == 1) {
 		addr->family = AF_INET6;
-		memcpy(&addr->type.in6, &v6, NS_IN6ADDRSZ);
+		memmove(&addr->type.in6, &v6, NS_IN6ADDRSZ);
 		addr->zone = 0;
 	} else
 		return (ISC_R_BADADDRESSFORM); /* Unrecognised format. */
@@ -302,7 +299,8 @@ resconf_parsenameserver(irs_resconf_t *conf,  FILE *fp) {
 static isc_result_t
 resconf_parsedomain(irs_resconf_t *conf,  FILE *fp) {
 	char word[RESCONFMAXLINELEN];
-	int res, i;
+	int res;
+	unsigned int i;
 
 	res = getword(fp, word, sizeof(word));
 	if (strlen(word) == 0U)
@@ -336,7 +334,8 @@ resconf_parsedomain(irs_resconf_t *conf,  FILE *fp) {
 
 static isc_result_t
 resconf_parsesearch(irs_resconf_t *conf,  FILE *fp) {
-	int idx, delim;
+	int delim;
+	unsigned int idx;
 	char word[RESCONFMAXLINELEN];
 
 	if (conf->domainname != NULL) {
@@ -367,6 +366,7 @@ resconf_parsesearch(irs_resconf_t *conf,  FILE *fp) {
 		if (conf->searchnxt == RESCONFMAXSEARCH)
 			goto ignore; /* Too many domains. */
 
+		INSIST(idx < sizeof(conf->search)/sizeof(conf->search[0]));
 		conf->search[idx] = isc_mem_strdup(conf->mctx, word);
 		if (conf->search[idx] == NULL)
 			return (ISC_R_NOMEMORY);
@@ -385,7 +385,8 @@ resconf_parsesearch(irs_resconf_t *conf,  FILE *fp) {
 
 static isc_result_t
 resconf_parsesortlist(irs_resconf_t *conf,  FILE *fp) {
-	int delim, res, idx;
+	int delim, res;
+	unsigned int idx;
 	char word[RESCONFMAXLINELEN];
 	char *p;
 
@@ -402,6 +403,7 @@ resconf_parsesortlist(irs_resconf_t *conf,  FILE *fp) {
 			*p++ = '\0';
 
 		idx = conf->sortlistnxt;
+		INSIST(idx < sizeof(conf->sortlist)/sizeof(conf->sortlist[0]));
 		res = create_addr(word, &conf->sortlist[idx].addr, 1);
 		if (res != ISC_R_SUCCESS)
 			return (res);
@@ -483,9 +485,10 @@ irs_resconf_load(isc_mem_t *mctx, const char *filename, irs_resconf_t **confp)
 {
 	FILE *fp = NULL;
 	char word[256];
-	isc_result_t rval, ret;
+	isc_result_t rval, ret = ISC_R_SUCCESS;
 	irs_resconf_t *conf;
-	int i, stopchar;
+	unsigned int i;
+	int stopchar;
 
 	REQUIRE(mctx != NULL);
 	REQUIRE(filename != NULL);
@@ -498,57 +501,67 @@ irs_resconf_load(isc_mem_t *mctx, const char *filename, irs_resconf_t **confp)
 
 	conf->mctx = mctx;
 	ISC_LIST_INIT(conf->nameservers);
+	ISC_LIST_INIT(conf->searchlist);
 	conf->numns = 0;
 	conf->domainname = NULL;
 	conf->searchnxt = 0;
+	conf->sortlistnxt = 0;
 	conf->resdebug = 0;
 	conf->ndots = 1;
 	for (i = 0; i < RESCONFMAXSEARCH; i++)
 		conf->search[i] = NULL;
 
 	errno = 0;
-	if ((fp = fopen(filename, "r")) == NULL) {
-		isc_mem_put(mctx, conf, sizeof(*conf));
-		return (ISC_R_INVALIDFILE);
-	}
-
-	ret = ISC_R_SUCCESS;
-	do {
-		stopchar = getword(fp, word, sizeof(word));
-		if (stopchar == EOF) {
-			rval = ISC_R_SUCCESS;
-			POST(rval);
-			break;
-		}
-
-		if (strlen(word) == 0U)
-			rval = ISC_R_SUCCESS;
-		else if (strcmp(word, "nameserver") == 0)
-			rval = resconf_parsenameserver(conf, fp);
-		else if (strcmp(word, "domain") == 0)
-			rval = resconf_parsedomain(conf, fp);
-		else if (strcmp(word, "search") == 0)
-			rval = resconf_parsesearch(conf, fp);
-		else if (strcmp(word, "sortlist") == 0)
-			rval = resconf_parsesortlist(conf, fp);
-		else if (strcmp(word, "options") == 0)
-			rval = resconf_parseoption(conf, fp);
-		else {
-			/* unrecognised word. Ignore entire line */
-			rval = ISC_R_SUCCESS;
-			stopchar = eatline(fp);
+	if ((fp = fopen(filename, "r")) != NULL) {
+		do {
+			stopchar = getword(fp, word, sizeof(word));
 			if (stopchar == EOF) {
+				rval = ISC_R_SUCCESS;
+				POST(rval);
 				break;
 			}
-		}
-		if (ret == ISC_R_SUCCESS && rval != ISC_R_SUCCESS)
-			ret = rval;
-	} while (1);
 
-	fclose(fp);
+			if (strlen(word) == 0U)
+				rval = ISC_R_SUCCESS;
+			else if (strcmp(word, "nameserver") == 0)
+				rval = resconf_parsenameserver(conf, fp);
+			else if (strcmp(word, "domain") == 0)
+				rval = resconf_parsedomain(conf, fp);
+			else if (strcmp(word, "search") == 0)
+				rval = resconf_parsesearch(conf, fp);
+			else if (strcmp(word, "sortlist") == 0)
+				rval = resconf_parsesortlist(conf, fp);
+			else if (strcmp(word, "options") == 0)
+				rval = resconf_parseoption(conf, fp);
+			else {
+				/* unrecognised word. Ignore entire line */
+				rval = ISC_R_SUCCESS;
+				stopchar = eatline(fp);
+				if (stopchar == EOF) {
+					break;
+				}
+			}
+			if (ret == ISC_R_SUCCESS && rval != ISC_R_SUCCESS)
+				ret = rval;
+		} while (1);
+
+		fclose(fp);
+	} else {
+		switch (errno) {
+		case ENOENT:
+			break;
+		default:
+			isc_mem_put(mctx, conf, sizeof(*conf));
+			return (ISC_R_INVALIDFILE);
+		}
+	}
+
+	if (ret != ISC_R_SUCCESS) {
+		goto error;
+	}
 
 	/* If we don't find a nameserver fall back to localhost */
-	if (conf->numns == 0) {
+	if (conf->numns == 0U) {
 		INSIST(ISC_LIST_EMPTY(conf->nameservers));
 
 		/* XXX: should we catch errors? */
@@ -560,7 +573,6 @@ irs_resconf_load(isc_mem_t *mctx, const char *filename, irs_resconf_t **confp)
 	 * Construct unified search list from domain or configured
 	 * search list
 	 */
-	ISC_LIST_INIT(conf->searchlist);
 	if (conf->domainname != NULL) {
 		ret = add_search(conf, conf->domainname);
 	} else if (conf->searchnxt > 0) {
@@ -571,12 +583,16 @@ irs_resconf_load(isc_mem_t *mctx, const char *filename, irs_resconf_t **confp)
 		}
 	}
 
+ error:
 	conf->magic = IRS_RESCONF_MAGIC;
 
 	if (ret != ISC_R_SUCCESS)
 		irs_resconf_destroy(&conf);
-	else
+	else {
+		if (fp == NULL)
+			ret = ISC_R_FILENOTFOUND;
 		*confp = conf;
+	}
 
 	return (ret);
 }
@@ -586,7 +602,7 @@ irs_resconf_destroy(irs_resconf_t **confp) {
 	irs_resconf_t *conf;
 	isc_sockaddr_t *address;
 	irs_resconf_search_t *searchentry;
-	int i;
+	unsigned int i;
 
 	REQUIRE(confp != NULL);
 	conf = *confp;

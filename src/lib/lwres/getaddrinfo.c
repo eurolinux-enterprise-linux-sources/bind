@@ -1,6 +1,12 @@
 /*
- * Copyright (C) 2004-2008, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2001  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ *
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  *
  * This code is derived from software contributed to ISC by
  * Berkeley Software Design, Inc.
@@ -134,13 +140,13 @@
 #include <config.h>
 
 #include <errno.h>
-
-#include <isc/string.h>
+#include <string.h>
 
 #include <lwres/lwres.h>
 #include <lwres/net.h>
 #include <lwres/netdb.h>
 #include <lwres/stdlib.h>
+#include <lwres/string.h>
 
 #define SA(addr)	((struct sockaddr *)(addr))
 #define SIN(addr)	((struct sockaddr_in *)(addr))
@@ -392,7 +398,7 @@ lwres_getaddrinfo(const char *hostname, const char *servname,
 				 * Convert to a V4 mapped address.
 				 */
 				struct in6_addr *a6 = (struct in6_addr *)abuf;
-				memcpy(&a6->s6_addr[12], &a6->s6_addr[0], 4);
+				memmove(&a6->s6_addr[12], &a6->s6_addr[0], 4);
 				memset(&a6->s6_addr[10], 0xff, 2);
 				memset(&a6->s6_addr[0], 0, 10);
 				goto inet6_addr;
@@ -427,7 +433,7 @@ lwres_getaddrinfo(const char *hostname, const char *servname,
 			ai_list = ai;
 			ai->ai_socktype = socktype;
 			SIN(ai->ai_addr)->sin_port = port;
-			memcpy((char *)ai->ai_addr + addroff, abuf, addrsize);
+			memmove((char *)ai->ai_addr + addroff, abuf, addrsize);
 			if (flags & AI_CANONNAME) {
 #if defined(LWRES_HAVE_SIN6_SCOPE_ID)
 				if (ai->ai_family == AF_INET6)
@@ -579,7 +585,7 @@ add_ipv4(const char *hostname, int flags, struct addrinfo **aip,
 		*aip = ai;
 		ai->ai_socktype = socktype;
 		SIN(ai->ai_addr)->sin_port = port;
-		memcpy(&SIN(ai->ai_addr)->sin_addr, v4_loop, 4);
+		memmove(&SIN(ai->ai_addr)->sin_addr, v4_loop, 4);
 	} else {
 		lwres = lwres_getaddrsbyname(lwrctx, hostname,
 					     LWRES_ADDRTYPE_V4, &by);
@@ -597,8 +603,8 @@ add_ipv4(const char *hostname, int flags, struct addrinfo **aip,
 			*aip = ai;
 			ai->ai_socktype = socktype;
 			SIN(ai->ai_addr)->sin_port = port;
-			memcpy(&SIN(ai->ai_addr)->sin_addr,
-			       addr->address, 4);
+			memmove(&SIN(ai->ai_addr)->sin_addr,
+				addr->address, 4);
 			if (flags & AI_CANONNAME) {
 				ai->ai_canonname = strdup(by->realname);
 				if (ai->ai_canonname == NULL)
@@ -643,7 +649,7 @@ add_ipv6(const char *hostname, int flags, struct addrinfo **aip,
 		*aip = ai;
 		ai->ai_socktype = socktype;
 		SIN6(ai->ai_addr)->sin6_port = port;
-		memcpy(&SIN6(ai->ai_addr)->sin6_addr, v6_loop, 16);
+		memmove(&SIN6(ai->ai_addr)->sin6_addr, v6_loop, 16);
 	} else {
 		lwres = lwres_getaddrsbyname(lwrctx, hostname,
 					     LWRES_ADDRTYPE_V6, &by);
@@ -661,8 +667,8 @@ add_ipv6(const char *hostname, int flags, struct addrinfo **aip,
 			*aip = ai;
 			ai->ai_socktype = socktype;
 			SIN6(ai->ai_addr)->sin6_port = port;
-			memcpy(&SIN6(ai->ai_addr)->sin6_addr,
-			       addr->address, 16);
+			memmove(&SIN6(ai->ai_addr)->sin6_addr,
+				addr->address, 16);
 			if (flags & AI_CANONNAME) {
 				ai->ai_canonname = strdup(by->realname);
 				if (ai->ai_canonname == NULL)
@@ -706,12 +712,16 @@ get_local(const char *name, int socktype, struct addrinfo **res) {
 	if (socktype == 0)
 		return (EAI_SOCKTYPE);
 
+	if (strlen(name) >= sizeof(slocal->sun_path))
+		return (EAI_OVERFLOW);
+
 	ai = ai_alloc(AF_LOCAL, sizeof(*slocal));
 	if (ai == NULL)
 		return (EAI_MEMORY);
 
 	slocal = SLOCAL(ai->ai_addr);
 	strncpy(slocal->sun_path, name, sizeof(slocal->sun_path));
+	slocal->sun_path[sizeof(slocal->sun_path) - 1] = '\0';
 
 	ai->ai_socktype = socktype;
 	/*

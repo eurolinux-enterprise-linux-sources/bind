@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 /*! \file */
 
@@ -74,8 +67,7 @@ static isc_result_t
 doneloading(dns_zt_t *zt, dns_zone_t *zone, isc_task_t *task);
 
 isc_result_t
-dns_zt_create(isc_mem_t *mctx, dns_rdataclass_t rdclass, dns_zt_t **ztp)
-{
+dns_zt_create(isc_mem_t *mctx, dns_rdataclass_t rdclass, dns_zt_t **ztp) {
 	dns_zt_t *zt;
 	isc_result_t result;
 
@@ -156,7 +148,7 @@ dns_zt_unmount(dns_zt_t *zt, dns_zone_t *zone) {
 }
 
 isc_result_t
-dns_zt_find(dns_zt_t *zt, dns_name_t *name, unsigned int options,
+dns_zt_find(dns_zt_t *zt, const dns_name_t *name, unsigned int options,
 	    dns_name_t *foundname, dns_zone_t **zonep)
 {
 	isc_result_t result;
@@ -315,12 +307,15 @@ asyncload(dns_zone_t *zone, void *callback) {
 	zt = dns_zone_getview(zone)->zonetable;
 	INSIST(VALID_ZT(zt));
 
+	INSIST(zt->references > 0);
+	zt->references++;
+	zt->loads_pending++;
+
 	result = dns_zone_asyncload(zone, *loaded, zt);
-	if (result == ISC_R_SUCCESS) {
+	if (result != ISC_R_SUCCESS) {
+		zt->references--;
+		zt->loads_pending--;
 		INSIST(zt->references > 0);
-		zt->references++;
-		INSIST(zt->references != 0);
-		zt->loads_pending++;
 	}
 	return (ISC_R_SUCCESS);
 }
@@ -396,16 +391,16 @@ freezezones(dns_zone_t *zone, void *uap) {
 			result = DNS_R_FROZEN;
 		if (result == ISC_R_SUCCESS)
 			result = dns_zone_flush(zone);
+		if (result == ISC_R_SUCCESS)
+			dns_zone_setupdatedisabled(zone, freeze);
 	} else {
 		if (frozen) {
-			result = dns_zone_load(zone);
+			result = dns_zone_loadandthaw(zone);
 			if (result == DNS_R_CONTINUE ||
 			    result == DNS_R_UPTODATE)
 				result = ISC_R_SUCCESS;
 		}
 	}
-	if (result == ISC_R_SUCCESS)
-		dns_zone_setupdatedisabled(zone, freeze);
 	view = dns_zone_getview(zone);
 	if (strcmp(view->name, "_bind") == 0 ||
 	    strcmp(view->name, "_default") == 0)
@@ -428,6 +423,54 @@ freezezones(dns_zone_t *zone, void *uap) {
 	if (raw != NULL)
 		dns_zone_detach(&raw);
 	return (result);
+}
+
+void
+dns_zt_setviewcommit(dns_zt_t *zt) {
+	dns_rbtnode_t *node;
+	dns_rbtnodechain_t chain;
+	isc_result_t result;
+
+	REQUIRE(VALID_ZT(zt));
+
+	dns_rbtnodechain_init(&chain, zt->mctx);
+
+	result = dns_rbtnodechain_first(&chain, zt->table, NULL, NULL);
+	while (result == DNS_R_NEWORIGIN || result == ISC_R_SUCCESS) {
+		result = dns_rbtnodechain_current(&chain, NULL, NULL,
+						  &node);
+		if (result == ISC_R_SUCCESS && node->data != NULL) {
+			dns_zone_setviewcommit(node->data);
+		}
+
+		result = dns_rbtnodechain_next(&chain, NULL, NULL);
+	}
+
+	dns_rbtnodechain_invalidate(&chain);
+}
+
+void
+dns_zt_setviewrevert(dns_zt_t *zt) {
+	dns_rbtnode_t *node;
+	dns_rbtnodechain_t chain;
+	isc_result_t result;
+
+	REQUIRE(VALID_ZT(zt));
+
+	dns_rbtnodechain_init(&chain, zt->mctx);
+
+	result = dns_rbtnodechain_first(&chain, zt->table, NULL, NULL);
+	while (result == DNS_R_NEWORIGIN || result == ISC_R_SUCCESS) {
+		result = dns_rbtnodechain_current(&chain, NULL, NULL,
+						  &node);
+		if (result == ISC_R_SUCCESS && node->data != NULL) {
+			dns_zone_setviewrevert(node->data);
+		}
+
+		result = dns_rbtnodechain_next(&chain, NULL, NULL);
+	}
+
+	dns_rbtnodechain_invalidate(&chain);
 }
 
 isc_result_t
@@ -534,6 +577,5 @@ auto_detach(void *data, void *arg) {
 	dns_zone_t *zone = data;
 
 	UNUSED(arg);
-
 	dns_zone_detach(&zone);
 }

@@ -1,17 +1,12 @@
 /*
- * Copyright (C) 2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 
@@ -90,16 +85,17 @@ typedef enum {
  */
 #define DNS_RRL_MAX_PREFIX  64
 typedef union dns_rrl_key dns_rrl_key_t;
+struct dns__rrl_key {
+	isc_uint32_t	    ip[DNS_RRL_MAX_PREFIX/32];
+	isc_uint32_t	    qname_hash;
+	dns_rdatatype_t	    qtype;
+	isc_uint8_t         qclass;
+	unsigned int	    rtype   :4; /* dns_rrl_rtype_t */
+	unsigned int	    ipv6    :1;
+};
 union dns_rrl_key {
-	struct {
-		isc_uint32_t	    ip[DNS_RRL_MAX_PREFIX/32];
-		isc_uint32_t	    qname_hash;
-		dns_rdatatype_t	    qtype;
-		isc_uint8_t         qclass;
-		dns_rrl_rtype_t	    rtype   :4; /* 3 bits + sign bit */
-		isc_boolean_t	    ipv6    :1;
-	} s;
-	isc_uint16_t	w[1];
+	struct dns__rrl_key s;
+	isc_uint16_t	w[sizeof(struct dns__rrl_key)/sizeof(isc_uint16_t)];
 };
 
 /*
@@ -119,10 +115,10 @@ struct dns_rrl_entry {
 
 # define DNS_RRL_TS_GEN_BITS	2
 	unsigned int	ts_gen	    :DNS_RRL_TS_GEN_BITS;
-	isc_boolean_t	ts_valid    :1;
+	unsigned int	ts_valid    :1;
 # define DNS_RRL_HASH_GEN_BITS	1
 	unsigned int	hash_gen    :DNS_RRL_HASH_GEN_BITS;
-	isc_boolean_t	logged	    :1;
+	unsigned int	logged	    :1;
 # define DNS_RRL_LOG_BITS	11
 	unsigned int	log_secs    :DNS_RRL_LOG_BITS;
 

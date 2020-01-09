@@ -1,22 +1,12 @@
 /*
- * Copyright (C) 2004-2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * $Id: gssapi_link.c,v 1.17 2011/03/28 05:32:16 marka Exp $
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 #include <config.h>
@@ -26,6 +16,7 @@
 #include <isc/base64.h>
 #include <isc/buffer.h>
 #include <isc/mem.h>
+#include <isc/print.h>
 #include <isc/string.h>
 #include <isc/util.h>
 
@@ -47,7 +38,7 @@
 
 #define GBUFFER_TO_REGION(gb, r) \
 	do { \
-		(r).length = (gb).length; \
+	  (r).length = (unsigned int)(gb).length; \
 		(r).base = (gb).value; \
 	} while (0)
 
@@ -180,7 +171,7 @@ gssapi_sign(dst_context_t *dctx, isc_buffer_t *sig) {
 	 * Copy the output into our buffer space, and release the gssapi
 	 * allocated space.
 	 */
-	isc_buffer_putmem(sig, gsig.value, gsig.length);
+	isc_buffer_putmem(sig, gsig.value, (unsigned int)gsig.length);
 	if (gsig.length != 0U)
 		gss_release_buffer(&minor, &gsig);
 
@@ -216,7 +207,7 @@ gssapi_verify(dst_context_t *dctx, const isc_region_t *sig) {
 	buf = isc_mem_allocate(dst__memory_pool, sig->length);
 	if (buf == NULL)
 		return (ISC_R_FAILURE);
-	memcpy(buf, sig->base, sig->length);
+	memmove(buf, sig->base, sig->length);
 	r.base = buf;
 	r.length = sig->length;
 	REGION_TO_GBUFFER(r, gsig);
@@ -286,7 +277,7 @@ gssapi_destroy(dst_key_t *key) {
 static isc_result_t
 gssapi_restore(dst_key_t *key, const char *keystr) {
 	OM_uint32 major, minor;
-	size_t len;
+	unsigned int len;
 	isc_buffer_t *b = NULL;
 	isc_region_t r;
 	gss_buffer_desc gssbuffer;
@@ -346,18 +337,19 @@ gssapi_dump(dst_key_t *key, isc_mem_t *mctx, char **buffer, int *length) {
 		gss_release_buffer(&minor, &gssbuffer);
 		return (ISC_R_NOMEMORY);
 	}
-	isc_buffer_init(&b, buf, len);
+	isc_buffer_init(&b, buf, (unsigned int)len);
 	GBUFFER_TO_REGION(gssbuffer, r);
 	result = isc_base64_totext(&r, 0, "", &b);
 	RUNTIME_CHECK(result == ISC_R_SUCCESS);
 	gss_release_buffer(&minor, &gssbuffer);
 	*buffer = buf;
-	*length = len;
+	*length = (int)len;
 	return (ISC_R_SUCCESS);
 }
 
 static dst_func_t gssapi_functions = {
 	gssapi_create_signverify_ctx,
+	NULL, /*%< createctx2 */
 	gssapi_destroy_signverify_ctx,
 	gssapi_adddata,
 	gssapi_sign,

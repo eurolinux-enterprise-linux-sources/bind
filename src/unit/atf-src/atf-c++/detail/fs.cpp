@@ -1,7 +1,4 @@
-//
-// Automated Testing Framework (atf)
-//
-// Copyright (c) 2007, 2008, 2009 The NetBSD Foundation, Inc.
+// Copyright (c) 2007 The NetBSD Foundation, Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -25,10 +22,11 @@
 // IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 // IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+
+#include "atf-c++/detail/fs.hpp"
 
 #if defined(HAVE_CONFIG_H)
-#include "bconfig.h"
+#include "config.h"
 #endif
 
 extern "C" {
@@ -47,17 +45,15 @@ extern "C" {
 #include <cstring>
 
 extern "C" {
-#include "../../atf-c/error.h"
+#include "atf-c/error.h"
 }
 
-#include "../utils.hpp"
-
-#include "exceptions.hpp"
-#include "env.hpp"
-#include "fs.hpp"
-#include "process.hpp"
-#include "sanity.hpp"
-#include "text.hpp"
+#include "atf-c++/detail/env.hpp"
+#include "atf-c++/detail/exceptions.hpp"
+#include "atf-c++/detail/process.hpp"
+#include "atf-c++/detail/sanity.hpp"
+#include "atf-c++/detail/text.hpp"
+#include "atf-c++/utils.hpp"
 
 namespace impl = atf::fs;
 #define IMPL_NAME "atf::fs"

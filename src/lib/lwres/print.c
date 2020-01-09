@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2001, 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
 
 #include <config.h>
 
@@ -26,6 +18,7 @@
 #define	LWRES__PRINT_SOURCE	/* Used to get the lwres_print_* prototypes. */
 
 #include <lwres/stdlib.h>
+#include <lwres/string.h>
 
 #include "assert_p.h"
 #include "print_p.h"
@@ -67,6 +60,7 @@ lwres__print_vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 	int h;
 	int l;
 	int q;
+	int z;
 	int alt;
 	int zero;
 	int left;
@@ -111,7 +105,7 @@ lwres__print_vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 		/*
 		 * Reset flags.
 		 */
-		dot = space = plus = left = zero = alt = h = l = q = 0;
+		dot = space = plus = left = zero = alt = h = l = q = z = 0;
 		width = precision = 0;
 		head = "";
 		length = pad = zeropad = 0;
@@ -195,6 +189,10 @@ lwres__print_vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 				format++;
 			}
 			goto doint;
+		case 'z':
+			z = 1;
+			format++;
+			goto doint;
 		case 'n':
 		case 'i':
 		case 'd':
@@ -217,6 +215,11 @@ lwres__print_vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 					p = va_arg(ap, long *);
 					REQUIRE(p != NULL);
 					*p = str - save;
+				} else if (z) {
+					size_t *p;
+					p = va_arg(ap, size_t *);
+					REQUIRE(p != NULL);
+					*p = str - save;
 				} else {
 					int *p;
 					p = va_arg(ap, int *);
@@ -230,6 +233,8 @@ lwres__print_vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 					tmpi = va_arg(ap, long long int);
 				else if (l)
 					tmpi = va_arg(ap, long int);
+				else if (z)
+					tmpi = va_arg(ap, size_t);
 				else
 					tmpi = va_arg(ap, int);
 				if (tmpi < 0) {
@@ -253,6 +258,8 @@ lwres__print_vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 						       unsigned long long int);
 				else if (l)
 					tmpui = va_arg(ap, long int);
+				else if (z)
+					tmpui = va_arg(ap, size_t);
 				else
 					tmpui = va_arg(ap, int);
 				sprintf(buf,
@@ -266,6 +273,8 @@ lwres__print_vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 						       unsigned long long int);
 				else if (l)
 					tmpui = va_arg(ap, unsigned long int);
+				else if (z)
+					tmpui = va_arg(ap, size_t);
 				else
 					tmpui = va_arg(ap, unsigned int);
 				sprintf(buf, "%" LWRES_PRINT_QUADFORMAT "u",
@@ -277,6 +286,8 @@ lwres__print_vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 						       unsigned long long int);
 				else if (l)
 					tmpui = va_arg(ap, unsigned long int);
+				else if (z)
+					tmpui = va_arg(ap, size_t);
 				else
 					tmpui = va_arg(ap, unsigned int);
 				if (alt) {
@@ -293,6 +304,8 @@ lwres__print_vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 						       unsigned long long int);
 				else if (l)
 					tmpui = va_arg(ap, unsigned long int);
+				else if (z)
+					tmpui = va_arg(ap, size_t);
 				else
 					tmpui = va_arg(ap, unsigned int);
 				if (alt) {
@@ -487,7 +500,7 @@ lwres__print_vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 #else
 			INSIST("long doubles are not supported" == NULL);
 #endif
-			/*FALLTHROUGH*/
+			/* FALLTHROUGH */
 		case 'e':
 		case 'E':
 		case 'f':

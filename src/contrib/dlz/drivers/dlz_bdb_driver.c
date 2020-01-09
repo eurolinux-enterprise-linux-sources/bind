@@ -34,20 +34,11 @@
  */
 
 /*
- * Copyright (C) 1999-2001  Internet Software Consortium.
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND INTERNET SOFTWARE CONSORTIUM
- * DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL
- * INTERNET SOFTWARE CONSORTIUM BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING
- * FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
- * NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION
- * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ * Copyright (C) 1999-2001, 2016  Internet Systems Consortium, Inc. ("ISC")
+ * 
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
 #ifdef DLZ_BDB
@@ -114,7 +105,8 @@ typedef struct parsed_data {
 /* forward reference */
 
 static isc_result_t
-bdb_findzone(void *driverarg, void *dbdata, const char *name);
+bdb_findzone(void *driverarg, void *dbdata, const char *name,
+	     dns_clientinfomethods_t *methods, dns_clientinfo_t *clientinfo);
 
 /*%
  * Parses the DBT from the Berkeley DB into a parsed_data record
@@ -226,7 +218,7 @@ bdb_allowzonexfr(void *driverarg, void *dbdata, const char *name,
 	DBT key, data;
 
 	/* check to see if we are authoritative for the zone first. */
-	result = bdb_findzone(driverarg, dbdata, name);
+	result = bdb_findzone(driverarg, dbdata, name, NULL, NULL);
 	if (result != ISC_R_SUCCESS)
 		return (ISC_R_NOTFOUND);
 
@@ -393,7 +385,8 @@ bdb_cleanup(bdb_instance_t *db) {
 }
 
 static isc_result_t
-bdb_findzone(void *driverarg, void *dbdata, const char *name)
+bdb_findzone(void *driverarg, void *dbdata, const char *name,
+	     dns_clientinfomethods_t *methods, dns_clientinfo_t *clientinfo)
 {
 
 	isc_result_t result;
@@ -402,6 +395,8 @@ bdb_findzone(void *driverarg, void *dbdata, const char *name)
 	DBT key, data;
 
 	UNUSED(driverarg);
+	UNUSED(methods);
+	UNUSED(clientinfo);
 
 	memset(&key, 0, sizeof(DBT));
 	memset(&data, 0, sizeof(DBT));

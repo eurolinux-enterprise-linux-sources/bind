@@ -1,22 +1,13 @@
 /*
- * Copyright (C) 2009, 2011  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: hip_55.c,v 1.8 2011/01/13 04:59:26 tbox Exp $ */
-
-/* reviewed: TBC */
 
 /* RFC 5205 */
 
@@ -35,7 +26,7 @@ fromtext_hip(ARGS_FROMTEXT) {
 	unsigned char *start;
 	size_t len;
 
-	REQUIRE(type == 55);
+	REQUIRE(type == dns_rdatatype_hip);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -76,7 +67,7 @@ fromtext_hip(ARGS_FROMTEXT) {
 	len = (unsigned char *)isc_buffer_used(target) - start;
 	if (len > 0xffU)
 		RETTOK(ISC_R_RANGE);
-	RETERR(uint8_tobuffer(len, &hit_len));
+	RETERR(uint8_tobuffer((isc_uint32_t)len, &hit_len));
 
 	/*
 	 * Public key (base64).
@@ -92,7 +83,10 @@ fromtext_hip(ARGS_FROMTEXT) {
 	len = (unsigned char *)isc_buffer_used(target) - start;
 	if (len > 0xffffU)
 		RETTOK(ISC_R_RANGE);
-	RETERR(uint16_tobuffer(len, &key_len));
+	RETERR(uint16_tobuffer((isc_uint32_t)len, &key_len));
+
+	if (origin == NULL)
+		origin = dns_rootname;
 
 	/*
 	 * Rendezvous Servers.
@@ -105,7 +99,6 @@ fromtext_hip(ARGS_FROMTEXT) {
 		if (token.type != isc_tokentype_string)
 			break;
 		buffer_fromregion(&buffer, &token.value.as_region);
-		origin = (origin != NULL) ? origin : dns_rootname;
 		RETTOK(dns_name_fromtext(&name, &buffer, origin, options,
 					 target));
 	} while (1);
@@ -122,11 +115,11 @@ static inline isc_result_t
 totext_hip(ARGS_TOTEXT) {
 	isc_region_t region;
 	dns_name_t name;
-	size_t length, key_len, hit_len;
+	unsigned int length, key_len, hit_len;
 	unsigned char algorithm;
 	char buf[sizeof("225 ")];
 
-	REQUIRE(rdata->type == 55);
+	REQUIRE(rdata->type == dns_rdatatype_hip);
 	REQUIRE(rdata->length != 0);
 
 	dns_rdata_toregion(rdata, &region);
@@ -146,7 +139,7 @@ totext_hip(ARGS_TOTEXT) {
 	/*
 	 * Algorithm
 	 */
-	sprintf(buf, "%u ", algorithm);
+	snprintf(buf, sizeof(buf), "%u ", algorithm);
 	RETERR(str_totext(buf, target));
 
 	/*
@@ -193,7 +186,7 @@ fromwire_hip(ARGS_FROMWIRE) {
 	isc_uint8_t hit_len;
 	isc_uint16_t key_len;
 
-	REQUIRE(type == 55);
+	REQUIRE(type == dns_rdatatype_hip);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -229,7 +222,7 @@ static inline isc_result_t
 towire_hip(ARGS_TOWIRE) {
 	isc_region_t region;
 
-	REQUIRE(rdata->type == 55);
+	REQUIRE(rdata->type == dns_rdatatype_hip);
 	REQUIRE(rdata->length != 0);
 
 	UNUSED(cctx);
@@ -245,7 +238,7 @@ compare_hip(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 55);
+	REQUIRE(rdata1->type == dns_rdatatype_hip);
 	REQUIRE(rdata1->length != 0);
 	REQUIRE(rdata2->length != 0);
 
@@ -260,7 +253,7 @@ fromstruct_hip(ARGS_FROMSTRUCT) {
 	dns_rdata_hip_t myhip;
 	isc_result_t result;
 
-	REQUIRE(type == 55);
+	REQUIRE(type == dns_rdatatype_hip);
 	REQUIRE(source != NULL);
 	REQUIRE(hip->common.rdtype == type);
 	REQUIRE(hip->common.rdclass == rdclass);
@@ -292,7 +285,7 @@ tostruct_hip(ARGS_TOSTRUCT) {
 	isc_region_t region;
 	dns_rdata_hip_t *hip = target;
 
-	REQUIRE(rdata->type == 55);
+	REQUIRE(rdata->type == dns_rdatatype_hip);
 	REQUIRE(target != NULL);
 	REQUIRE(rdata->length != 0);
 
@@ -317,6 +310,8 @@ tostruct_hip(ARGS_TOSTRUCT) {
 	if (hip->hit == NULL)
 		goto cleanup;
 	isc_region_consume(&region, hip->hit_len);
+
+	INSIST(hip->key_len <= region.length);
 
 	hip->key = mem_maybedup(mctx, region.base, hip->key_len);
 	if (hip->key == NULL)
@@ -367,7 +362,7 @@ additionaldata_hip(ARGS_ADDLDATA) {
 	UNUSED(add);
 	UNUSED(arg);
 
-	REQUIRE(rdata->type == 55);
+	REQUIRE(rdata->type == dns_rdatatype_hip);
 
 	return (ISC_R_SUCCESS);
 }
@@ -376,7 +371,7 @@ static inline isc_result_t
 digest_hip(ARGS_DIGEST) {
 	isc_region_t r;
 
-	REQUIRE(rdata->type == 55);
+	REQUIRE(rdata->type == dns_rdatatype_hip);
 
 	dns_rdata_toregion(rdata, &r);
 	return ((digest)(arg, &r));
@@ -385,7 +380,7 @@ digest_hip(ARGS_DIGEST) {
 static inline isc_boolean_t
 checkowner_hip(ARGS_CHECKOWNER) {
 
-	REQUIRE(type == 55);
+	REQUIRE(type == dns_rdatatype_hip);
 
 	UNUSED(name);
 	UNUSED(type);
@@ -398,7 +393,7 @@ checkowner_hip(ARGS_CHECKOWNER) {
 static inline isc_boolean_t
 checknames_hip(ARGS_CHECKNAMES) {
 
-	REQUIRE(rdata->type == 55);
+	REQUIRE(rdata->type == dns_rdatatype_hip);
 
 	UNUSED(rdata);
 	UNUSED(owner);
@@ -457,7 +452,7 @@ casecompare_hip(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 55);
+	REQUIRE(rdata1->type == dns_rdatatype_hip);
 	REQUIRE(rdata1->length != 0);
 	REQUIRE(rdata2->length != 0);
 
@@ -466,23 +461,19 @@ casecompare_hip(ARGS_COMPARE) {
 
 	INSIST(r1.length > 4);
 	INSIST(r2.length > 4);
-	r1.length = 4;
-	r2.length = 4;
-	order = isc_region_compare(&r1, &r2);
+	order = memcmp(r1.base, r2.base, 4);
 	if (order != 0)
 		return (order);
 
 	hit_len = uint8_fromregion(&r1);
 	isc_region_consume(&r1, 2);         /* hit length + algorithm */
 	key_len = uint16_fromregion(&r1);
-
-	dns_rdata_toregion(rdata1, &r1);
-	dns_rdata_toregion(rdata2, &r2);
-	isc_region_consume(&r1, 4);
+	isc_region_consume(&r1, 2);         /* key length */
 	isc_region_consume(&r2, 4);
+
 	INSIST(r1.length >= (unsigned) (hit_len + key_len));
 	INSIST(r2.length >= (unsigned) (hit_len + key_len));
-	order = isc_region_compare(&r1, &r2);
+	order = memcmp(r1.base, r2.base, hit_len + key_len);
 	if (order != 0)
 		return (order);
 	isc_region_consume(&r1, hit_len + key_len);

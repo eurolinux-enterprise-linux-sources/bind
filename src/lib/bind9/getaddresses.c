@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004, 2005, 2007  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2001, 2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: getaddresses.c,v 1.22 2007/06/19 23:47:16 tbox Exp $ */
 
 /*! \file */
 
@@ -28,6 +20,7 @@
 #include <isc/netscope.h>
 #include <isc/result.h>
 #include <isc/sockaddr.h>
+#include <isc/string.h>
 #include <isc/util.h>
 
 #include <bind9/getaddresses.h>
@@ -90,7 +83,7 @@ bind9_getaddresses(const char *hostname, in_port_t port,
 		char tmpbuf[128], *d;
 		isc_uint32_t zone = 0;
 
-		strcpy(tmpbuf, hostname);
+		strlcpy(tmpbuf, hostname, sizeof(tmpbuf));
 		d = strchr(tmpbuf, '%');
 		if (d != NULL)
 			*d = '\0';
@@ -103,18 +96,18 @@ bind9_getaddresses(const char *hostname, in_port_t port,
 
 			if (d != NULL) {
 #ifdef ISC_PLATFORM_HAVESCOPEID
-				isc_result_t result;
+				isc_result_t iresult;
 
-				result = isc_netscope_pton(AF_INET6, d + 1,
-							   &in6, &zone);
-				    
-				if (result != ISC_R_SUCCESS)
-					return (result);
+				iresult = isc_netscope_pton(AF_INET6, d + 1,
+							    &in6, &zone);
+
+				if (iresult != ISC_R_SUCCESS)
+					return (iresult);
 #else
 				/*
 				 * The extended format is specified while the
 				 * system does not provide the ability to use
-				 * it.  Throw an explicit error instead of
+				 * it.	Throw an explicit error instead of
 				 * ignoring the specified value.
 				 */
 				return (ISC_R_BADADDRESSFORM);
@@ -129,7 +122,6 @@ bind9_getaddresses(const char *hostname, in_port_t port,
 
 			*addrcount = 1;
 			return (ISC_R_SUCCESS);
-			
 		}
 	}
 #ifdef USE_GETADDRINFO
@@ -164,6 +156,7 @@ bind9_getaddresses(const char *hostname, in_port_t port,
 			goto again;
 		}
 #endif
+		/* FALLTHROUGH */
 	default:
 		return (ISC_R_FAILURE);
 	}

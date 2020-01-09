@@ -1,7 +1,4 @@
-//
-// Automated Testing Framework (atf)
-//
-// Copyright (c) 2007, 2008, 2009, 2010 The NetBSD Foundation, Inc.
+// Copyright (c) 2007 The NetBSD Foundation, Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -25,10 +22,9 @@
 // IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 // IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
 
-#if !defined(_ATF_CXX_TESTS_HPP_)
-#define _ATF_CXX_TESTS_HPP_
+#if !defined(ATF_CXX_TESTS_HPP)
+#define ATF_CXX_TESTS_HPP
 
 #include <map>
 #include <memory>
@@ -37,8 +33,6 @@
 extern "C" {
 #include <atf-c/defs.h>
 }
-
-#include <atf-c++/utils.hpp>
 
 namespace atf {
 namespace tests {
@@ -74,7 +68,11 @@ typedef std::map< std::string, std::string > vars_map;
 
 struct tc_impl;
 
-class tc : utils::noncopyable {
+class tc {
+    // Non-copyable.
+    tc(const tc&);
+    tc& operator=(const tc&);
+
     std::auto_ptr< tc_impl > pimpl;
 
 protected:
@@ -124,4 +122,4 @@ public:
 } // namespace tests
 } // namespace atf
 
-#endif // !defined(_ATF_CXX_TESTS_HPP_)
+#endif // !defined(ATF_CXX_TESTS_HPP)

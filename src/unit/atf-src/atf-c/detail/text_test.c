@@ -1,7 +1,4 @@
-/*
- * Automated Testing Framework (atf)
- *
- * Copyright (c) 2008, 2009, 2010 The NetBSD Foundation, Inc.
+/* Copyright (c) 2008 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,8 +21,9 @@
  * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
+
+#include "atf-c/detail/text.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,9 +31,8 @@
 
 #include <atf-c.h>
 
-#include "sanity.h"
-#include "test_helpers.h"
-#include "text.h"
+#include "atf-c/detail/sanity.h"
+#include "atf-c/detail/test_helpers.h"
 
 /* ---------------------------------------------------------------------
  * Auxiliary functions.
@@ -97,7 +94,7 @@ word_acum(const char *word, void *data)
 
 static
 atf_error_t
-word_count(const char *word, void *data)
+word_count(const char *word ATF_DEFS_ATTRIBUTE_UNUSED, void *data)
 {
     size_t *counter = data;
 
@@ -113,7 +110,7 @@ struct fail_at {
 
 static
 atf_error_t
-word_fail_at(const char *word, void *data)
+word_fail_at(const char *word ATF_DEFS_ATTRIBUTE_UNUSED, void *data)
 {
     struct fail_at *fa = data;
     atf_error_t err;

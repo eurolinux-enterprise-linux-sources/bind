@@ -1,7 +1,4 @@
-dnl
-dnl Automated Testing Framework (atf)
-dnl
-dnl Copyright (c) 2007, 2008, 2009 The NetBSD Foundation, Inc.
+dnl Copyright (c) 2007 The NetBSD Foundation, Inc.
 dnl All rights reserved.
 dnl
 dnl Redistribution and use in source and binary forms, with or without
@@ -25,7 +22,6 @@ dnl INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
 dnl IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 dnl OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 dnl IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-dnl
 
 AT_SETUP([test_program: compare the user-visible interfaces])
 

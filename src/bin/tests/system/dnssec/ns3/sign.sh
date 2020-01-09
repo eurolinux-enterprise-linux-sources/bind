@@ -1,26 +1,16 @@
 #!/bin/sh -e
 #
-# Copyright (C) 2004, 2006-2013  Internet Systems Consortium, Inc. ("ISC")
-# Copyright (C) 2000-2002  Internet Software Consortium.
+# Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
-# Permission to use, copy, modify, and/or distribute this software for any
-# purpose with or without fee is hereby granted, provided that the above
-# copyright notice and this permission notice appear in all copies.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
-# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-# AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
-# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
-# OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-# PERFORMANCE OF THIS SOFTWARE.
-
-# $Id: sign.sh,v 1.43 2011/11/04 05:36:28 each Exp $
+# See the COPYRIGHT file distributed with this work for additional
+# information regarding copyright ownership.
 
 SYSTEMTESTTOP=../..
 . $SYSTEMTESTTOP/conf.sh
-
-RANDFILE=../random.data
 
 zone=secure.example.
 infile=secure.example.db.in
@@ -56,7 +46,7 @@ cat $infile $keyname1.key $keyname2.key >$zonefile
 $SIGNER -P -r $RANDFILE -o $zone $zonefile > /dev/null 2>&1
 
 zone=keyless.example.
-infile=keyless.example.db.in
+infile=generic.example.db.in
 zonefile=keyless.example.db
 
 keyname=`$KEYGEN -q -r $RANDFILE -a RSAMD5 -b 768 -n zone $zone`
@@ -68,7 +58,7 @@ $SIGNER -P -r $RANDFILE -o $zone $zonefile > /dev/null 2>&1
 # Change the signer field of the a.b.keyless.example SIG A
 # to point to a provably nonexistent KEY record.
 mv $zonefile.signed $zonefile.tmp
-<$zonefile.tmp perl -p -e 's/ keyless.example/ b.keyless.example/
+<$zonefile.tmp $PERL -p -e 's/ keyless.example/ b.keyless.example/
     if /^a.b.keyless.example/../NXT/;' >$zonefile.signed
 rm -f $zonefile.tmp
 
@@ -177,7 +167,7 @@ cat $infile $keyname.key >$zonefile
 $SIGNER -P -g -3 - -A -r $RANDFILE -o $zone $zonefile > /dev/null 2>&1
 
 #
-# A nsec3 zone (non-optout) with unknown hash algorithm.
+# A nsec3 zone (non-optout) with unknown nsec3 hash algorithm (-U).
 #
 zone=nsec3-unknown.example.
 infile=nsec3-unknown.example.db.in
@@ -190,7 +180,7 @@ cat $infile $keyname.key >$zonefile
 $SIGNER -P -3 - -U -r $RANDFILE -o $zone $zonefile > /dev/null 2>&1
 
 #
-# A optout nsec3 zone.
+# A optout nsec3 zone with a unknown nsec3 hash algorithm (-U).
 #
 zone=optout-unknown.example.
 infile=optout-unknown.example.db.in
@@ -201,6 +191,44 @@ keyname=`$KEYGEN -q -r $RANDFILE -a NSEC3RSASHA1 -b 768 -n zone $zone`
 cat $infile $keyname.key >$zonefile
 
 $SIGNER -P -3 - -U -A -r $RANDFILE -o $zone $zonefile > /dev/null 2>&1
+
+#
+# A zone with a unknown DNSKEY algorithm.
+# Algorithm 7 is replaced by 100 in the zone and dsset.
+#
+zone=dnskey-unknown.example.
+infile=dnskey-unknown.example.db.in
+zonefile=dnskey-unknown.example.db
+
+keyname=`$KEYGEN -q -r $RANDFILE -a NSEC3RSASHA1 -b 768 -n zone $zone`
+
+cat $infile $keyname.key >$zonefile
+
+$SIGNER -P -3 - -r $RANDFILE -o $zone -O full -f ${zonefile}.tmp $zonefile > /dev/null 2>&1
+
+awk '$4 == "DNSKEY" { $7 = 100; print } $4 == "RRSIG" { $6 = 100; print } { print }' ${zonefile}.tmp > ${zonefile}.signed
+
+DSFILE=dsset-`echo ${zone} |sed -e "s/\.$//g"`$TP
+$DSFROMKEY -A -f ${zonefile}.signed $zone > $DSFILE
+
+#
+# A zone with a unknown DNSKEY algorithm + unknown NSEC3 hash algorithm (-U).
+# Algorithm 7 is replaced by 100 in the zone and dsset.
+#
+zone=dnskey-nsec3-unknown.example.
+infile=dnskey-nsec3-unknown.example.db.in
+zonefile=dnskey-nsec3-unknown.example.db
+
+keyname=`$KEYGEN -q -r $RANDFILE -a NSEC3RSASHA1 -b 768 -n zone $zone`
+
+cat $infile $keyname.key >$zonefile
+
+$SIGNER -P -3 - -r $RANDFILE -o $zone -U -O full -f ${zonefile}.tmp $zonefile > /dev/null 2>&1
+
+awk '$4 == "DNSKEY" { $7 = 100; print } $4 == "RRSIG" { $6 = 100; print } { print }' ${zonefile}.tmp > ${zonefile}.signed
+
+DSFILE=dsset-`echo ${zone} |sed -e "s/\.$//g"`$TP
+$DSFROMKEY -A -f ${zonefile}.signed $zone > $DSFILE
 
 #
 # A multiple parameter nsec3 zone.
@@ -397,8 +425,8 @@ signedfile="upper.example.db.signed"
 kskname=`$KEYGEN -q -r $RANDFILE $zone`
 zskname=`$KEYGEN -q -r $RANDFILE -f KSK $zone`
 cp $infile $zonefile
-$SIGNER -P -S -r $RANDFILE -o $zone -f $lower $zonefile > /dev/null 2>&1
-$CHECKZONE -D upper.example $lower 2>&- | \
+$SIGNER -P -S -r $RANDFILE -o $zone -f $lower $zonefile > /dev/null 2>/dev/null
+$CHECKZONE -D upper.example $lower 2>/dev/null | \
 	sed '/RRSIG/s/ upper.example. / UPPER.EXAMPLE. /' > $signedfile
 
 #
@@ -427,7 +455,7 @@ zskname=`$KEYGEN -q -r $RANDFILE -f KSK $zone`
 cp $infile $zonefile
 $SIGNER -S -r $RANDFILE -e now+1mi -o $zone $zonefile > /dev/null 2>&1
 # preserve a normalized copy of the NS RRSIG for comparison later
-$CHECKZONE -D nosign.example nosign.example.db.signed 2>&- | \
+$CHECKZONE -D nosign.example nosign.example.db.signed 2>/dev/null | \
         awk '$4 == "RRSIG" && $5 == "NS" {$2 = ""; print}' | \
         sed 's/[ 	][ 	]*/ /g'> ../nosign.before
 
@@ -451,3 +479,67 @@ kskname=`$KEYGEN -I $now+90s -q -r $RANDFILE -f KSK $zone`
 zskname=`$KEYGEN -q -r $RANDFILE $zone`
 cp $infile $zonefile
 $SIGNER -S -r $RANDFILE -o $zone $zonefile > /dev/null 2>&1
+
+#
+# A zone which will change its sig-validity-interval
+#
+zone=siginterval.example
+infile=siginterval.example.db.in
+zonefile=siginterval.example.db
+kskname=`$KEYGEN -q -3 -r $RANDFILE -fk $zone`
+zskname=`$KEYGEN -q -3 -r $RANDFILE $zone`
+cp $infile $zonefile
+
+#
+# A zone with a bad DS in the parent
+# (sourced from bogus.example.db.in)
+#
+zone=badds.example.
+infile=bogus.example.db.in
+zonefile=badds.example.db
+
+keyname=`$KEYGEN -q -r $RANDFILE -a RSAMD5 -b 768 -n zone $zone`
+
+cat $infile $keyname.key >$zonefile
+
+$SIGNER -P -r $RANDFILE -o $zone $zonefile > /dev/null 2>&1
+sed -e 's/bogus/badds/g' < dsset-bogus.example$TP > dsset-badds.example$TP
+
+#
+# A zone with future signatures.
+#
+zone=future.example
+infile=future.example.db.in
+zonefile=future.example.db
+kskname=`$KEYGEN -q -r $RANDFILE -f KSK $zone`
+zskname=`$KEYGEN -q -r $RANDFILE $zone`
+cat $infile $kskname.key $zskname.key >$zonefile
+$SIGNER -P -s +3600 -r $RANDFILE -o $zone $zonefile > /dev/null 2>&1
+cp -f $kskname.key trusted-future.key
+
+#
+# A zone with future signatures.
+#
+zone=managed-future.example
+infile=managed-future.example.db.in
+zonefile=managed-future.example.db
+kskname=`$KEYGEN -q -r $RANDFILE -f KSK $zone`
+zskname=`$KEYGEN -q -r $RANDFILE $zone`
+cat $infile $kskname.key $zskname.key >$zonefile
+$SIGNER -P -s +3600 -r $RANDFILE -o $zone $zonefile > /dev/null 2>&1
+
+#
+# A zone with a revoked key
+#
+zone=revkey.example.
+infile=generic.example.db.in
+zonefile=revkey.example.db
+
+ksk1=`$KEYGEN -q -r $RANDFILE -3fk $zone`
+ksk1=`$REVOKE $ksk1`
+ksk2=`$KEYGEN -q -r $RANDFILE -3fk $zone`
+zsk1=`$KEYGEN -q -r $RANDFILE -3 $zone`
+
+cat $infile ${ksk1}.key ${ksk2}.key ${zsk1}.key >$zonefile
+
+$SIGNER -P -r $RANDFILE -o $zone $zonefile > /dev/null 2>&1

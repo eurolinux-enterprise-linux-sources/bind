@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007, 2009-2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2001, 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 #ifndef ISC_TASK_H
 #define ISC_TASK_H 1
@@ -81,6 +74,7 @@
  ***/
 
 #include <isc/eventclass.h>
+#include <isc/json.h>
 #include <isc/lang.h>
 #include <isc/stdtime.h>
 #include <isc/types.h>
@@ -128,7 +122,7 @@ typedef struct isc_taskmethods {
 	unsigned int (*unsend)(isc_task_t *task, void *sender, isc_eventtype_t type,
 			       void *tag, isc_eventlist_t *events);
 	isc_result_t (*onshutdown)(isc_task_t *task, isc_taskaction_t action,
-				   const void *arg);
+				   void *arg);
 	void (*shutdown)(isc_task_t *task);
 	void (*setname)(isc_task_t *task, const char *name, void *tag);
 	unsigned int (*purgeevents)(isc_task_t *task, void *sender,
@@ -441,7 +435,7 @@ isc_task_unsend(isc_task_t *task, void *sender, isc_eventtype_t type,
 
 isc_result_t
 isc_task_onshutdown(isc_task_t *task, isc_taskaction_t action,
-		    const void *arg);
+		    void *arg);
 /*%<
  * Send a shutdown event with action 'action' and argument 'arg' when
  * 'task' is shutdown.
@@ -466,7 +460,7 @@ isc_task_onshutdown(isc_task_t *task, isc_taskaction_t action,
  *
  *\li	#ISC_R_SUCCESS
  *\li	#ISC_R_NOMEMORY
- *\li	#ISC_R_TASKSHUTTINGDOWN			Task is shutting down.
+ *\li	#ISC_R_SHUTTINGDOWN			Task is shutting down.
  */
 
 void
@@ -602,9 +596,14 @@ isc_task_endexclusive(isc_task_t *task);
 
 void
 isc_task_getcurrenttime(isc_task_t *task, isc_stdtime_t *t);
+void
+isc_task_getcurrenttimex(isc_task_t *task, isc_time_t *t);
 /*%<
  * Provide the most recent timestamp on the task.  The timestamp is considered
- * as the "current time" in the second-order granularity.
+ * as the "current time".
+ *
+ * isc_task_getcurrentime() returns the time in one-second granularity;
+ * isc_task_getcurrentimex() returns it in nanosecond granularity.
  *
  * Requires:
  *\li	'task' is a valid task.
@@ -631,7 +630,7 @@ isc_task_setprivilege(isc_task_t *task, isc_boolean_t priv);
  * 'priv'.
  *
  * Under normal circumstances this flag has no effect on the task behavior,
- * but when the task manager has been set to privileged exeuction mode via
+ * but when the task manager has been set to privileged execution mode via
  * isc_taskmgr_setmode(), only tasks with the flag set will be executed,
  * and all other tasks will wait until they're done.  Once all privileged
  * tasks have finished executing, the task manager will automatically
@@ -787,10 +786,13 @@ isc_taskmgr_excltask(isc_taskmgr_t *mgr, isc_task_t **taskp);
 
 
 #ifdef HAVE_LIBXML2
-
 int
 isc_taskmgr_renderxml(isc_taskmgr_t *mgr, xmlTextWriterPtr writer);
+#endif
 
+#ifdef HAVE_JSON
+isc_result_t
+isc_taskmgr_renderjson(isc_taskmgr_t *mgr, json_object *tasksobj);
 #endif
 
 /*%<

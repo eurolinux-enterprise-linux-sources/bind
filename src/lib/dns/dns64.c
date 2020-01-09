@@ -1,20 +1,14 @@
 /*
- * Copyright (C) 2010, 2011  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: dns64.c,v 1.8 2011/03/12 04:59:47 tbox Exp $ */
 
 #include <config.h>
 
@@ -57,51 +51,51 @@ isc_result_t
 dns_dns64_create(isc_mem_t *mctx, isc_netaddr_t *prefix,
 		 unsigned int prefixlen, isc_netaddr_t *suffix,
 		 dns_acl_t *clients, dns_acl_t *mapped, dns_acl_t *excluded,
-		 unsigned int flags, dns_dns64_t **dns64)
+		 unsigned int flags, dns_dns64_t **dns64p)
 {
-	dns_dns64_t *new;
+	dns_dns64_t *dns64;
 	unsigned int nbytes = 16;
 
 	REQUIRE(prefix != NULL && prefix->family == AF_INET6);
-	/* Legal prefix lengths from draft-ietf-behave-address-format-04. */
+	/* Legal prefix lengths from rfc6052.txt. */
 	REQUIRE(prefixlen == 32 || prefixlen == 40 || prefixlen == 48 ||
 		prefixlen == 56 || prefixlen == 64 || prefixlen == 96);
 	REQUIRE(isc_netaddr_prefixok(prefix, prefixlen) == ISC_R_SUCCESS);
-	REQUIRE(dns64 != NULL && *dns64 == NULL);
+	REQUIRE(dns64p != NULL && *dns64p == NULL);
 
 	if (suffix != NULL) {
 		static const unsigned char zeros[16];
 		REQUIRE(prefix->family == AF_INET6);
 		nbytes = prefixlen / 8 + 4;
-		/* Bits 64-71 are zeros. draft-ietf-behave-address-format-04 */
+		/* Bits 64-71 are zeros. rfc6052.txt */
 		if (prefixlen >= 32 && prefixlen <= 64)
 			nbytes++;
 		REQUIRE(memcmp(suffix->type.in6.s6_addr, zeros, nbytes) == 0);
 	}
 
-	new = isc_mem_get(mctx, sizeof(dns_dns64_t));
-	if (new == NULL)
+	dns64 = isc_mem_get(mctx, sizeof(dns_dns64_t));
+	if (dns64 == NULL)
 		return (ISC_R_NOMEMORY);
-	memset(new->bits, 0, sizeof(new->bits));
-	memcpy(new->bits, prefix->type.in6.s6_addr, prefixlen / 8);
+	memset(dns64->bits, 0, sizeof(dns64->bits));
+	memmove(dns64->bits, prefix->type.in6.s6_addr, prefixlen / 8);
 	if (suffix != NULL)
-		memcpy(new->bits + nbytes, suffix->type.in6.s6_addr + nbytes,
-		       16 - nbytes);
-	new->clients = NULL;
+		memmove(dns64->bits + nbytes, suffix->type.in6.s6_addr + nbytes,
+			16 - nbytes);
+	dns64->clients = NULL;
 	if (clients != NULL)
-		dns_acl_attach(clients, &new->clients);
-	new->mapped = NULL;
+		dns_acl_attach(clients, &dns64->clients);
+	dns64->mapped = NULL;
 	if (mapped != NULL)
-		dns_acl_attach(mapped, &new->mapped);
-	new->excluded = NULL;
+		dns_acl_attach(mapped, &dns64->mapped);
+	dns64->excluded = NULL;
 	if (excluded != NULL)
-		dns_acl_attach(excluded, &new->excluded);
-	new->prefixlen = prefixlen;
-	new->flags = flags;
-	ISC_LINK_INIT(new, link);
-	new->mctx = NULL;
-	isc_mem_attach(mctx, &new->mctx);
-	*dns64 = new;
+		dns_acl_attach(excluded, &dns64->excluded);
+	dns64->prefixlen = prefixlen;
+	dns64->flags = flags;
+	ISC_LINK_INIT(dns64, link);
+	dns64->mctx = NULL;
+	isc_mem_attach(mctx, &dns64->mctx);
+	*dns64p = dns64;
 	return (ISC_R_SUCCESS);
 }
 
@@ -155,7 +149,7 @@ dns_dns64_aaaafroma(const dns_dns64_t *dns64, const isc_netaddr_t *reqaddr,
 		struct in_addr ina;
 		isc_netaddr_t netaddr;
 
-		memcpy(&ina.s_addr, a, 4);
+		memmove(&ina.s_addr, a, 4);
 		isc_netaddr_fromin(&netaddr, &ina);
 		result = dns_acl_match(&netaddr, NULL, dns64->mapped, env,
 				       &match, NULL);
@@ -168,19 +162,19 @@ dns_dns64_aaaafroma(const dns_dns64_t *dns64, const isc_netaddr_t *reqaddr,
 	nbytes = dns64->prefixlen / 8;
 	INSIST(nbytes <= 12);
 	/* Copy prefix. */
-	memcpy(aaaa, dns64->bits, nbytes);
-	/* Bits 64-71 are zeros. draft-ietf-behave-address-format-04 */
+	memmove(aaaa, dns64->bits, nbytes);
+	/* Bits 64-71 are zeros. rfc6052.txt */
 	if (nbytes == 8)
 		aaaa[nbytes++] = 0;
 	/* Copy mapped address. */
 	for (i = 0; i < 4U; i++) {
 		aaaa[nbytes++] = a[i];
-		/* Bits 64-71 are zeros. draft-ietf-behave-address-format-04 */
+		/* Bits 64-71 are zeros. rfc6052.txt */
 		if (nbytes == 8)
 			aaaa[nbytes++] = 0;
 	}
 	/* Copy suffix. */
-	memcpy(aaaa + nbytes, dns64->bits + nbytes, 16 - nbytes);
+	memmove(aaaa + nbytes, dns64->bits + nbytes, 16 - nbytes);
 	return (ISC_R_SUCCESS);
 }
 
@@ -268,7 +262,7 @@ dns_dns64_aaaaok(const dns_dns64_t *dns64, const isc_netaddr_t *reqaddr,
 			if (aaaaok == NULL || !aaaaok[i]) {
 
 				dns_rdataset_current(rdataset, &rdata);
-				memcpy(&in6.s6_addr, rdata.data, 16);
+				memmove(&in6.s6_addr, rdata.data, 16);
 				isc_netaddr_fromin6(&netaddr, &in6);
 
 				result = dns_acl_match(&netaddr, NULL,

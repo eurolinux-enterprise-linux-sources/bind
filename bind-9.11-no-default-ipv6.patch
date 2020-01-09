@@ -1,0 +1,42 @@
+From 9fea3896c84d027271c2315af098dad319a444da Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20Men=C5=A1=C3=ADk?= <pemensik@redhat.com>
+Date: Mon, 21 Jan 2019 19:23:10 +0100
+Subject: [PATCH 2/5] Turn off listening on IPv6 by default
+
+To maintain behaviour of BIND 9.9, turn off listening on IPv6 by
+default. To enable listening like upstream defaults, include
+listen-on-v6 { any; }; in options.
+---
+ bin/named/config.c      | 2 +-
+ doc/arm/Bv9ARM-book.xml | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/bin/named/config.c b/bin/named/config.c
+index 7d97029..1d7aaa1 100644
+--- a/bin/named/config.c
++++ b/bin/named/config.c
+@@ -77,7 +77,7 @@ options {\n\
+ 	interface-interval 60;\n\
+ #	keep-response-order {none;};\n\
+ 	listen-on {any;};\n\
+-	listen-on-v6 {any;};\n\
++	listen-on-v6 {none;};\n\
+ #	lock-file \"" NS_LOCALSTATEDIR "/run/named/named.lock\";\n\
+ 	match-mapped-addresses no;\n\
+ 	max-rsa-exponent-size 0; /* no limit */\n\
+diff --git a/doc/arm/Bv9ARM-book.xml b/doc/arm/Bv9ARM-book.xml
+index a5d9e2e..5e7d015 100644
+--- a/doc/arm/Bv9ARM-book.xml
++++ b/doc/arm/Bv9ARM-book.xml
+@@ -7473,7 +7473,7 @@ listen-on port 1234 { !1.2.3.4; 1.2/16; };
+ 	    The <command>listen-on-v6</command> option is used to
+ 	    specify the interfaces and the ports on which the server will
+ 	    listen for incoming queries sent using IPv6.  If not specified,
+-	    the server will listen on port 53 on all IPv6 interfaces.
++	    the server will not listen on port 53 on any IPv6 interfaces.
+ 	  </para>
+ 
+ 	  <para>
+-- 
+2.20.1
+

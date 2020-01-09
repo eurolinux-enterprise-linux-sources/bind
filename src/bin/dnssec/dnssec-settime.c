@@ -1,20 +1,13 @@
 /*
- * Copyright (C) 2009-2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: dnssec-settime.c,v 1.32 2011/06/02 20:24:45 each Exp $ */
 
 /*! \file */
 
@@ -41,6 +34,10 @@
 
 #include <dst/dst.h>
 
+#ifdef PKCS11CRYPTO
+#include <pk11/result.h>
+#endif
+
 #include "dnssectool.h"
 
 const char *program = "dnssec-settime";
@@ -57,9 +54,12 @@ usage(void) {
 	fprintf(stderr,	"    %s [options] keyfile\n\n", program);
 	fprintf(stderr, "Version: %s\n", VERSION);
 	fprintf(stderr, "General options:\n");
-#ifdef USE_PKCS11
+#if defined(PKCS11CRYPTO)
+	fprintf(stderr, "    -E engine:          specify PKCS#11 provider "
+					"(default: %s)\n", PK11_LIB_LOCATION);
+#elif defined(USE_PKCS11)
 	fprintf(stderr, "    -E engine:          specify OpenSSL engine "
-						 "(default \"pkcs11\")\n");
+					   "(default \"pkcs11\")\n");
 #else
 	fprintf(stderr, "    -E engine:          specify OpenSSL engine\n");
 #endif
@@ -68,10 +68,13 @@ usage(void) {
 	fprintf(stderr, "    -K directory:       set key file location\n");
 	fprintf(stderr, "    -L ttl:             set default key TTL\n");
 	fprintf(stderr, "    -v level:           set level of verbosity\n");
+	fprintf(stderr, "    -V:                 print version information\n");
 	fprintf(stderr, "    -h:                 help\n");
 	fprintf(stderr, "Timing options:\n");
 	fprintf(stderr, "    -P date/[+-]offset/none: set/unset key "
 						     "publication date\n");
+	fprintf(stderr, "    -P sync date/[+-]offset/none: set/unset "
+					"CDS and CDNSKEY publication date\n");
 	fprintf(stderr, "    -A date/[+-]offset/none: set/unset key "
 						     "activation date\n");
 	fprintf(stderr, "    -R date/[+-]offset/none: set/unset key "
@@ -80,9 +83,16 @@ usage(void) {
 						     "inactivation date\n");
 	fprintf(stderr, "    -D date/[+-]offset/none: set/unset key "
 						     "deletion date\n");
+	fprintf(stderr, "    -D sync date/[+-]offset/none: set/unset "
+					"CDS and CDNSKEY deletion date\n");
+	fprintf(stderr, "    -S <key>: generate a successor to an existing "
+				      "key\n");
+	fprintf(stderr, "    -i <interval>: prepublication interval for "
+					   "successor key "
+					   "(default: 30 days)\n");
 	fprintf(stderr, "Printing options:\n");
-	fprintf(stderr, "    -p C/P/A/R/I/D/all: print a particular time "
-						"value or values\n");
+	fprintf(stderr, "    -p C/P/Psync/A/R/I/D/Dsync/all: print a "
+					"particular time value or values\n");
 	fprintf(stderr, "    -u:                 print times in unix epoch "
 						"format\n");
 	fprintf(stderr, "Output:\n");
@@ -109,8 +119,8 @@ printtime(dst_key_t *key, int type, const char *tag, isc_boolean_t epoch,
 	} else if (epoch) {
 		fprintf(stream, "%d\n", (int) when);
 	} else {
-		time_t time = when;
-		output = ctime(&time);
+		time_t timet = when;
+		output = ctime(&timet);
 		fprintf(stream, "%s", output);
 	}
 }
@@ -119,11 +129,12 @@ int
 main(int argc, char **argv) {
 	isc_result_t	result;
 #ifdef USE_PKCS11
-	const char	*engine = "pkcs11";
+	const char	*engine = PKCS11_ENGINE;
 #else
 	const char	*engine = NULL;
 #endif
-	char		*filename = NULL, *directory = NULL;
+	const char 	*filename = NULL;
+	char		*directory = NULL;
 	char		newname[1024];
 	char		keystr[DST_KEY_FORMATSIZE];
 	char		*endp, *p;
@@ -155,6 +166,10 @@ main(int argc, char **argv) {
 	isc_boolean_t   epoch = ISC_FALSE;
 	isc_boolean_t   changed = ISC_FALSE;
 	isc_log_t       *log = NULL;
+	isc_stdtime_t	syncadd = 0, syncdel = 0;
+	isc_boolean_t	unsetsyncadd = ISC_FALSE, setsyncadd = ISC_FALSE;
+	isc_boolean_t	unsetsyncdel = ISC_FALSE, setsyncdel = ISC_FALSE;
+	isc_boolean_t	printsyncadd = ISC_FALSE, printsyncdel = ISC_FALSE;
 
 	if (argc == 1)
 		usage();
@@ -163,15 +178,18 @@ main(int argc, char **argv) {
 	if (result != ISC_R_SUCCESS)
 		fatal("Out of memory");
 
-	setup_logging(verbose, mctx, &log);
+	setup_logging(mctx, &log);
 
+#ifdef PKCS11CRYPTO
+	pk11_result_register();
+#endif
 	dns_result_register();
 
 	isc_commandline_errprint = ISC_FALSE;
 
 	isc_stdtime_get(&now);
 
-#define CMDLINE_FLAGS "A:D:E:fhI:i:K:L:P:p:R:S:uv:"
+#define CMDLINE_FLAGS "A:D:E:fhI:i:K:L:P:p:R:S:uv:V"
 	while ((ch = isc_commandline_parse(argc, argv, CMDLINE_FLAGS)) != -1) {
 		switch (ch) {
 		case 'E':
@@ -189,6 +207,8 @@ main(int argc, char **argv) {
 				printrev = ISC_TRUE;
 				printinact = ISC_TRUE;
 				printdel = ISC_TRUE;
+				printsyncadd = ISC_TRUE;
+				printsyncdel = ISC_TRUE;
 				break;
 			}
 
@@ -198,6 +218,11 @@ main(int argc, char **argv) {
 					printcreate = ISC_TRUE;
 					break;
 				case 'P':
+					if (!strncmp(p, "sync", 4)) {
+						p += 4;
+						printsyncadd = ISC_TRUE;
+						break;
+					}
 					printpub = ISC_TRUE;
 					break;
 				case 'A':
@@ -210,6 +235,11 @@ main(int argc, char **argv) {
 					printinact = ISC_TRUE;
 					break;
 				case 'D':
+					if (!strncmp(p, "sync", 4)) {
+						p += 4;
+						printsyncdel = ISC_TRUE;
+						break;
+					}
 					printdel = ISC_TRUE;
 					break;
 				case ' ':
@@ -236,10 +266,7 @@ main(int argc, char **argv) {
 			}
 			break;
 		case 'L':
-			if (strcmp(isc_commandline_argument, "none") == 0)
-				ttl = 0;
-			else
-				ttl = strtottl(isc_commandline_argument);
+			ttl = strtottl(isc_commandline_argument);
 			setttl = ISC_TRUE;
 			break;
 		case 'v':
@@ -248,69 +275,76 @@ main(int argc, char **argv) {
 				fatal("-v must be followed by a number");
 			break;
 		case 'P':
+			/* -Psync ? */
+			if (isoptarg("sync", argv, usage)) {
+				if (unsetsyncadd || setsyncadd)
+					fatal("-P sync specified more than "
+					      "once");
+
+				changed = ISC_TRUE;
+				syncadd = strtotime(isc_commandline_argument,
+						   now, now, &setsyncadd);
+				unsetsyncadd = !setsyncadd;
+				break;
+			}
+			(void)isoptarg("dnskey", argv, usage);
 			if (setpub || unsetpub)
 				fatal("-P specified more than once");
 
 			changed = ISC_TRUE;
-			if (!strcasecmp(isc_commandline_argument, "none")) {
-				unsetpub = ISC_TRUE;
-			} else {
-				setpub = ISC_TRUE;
-				pub = strtotime(isc_commandline_argument,
-						now, now);
-			}
+			pub = strtotime(isc_commandline_argument,
+					now, now, &setpub);
+			unsetpub = !setpub;
 			break;
 		case 'A':
 			if (setact || unsetact)
 				fatal("-A specified more than once");
 
 			changed = ISC_TRUE;
-			if (!strcasecmp(isc_commandline_argument, "none")) {
-				unsetact = ISC_TRUE;
-			} else {
-				setact = ISC_TRUE;
-				act = strtotime(isc_commandline_argument,
-						now, now);
-			}
+			act = strtotime(isc_commandline_argument,
+					now, now, &setact);
+			unsetact = !setact;
 			break;
 		case 'R':
 			if (setrev || unsetrev)
 				fatal("-R specified more than once");
 
 			changed = ISC_TRUE;
-			if (!strcasecmp(isc_commandline_argument, "none")) {
-				unsetrev = ISC_TRUE;
-			} else {
-				setrev = ISC_TRUE;
-				rev = strtotime(isc_commandline_argument,
-						now, now);
-			}
+			rev = strtotime(isc_commandline_argument,
+					now, now, &setrev);
+			unsetrev = !setrev;
 			break;
 		case 'I':
 			if (setinact || unsetinact)
 				fatal("-I specified more than once");
 
 			changed = ISC_TRUE;
-			if (!strcasecmp(isc_commandline_argument, "none")) {
-				unsetinact = ISC_TRUE;
-			} else {
-				setinact = ISC_TRUE;
-				inact = strtotime(isc_commandline_argument,
-						now, now);
-			}
+			inact = strtotime(isc_commandline_argument,
+					now, now, &setinact);
+			unsetinact = !setinact;
 			break;
 		case 'D':
+			/* -Dsync ? */
+			if (isoptarg("sync", argv, usage)) {
+				if (unsetsyncdel || setsyncdel)
+					fatal("-D sync specified more than "
+					      "once");
+
+				changed = ISC_TRUE;
+				syncdel = strtotime(isc_commandline_argument,
+						   now, now, &setsyncdel);
+				unsetsyncdel = !setsyncdel;
+				break;
+			}
+			/* -Ddnskey ? */
+			(void)isoptarg("dnskey", argv, usage);
 			if (setdel || unsetdel)
 				fatal("-D specified more than once");
 
 			changed = ISC_TRUE;
-			if (!strcasecmp(isc_commandline_argument, "none")) {
-				unsetdel = ISC_TRUE;
-			} else {
-				setdel = ISC_TRUE;
-				del = strtotime(isc_commandline_argument,
-						now, now);
-			}
+			del = strtotime(isc_commandline_argument,
+					now, now, &setdel);
+			unsetdel = !setdel;
 			break;
 		case 'S':
 			predecessor = isc_commandline_argument;
@@ -322,9 +356,14 @@ main(int argc, char **argv) {
 			if (isc_commandline_option != '?')
 				fprintf(stderr, "%s: invalid argument -%c\n",
 					program, isc_commandline_option);
-			/* Falls into */
+			/* FALLTHROUGH */
 		case 'h':
+			/* Does not return. */
 			usage();
+
+		case 'V':
+			/* Does not return. */
+			version(program);
 
 		default:
 			fprintf(stderr, "%s: unhandled option -%c\n",
@@ -352,7 +391,6 @@ main(int argc, char **argv) {
 	isc_entropy_stopcallbacksources(ectx);
 
 	if (predecessor != NULL) {
-		char keystr[DST_KEY_FORMATSIZE];
 		int major, minor;
 
 		if (prepub == -1)
@@ -370,7 +408,7 @@ main(int argc, char **argv) {
 		if (result != ISC_R_SUCCESS)
 			fatal("Invalid keyfile %s: %s",
 			      filename, isc_result_totext(result));
-		if (!dst_key_isprivate(prevkey))
+		if (!dst_key_isprivate(prevkey) && !dst_key_isexternal(prevkey))
 			fatal("%s is not a private key", filename);
 
 		name = dst_key_name(prevkey);
@@ -397,13 +435,16 @@ main(int argc, char **argv) {
 			      "You must set one before\n\t"
 			      "generating a successor.");
 
-		pub = prevact - prepub;
-		if (pub < now && prepub != 0)
-			fatal("Predecessor will become inactive before the\n\t"
-			      "prepublication period ends.  Either change "
-			      "its inactivation date,\n\t"
-			      "or use the -i option to set a shorter "
-			      "prepublication interval.");
+		pub = previnact - prepub;
+		act = previnact;
+
+		if ((previnact - prepub) < now && prepub != 0)
+			fatal("Time until predecessor inactivation is\n\t"
+			      "shorter than the prepublication interval.  "
+			      "Either change\n\t"
+			      "predecessor inactivation date, or use the -i "
+			      "option to set\n\t"
+			      "a shorter prepublication interval.");
 
 		result = dst_key_gettime(prevkey, DST_TIME_DELETE, &prevdel);
 		if (result != ISC_R_SUCCESS)
@@ -419,7 +460,6 @@ main(int argc, char **argv) {
 					"inactive.\n", program);
 
 		changed = setpub = setact = ISC_TRUE;
-		dst_key_free(&prevkey);
 	} else {
 		if (prepub < 0)
 			prepub = 0;
@@ -462,7 +502,7 @@ main(int argc, char **argv) {
 		fatal("Invalid keyfile %s: %s",
 		      filename, isc_result_totext(result));
 
-	if (!dst_key_isprivate(key))
+	if (!dst_key_isprivate(key) && !dst_key_isexternal(key))
 		fatal("%s is not a private key", filename);
 
 	dst_key_format(key, keystr, sizeof(keystr));
@@ -482,11 +522,12 @@ main(int argc, char **argv) {
 	if ((setdel && setinact && del < inact) ||
 	    (dst_key_gettime(key, DST_TIME_INACTIVE,
 			     &previnact) == ISC_R_SUCCESS &&
-	     setdel && !setinact && del < previnact) ||
+	     setdel && !setinact && !unsetinact && del < previnact) ||
 	    (dst_key_gettime(key, DST_TIME_DELETE,
 			     &prevdel) == ISC_R_SUCCESS &&
-	     setinact && !setdel && prevdel < inact) ||
-	    (!setdel && !setinact && prevdel < previnact))
+	     setinact && !setdel && !unsetdel && prevdel < inact) ||
+	    (!setdel && !unsetdel && !setinact && !unsetinact &&
+	     prevdel != 0 && prevdel < previnact))
 		fprintf(stderr, "%s: warning: Key is scheduled to "
 				"be deleted before it is\n\t"
 				"scheduled to be inactive.\n",
@@ -544,6 +585,16 @@ main(int argc, char **argv) {
 	else if (unsetdel)
 		dst_key_unsettime(key, DST_TIME_DELETE);
 
+	if (setsyncadd)
+		dst_key_settime(key, DST_TIME_SYNCPUBLISH, syncadd);
+	else if (unsetsyncadd)
+		dst_key_unsettime(key, DST_TIME_SYNCPUBLISH);
+
+	if (setsyncdel)
+		dst_key_settime(key, DST_TIME_SYNCDELETE, syncdel);
+	else if (unsetsyncdel)
+		dst_key_unsettime(key, DST_TIME_SYNCDELETE);
+
 	if (setttl)
 		dst_key_setttl(key, ttl);
 
@@ -581,6 +632,14 @@ main(int argc, char **argv) {
 	if (printdel)
 		printtime(key, DST_TIME_DELETE, "Delete", epoch, stdout);
 
+	if (printsyncadd)
+		printtime(key, DST_TIME_SYNCPUBLISH, "SYNC Publish",
+			  epoch, stdout);
+
+	if (printsyncdel)
+		printtime(key, DST_TIME_SYNCDELETE, "SYNC Delete",
+			  epoch, stdout);
+
 	if (changed) {
 		isc_buffer_init(&buf, newname, sizeof(newname));
 		result = dst_key_buildfilename(key, DST_TYPE_PUBLIC, directory,
@@ -610,6 +669,8 @@ main(int argc, char **argv) {
 		printf("%s\n", newname);
 	}
 
+	if (prevkey != NULL)
+		dst_key_free(&prevkey);
 	dst_key_free(&key);
 	dst_lib_destroy();
 	isc_hash_destroy();

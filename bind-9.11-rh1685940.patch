@@ -1,0 +1,72 @@
+From 9fcd066217e8b6f52b601bdd8a0cb6455f98b88c Mon Sep 17 00:00:00 2001
+From: Petr Mensik <pemensik@redhat.com>
+Date: Thu, 7 Mar 2019 14:33:28 +0100
+Subject: [PATCH] Do not replace random generator on single thread
+
+DHCP builds fails to initialize dst library entropy generator. It does
+not require it for anything. Instead of initializing it, skip replacing
+custom random generator in single thread builds. Should use OpenSSL
+default random generator in case of SSL.
+
+Related: rhbz#1685940
+---
+ lib/dns/openssl_link.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/lib/dns/openssl_link.c b/lib/dns/openssl_link.c
+index ec6dc7f..ca3ffbc 100644
+--- a/lib/dns/openssl_link.c
++++ b/lib/dns/openssl_link.c
+@@ -31,6 +31,7 @@
+ #include <isc/mem.h>
+ #include <isc/mutex.h>
+ #include <isc/mutexblock.h>
++#include <isc/platform.h>
+ #include <isc/string.h>
+ #include <isc/thread.h>
+ #include <isc/util.h>
+@@ -220,6 +221,7 @@ dst__openssl_init(const char *engine) {
+ 	ERR_load_crypto_strings();
+ #endif
+ 
++#ifdef ISC_PLATFORM_USETHREADS
+ 	rm = mem_alloc(sizeof(RAND_METHOD) FILELINE);
+ 	if (rm == NULL) {
+ 		result = ISC_R_NOMEMORY;
+@@ -231,6 +233,7 @@ dst__openssl_init(const char *engine) {
+ 	rm->add = entropy_add;
+ 	rm->pseudorand = entropy_getpseudo;
+ 	rm->status = entropy_status;
++#endif
+ 
+ #if !defined(OPENSSL_NO_ENGINE)
+ #if !defined(CONF_MFLAGS_DEFAULT_SECTION)
+@@ -264,6 +267,7 @@ dst__openssl_init(const char *engine) {
+ 		}
+ 	}
+ 
++#ifdef ISC_PLATFORM_USETHREADS
+ 	re = ENGINE_get_default_RAND();
+ 	if (re == NULL) {
+ 		re = ENGINE_new();
+@@ -276,6 +280,7 @@ dst__openssl_init(const char *engine) {
+ 		ENGINE_free(re);
+ 	} else
+ 		ENGINE_finish(re);
++#endif
+ #else
+ 	RAND_set_rand_method(rm);
+ #endif /* !defined(OPENSSL_NO_ENGINE) */
+@@ -286,7 +291,8 @@ dst__openssl_init(const char *engine) {
+ 	if (e != NULL)
+ 		ENGINE_free(e);
+ 	e = NULL;
+-	mem_free(rm FILELINE);
++	if (rm != NULL)
++		mem_free(rm FILELINE);
+ 	rm = NULL;
+ #endif
+  cleanup_mutexinit:
+-- 
+2.20.1
+

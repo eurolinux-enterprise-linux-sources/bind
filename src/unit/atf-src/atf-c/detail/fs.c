@@ -1,7 +1,4 @@
-/*
- * Automated Testing Framework (atf)
- *
- * Copyright (c) 2007, 2008, 2009, 2010 The NetBSD Foundation, Inc.
+/* Copyright (c) 2007 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,11 +21,12 @@
  * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
+
+#include "atf-c/detail/fs.h"
 
 #if defined(HAVE_CONFIG_H)
-#include "bconfig.h"
+#include "config.h"
 #endif
 
 #include <sys/types.h>
@@ -46,12 +44,11 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "atf-c/defs.h"
+#include "atf-c/detail/sanity.h"
+#include "atf-c/detail/text.h"
+#include "atf-c/detail/user.h"
 #include "atf-c/error.h"
-
-#include "fs.h"
-#include "sanity.h"
-#include "text.h"
-#include "user.h"
 
 /* ---------------------------------------------------------------------
  * Prototypes for auxiliary functions.
@@ -584,7 +581,7 @@ atf_fs_stat_copy(atf_fs_stat_t *dest, const atf_fs_stat_t *src)
 }
 
 void
-atf_fs_stat_fini(atf_fs_stat_t *st)
+atf_fs_stat_fini(atf_fs_stat_t *st ATF_DEFS_ATTRIBUTE_UNUSED)
 {
 }
 

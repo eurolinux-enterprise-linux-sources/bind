@@ -1,0 +1,288 @@
+From 25ff8ab2b0772262d358272a3ed70a24fc6e4887 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ond=C5=99ej=20Sur=C3=BD?= <ondrej@sury.org>
+Date: Wed, 25 Apr 2018 14:04:31 +0200
+Subject: [PATCH] Replace isc_safe routines with their OpenSSL counter parts
+
+(cherry picked from commit 66ba2fdad583d962a1f4971c85d58381f0849e4d)
+
+Remove isc_safe_memcompare, it's not needed anywhere and can't be replaced with CRYPTO_memcmp()
+
+(cherry picked from commit b105ccee68ccc3c18e6ea530063b3c8e5a42571c)
+
+Fix the isc_safe_memwipe() usage with (NULL, >0)
+
+(cherry picked from commit 083461d3329ff6f2410745848a926090586a9846)
+---
+ bin/dnssec/dnssec-signzone.c |  2 +-
+ lib/dns/nsec3.c              |  4 +--
+ lib/dns/spnego.c             |  4 +--
+ lib/isc/Makefile.in          |  8 ++---
+ lib/isc/include/isc/safe.h   | 18 ++++------
+ lib/isc/safe.c               | 81 --------------------------------------------
+ lib/isc/tests/safe_test.c    | 20 -----------
+ 7 files changed, 13 insertions(+), 124 deletions(-)
+ delete mode 100644 lib/isc/safe.c
+
+diff --git a/bin/dnssec/dnssec-signzone.c b/bin/dnssec/dnssec-signzone.c
+index 53be1f5c60..351296a356 100644
+--- a/bin/dnssec/dnssec-signzone.c
++++ b/bin/dnssec/dnssec-signzone.c
+@@ -786,7 +786,7 @@ hashlist_add_dns_name(hashlist_t *l, /*const*/ dns_name_t *name,
+ 
+ static int
+ hashlist_comp(const void *a, const void *b) {
+-	return (isc_safe_memcompare(a, b, hash_length + 1));
++	return (memcmp(a, b, hash_length + 1));
+ }
+ 
+ static void
+diff --git a/lib/dns/nsec3.c b/lib/dns/nsec3.c
+index d364308aaf..37b6a8a7fe 100644
+--- a/lib/dns/nsec3.c
++++ b/lib/dns/nsec3.c
+@@ -1950,7 +1950,7 @@ dns_nsec3_noexistnodata(dns_rdatatype_t type, dns_name_t* name,
+ 	 * Work out what this NSEC3 covers.
+ 	 * Inside (<0) or outside (>=0).
+ 	 */
+-	scope = isc_safe_memcompare(owner, nsec3.next, nsec3.next_length);
++	scope = memcmp(owner, nsec3.next, nsec3.next_length);
+ 
+ 	/*
+ 	 * Prepare to compute all the hashes.
+@@ -1974,7 +1974,7 @@ dns_nsec3_noexistnodata(dns_rdatatype_t type, dns_name_t* name,
+ 			return (ISC_R_IGNORE);
+ 		}
+ 
+-		order = isc_safe_memcompare(hash, owner, length);
++		order = memcmp(hash, owner, length);
+ 		if (first && order == 0) {
+ 			/*
+ 			 * The hashes are the same.
+diff --git a/lib/dns/spnego.c b/lib/dns/spnego.c
+index ce3e42d650..079d4c1b4a 100644
+--- a/lib/dns/spnego.c
++++ b/lib/dns/spnego.c
+@@ -369,7 +369,7 @@ gssapi_spnego_decapsulate(OM_uint32 *,
+ 
+ /* mod_auth_kerb.c */
+ 
+-static int
++static isc_boolean_t
+ cmp_gss_type(gss_buffer_t token, gss_OID gssoid)
+ {
+ 	unsigned char *p;
+@@ -393,7 +393,7 @@ cmp_gss_type(gss_buffer_t token, gss_OID gssoid)
+ 	if (((OM_uint32) *p++) != gssoid->length)
+ 		return (GSS_S_DEFECTIVE_TOKEN);
+ 
+-	return (isc_safe_memcompare(p, gssoid->elements, gssoid->length));
++	return (!isc_safe_memequal(p, gssoid->elements, gssoid->length));
+ }
+ 
+ /* accept_sec_context.c */
+diff --git a/lib/isc/Makefile.in b/lib/isc/Makefile.in
+index ba53ef1091..98acffffc9 100644
+--- a/lib/isc/Makefile.in
++++ b/lib/isc/Makefile.in
+@@ -60,7 +60,7 @@ OBJS =		@ISC_EXTRA_OBJS@ @ISC_PK11_O@ @ISC_PK11_RESULT_O@ \
+ 		parseint.@O@ portset.@O@ quota.@O@ radix.@O@ random.@O@ \
+ 		ratelimiter.@O@ refcount.@O@ region.@O@ regex.@O@ result.@O@ \
+ 		rwlock.@O@ \
+-		safe.@O@ serial.@O@ sha1.@O@ sha2.@O@ sockaddr.@O@ stats.@O@ \
++		serial.@O@ sha1.@O@ sha2.@O@ sockaddr.@O@ stats.@O@ \
+ 		string.@O@ strtoul.@O@ symtab.@O@ task.@O@ taskpool.@O@ \
+ 		tm.@O@ timer.@O@ version.@O@ \
+ 		${UNIXOBJS} ${NLSOBJS} ${THREADOBJS}
+@@ -79,7 +79,7 @@ SRCS =		@ISC_EXTRA_SRCS@ @ISC_PK11_C@ @ISC_PK11_RESULT_C@ \
+ 		netaddr.c netscope.c pool.c ondestroy.c \
+ 		parseint.c portset.c quota.c radix.c random.c ${CHACHASRCS} \
+ 		ratelimiter.c refcount.c region.c regex.c result.c rwlock.c \
+-		safe.c serial.c sha1.c sha2.c sockaddr.c stats.c string.c \
++		serial.c sha1.c sha2.c sockaddr.c stats.c string.c \
+ 		strtoul.c symtab.c task.c taskpool.c timer.c \
+ 		tm.c version.c
+ 
+@@ -95,10 +95,6 @@ TESTDIRS =	@UNITTESTS@
+ 
+ @BIND9_MAKE_RULES@
+ 
+-safe.@O@: safe.c
+-	${LIBTOOL_MODE_COMPILE} ${CC} ${ALL_CFLAGS} @CCNOOPT@ \
+-		-c ${srcdir}/safe.c
+-
+ version.@O@: version.c
+ 	${LIBTOOL_MODE_COMPILE} ${CC} ${ALL_CFLAGS} \
+ 		-DVERSION=\"${VERSION}\" \
+diff --git a/lib/isc/include/isc/safe.h b/lib/isc/include/isc/safe.h
+index f29f00bac6..b8a0b2290c 100644
+--- a/lib/isc/include/isc/safe.h
++++ b/lib/isc/include/isc/safe.h
+@@ -15,27 +15,21 @@
+ 
+ /*! \file isc/safe.h */
+ 
+-#include <isc/types.h>
+-#include <stdlib.h>
++#include <isc/boolean.h>
++#include <isc/lang.h>
++
++#include <openssl/crypto.h>
+ 
+ ISC_LANG_BEGINDECLS
+ 
+-isc_boolean_t
+-isc_safe_memequal(const void *s1, const void *s2, size_t n);
++#define isc_safe_memequal(s1, s2, n) ISC_TF(!CRYPTO_memcmp(s1, s2, n))
+ /*%<
+  * Returns ISC_TRUE iff. two blocks of memory are equal, otherwise
+  * ISC_FALSE.
+  *
+  */
+ 
+-int
+-isc_safe_memcompare(const void *b1, const void *b2, size_t len);
+-/*%<
+- * Clone of libc memcmp() which is safe to differential timing attacks.
+- */
+-
+-void
+-isc_safe_memwipe(void *ptr, size_t len);
++#define isc_safe_memwipe(ptr, len) OPENSSL_cleanse(ptr, len)
+ /*%<
+  * Clear the memory of length `len` pointed to by `ptr`.
+  *
+diff --git a/lib/isc/safe.c b/lib/isc/safe.c
+deleted file mode 100644
+index 5c9e1e2d13..0000000000
+--- a/lib/isc/safe.c
++++ /dev/null
+@@ -1,81 +0,0 @@
+-/*
+- * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
+- *
+- * This Source Code Form is subject to the terms of the Mozilla Public
+- * License, v. 2.0. If a copy of the MPL was not distributed with this
+- * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+- *
+- * See the COPYRIGHT file distributed with this work for additional
+- * information regarding copyright ownership.
+- */
+-
+-/*! \file */
+-
+-#include <config.h>
+-
+-#include <isc/safe.h>
+-#include <isc/string.h>
+-#include <isc/util.h>
+-
+-#ifdef WIN32
+-#include <windows.h>
+-#endif
+-
+-#ifdef _MSC_VER
+-#pragma optimize("", off)
+-#endif
+-
+-isc_boolean_t
+-isc_safe_memequal(const void *s1, const void *s2, size_t n) {
+-	isc_uint8_t acc = 0;
+-
+-	if (n != 0U) {
+-		const isc_uint8_t *p1 = s1, *p2 = s2;
+-
+-		do {
+-			acc |= *p1++ ^ *p2++;
+-		} while (--n != 0U);
+-	}
+-	return (ISC_TF(acc == 0));
+-}
+-
+-
+-int
+-isc_safe_memcompare(const void *b1, const void *b2, size_t len) {
+-	const unsigned char *p1 = b1, *p2 = b2;
+-	size_t i;
+-	int res = 0, done = 0;
+-
+-	for (i = 0; i < len; i++) {
+-		/* lt is -1 if p1[i] < p2[i]; else 0. */
+-		int lt = (p1[i] - p2[i]) >> CHAR_BIT;
+-
+-		/* gt is -1 if p1[i] > p2[i]; else 0. */
+-		int gt = (p2[i] - p1[i]) >> CHAR_BIT;
+-
+-		/* cmp is 1 if p1[i] > p2[i]; -1 if p1[i] < p2[i]; else 0. */
+-		int cmp = lt - gt;
+-
+-		/* set res = cmp if !done. */
+-		res |= cmp & ~done;
+-
+-		/* set done if p1[i] != p2[i]. */
+-		done |= lt | gt;
+-	}
+-
+-	return (res);
+-}
+-
+-void
+-isc_safe_memwipe(void *ptr, size_t len) {
+-	if (ISC_UNLIKELY(ptr == NULL || len == 0))
+-		return;
+-
+-#ifdef WIN32
+-	SecureZeroMemory(ptr, len);
+-#elif HAVE_EXPLICIT_BZERO
+-	explicit_bzero(ptr, len);
+-#else
+-	memset(ptr, 0, len);
+-#endif
+-}
+diff --git a/lib/isc/tests/safe_test.c b/lib/isc/tests/safe_test.c
+index f721cd1096..ea3e61f98d 100644
+--- a/lib/isc/tests/safe_test.c
++++ b/lib/isc/tests/safe_test.c
+@@ -39,24 +39,6 @@ ATF_TC_BODY(isc_safe_memequal, tc) {
+ 				     "\x00\x00\x00\x00", 4));
+ }
+ 
+-ATF_TC(isc_safe_memcompare);
+-ATF_TC_HEAD(isc_safe_memcompare, tc) {
+-	atf_tc_set_md_var(tc, "descr", "safe memcompare()");
+-}
+-ATF_TC_BODY(isc_safe_memcompare, tc) {
+-	UNUSED(tc);
+-
+-	ATF_CHECK(isc_safe_memcompare("test", "test", 4) == 0);
+-	ATF_CHECK(isc_safe_memcompare("test", "tesc", 4) > 0);
+-	ATF_CHECK(isc_safe_memcompare("test", "tesy", 4) < 0);
+-	ATF_CHECK(isc_safe_memcompare("\x00\x00\x00\x00",
+-				      "\x00\x00\x00\x00", 4) == 0);
+-	ATF_CHECK(isc_safe_memcompare("\x00\x00\x00\x00",
+-				      "\x00\x00\x00\x01", 4) < 0);
+-	ATF_CHECK(isc_safe_memcompare("\x00\x00\x00\x02",
+-				      "\x00\x00\x00\x00", 4) > 0);
+-}
+-
+ ATF_TC(isc_safe_memwipe);
+ ATF_TC_HEAD(isc_safe_memwipe, tc) {
+ 	atf_tc_set_md_var(tc, "descr", "isc_safe_memwipe()");
+@@ -67,7 +49,6 @@ ATF_TC_BODY(isc_safe_memwipe, tc) {
+ 	/* These should pass. */
+ 	isc_safe_memwipe(NULL, 0);
+ 	isc_safe_memwipe((void *) -1, 0);
+-	isc_safe_memwipe(NULL, 42);
+ 
+ 	/*
+ 	 * isc_safe_memwipe(ptr, size) should function same as
+@@ -106,7 +87,6 @@ ATF_TC_BODY(isc_safe_memwipe, tc) {
+  */
+ ATF_TP_ADD_TCS(tp) {
+ 	ATF_TP_ADD_TC(tp, isc_safe_memequal);
+-	ATF_TP_ADD_TC(tp, isc_safe_memcompare);
+ 	ATF_TP_ADD_TC(tp, isc_safe_memwipe);
+ 	return (atf_no_error());
+ }
+-- 
+2.14.4
+

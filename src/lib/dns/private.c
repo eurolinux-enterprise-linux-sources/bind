@@ -1,27 +1,22 @@
 /*
- * Copyright (C) 2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
 
 #include "config.h"
 
+#include <isc/base64.h>
+#include <isc/print.h>
 #include <isc/result.h>
 #include <isc/string.h>
 #include <isc/types.h>
-#include <isc/base64.h>
+#include <isc/util.h>
 
 #include <dns/nsec3.h>
 #include <dns/private.h>
@@ -162,7 +157,6 @@ dns_private_chains(dns_db_t *db, dns_dbversion_t *ver,
 		for (result = dns_rdataset_first(&privateset);
 		     result == ISC_R_SUCCESS;
 		     result = dns_rdataset_next(&privateset)) {
-			unsigned char buf[DNS_NSEC3PARAM_BUFFERSIZE];
 			dns_rdata_t private = DNS_RDATA_INIT;
 			dns_rdata_t rdata = DNS_RDATA_INIT;
 
@@ -307,7 +301,7 @@ dns_private_totext(dns_rdata_t *private, isc_buffer_t *buf) {
 		unsigned char newbuf[DNS_NSEC3PARAM_BUFFERSIZE];
 		dns_rdata_t rdata = DNS_RDATA_INIT;
 		dns_rdata_nsec3param_t nsec3param;
-		isc_boolean_t remove, init, nonsec;
+		isc_boolean_t del, init, nonsec;
 		isc_buffer_t b;
 
 		if (!dns_nsec3param_fromprivate(private, &rdata, nsec3buf,
@@ -316,7 +310,7 @@ dns_private_totext(dns_rdata_t *private, isc_buffer_t *buf) {
 
 		CHECK(dns_rdata_tostruct(&rdata, &nsec3param, NULL));
 
-		remove = ISC_TF((nsec3param.flags & DNS_NSEC3FLAG_REMOVE) != 0);
+		del = ISC_TF((nsec3param.flags & DNS_NSEC3FLAG_REMOVE) != 0);
 		init = ISC_TF((nsec3param.flags & DNS_NSEC3FLAG_INITIAL) != 0);
 		nonsec = ISC_TF((nsec3param.flags & DNS_NSEC3FLAG_NONSEC) != 0);
 
@@ -327,7 +321,7 @@ dns_private_totext(dns_rdata_t *private, isc_buffer_t *buf) {
 
 		if (init)
 			isc_buffer_putstr(buf, "Pending NSEC3 chain ");
-		else if (remove)
+		else if (del)
 			isc_buffer_putstr(buf, "Removing NSEC3 chain ");
 		else
 			isc_buffer_putstr(buf, "Creating NSEC3 chain ");
@@ -340,18 +334,18 @@ dns_private_totext(dns_rdata_t *private, isc_buffer_t *buf) {
 
 		CHECK(dns_rdata_totext(&rdata, NULL, buf));
 
-		if (remove && !nonsec)
+		if (del && !nonsec)
 			isc_buffer_putstr(buf, " / creating NSEC chain");
 	} else if (private->length == 5) {
 		unsigned char alg = private->data[0];
 		dns_keytag_t keyid = (private->data[2] | private->data[1] << 8);
 		char keybuf[BUFSIZ], algbuf[DNS_SECALG_FORMATSIZE];
-		isc_boolean_t remove = ISC_TF(private->data[3] != 0);
+		isc_boolean_t del = ISC_TF(private->data[3] != 0);
 		isc_boolean_t complete = ISC_TF(private->data[4] != 0);
 
-		if (remove && complete)
+		if (del && complete)
 			isc_buffer_putstr(buf, "Done removing signatures for ");
-		else if (remove)
+		else if (del)
 			isc_buffer_putstr(buf, "Removing signatures for ");
 		else if (complete)
 			isc_buffer_putstr(buf, "Done signing with ");
@@ -359,7 +353,7 @@ dns_private_totext(dns_rdata_t *private, isc_buffer_t *buf) {
 			isc_buffer_putstr(buf, "Signing with ");
 
 		dns_secalg_format(alg, algbuf, sizeof(algbuf));
-		sprintf(keybuf, "key %d/%s", keyid, algbuf);
+		snprintf(keybuf, sizeof(keybuf), "key %d/%s", keyid, algbuf);
 		isc_buffer_putstr(buf, keybuf);
 	} else
 		return (ISC_R_NOTFOUND);

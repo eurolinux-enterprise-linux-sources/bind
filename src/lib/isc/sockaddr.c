@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007, 2010-2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 /*! \file */
 
@@ -205,7 +198,6 @@ isc_sockaddr_hash(const isc_sockaddr_t *sockaddr, isc_boolean_t address_only) {
 	unsigned int length = 0;
 	const unsigned char *s = NULL;
 	unsigned int h = 0;
-	unsigned int g;
 	unsigned int p = 0;
 	const struct in6_addr *in6;
 
@@ -239,12 +231,9 @@ isc_sockaddr_hash(const isc_sockaddr_t *sockaddr, isc_boolean_t address_only) {
 		p = 0;
 	}
 
-	h = isc_hash_calc(s, length, ISC_TRUE);
-	if (!address_only) {
-		g = isc_hash_calc((const unsigned char *)&p, sizeof(p),
-				  ISC_TRUE);
-		h = h ^ g; /* XXX: we should concatenate h and p first */
-	}
+	h = isc_hash_function(s, length, ISC_TRUE, NULL);
+	if (!address_only)
+		h = isc_hash_function(&p, sizeof(p), ISC_TRUE, &h);
 
 	return (h);
 }
@@ -332,7 +321,7 @@ isc_sockaddr_v6fromin(isc_sockaddr_t *sockaddr, const struct in_addr *ina,
 #endif
 	sockaddr->type.sin6.sin6_addr.s6_addr[10] = 0xff;
 	sockaddr->type.sin6.sin6_addr.s6_addr[11] = 0xff;
-	memcpy(&sockaddr->type.sin6.sin6_addr.s6_addr[12], ina, 4);
+	memmove(&sockaddr->type.sin6.sin6_addr.s6_addr[12], ina, 4);
 	sockaddr->type.sin6.sin6_port = htons(port);
 	sockaddr->length = sizeof(sockaddr->type.sin6);
 	ISC_LINK_INIT(sockaddr, link);
@@ -368,7 +357,7 @@ isc_sockaddr_pf(const isc_sockaddr_t *sockaddr) {
 
 void
 isc_sockaddr_fromnetaddr(isc_sockaddr_t *sockaddr, const isc_netaddr_t *na,
-		    in_port_t port)
+			 in_port_t port)
 {
 	memset(sockaddr, 0, sizeof(*sockaddr));
 	sockaddr->type.sin.sin_family = na->family;
@@ -386,7 +375,7 @@ isc_sockaddr_fromnetaddr(isc_sockaddr_t *sockaddr, const isc_netaddr_t *na,
 #ifdef ISC_PLATFORM_HAVESALEN
 		sockaddr->type.sin6.sin6_len = sizeof(sockaddr->type.sin6);
 #endif
-		memcpy(&sockaddr->type.sin6.sin6_addr, &na->type.in6, 16);
+		memmove(&sockaddr->type.sin6.sin6_addr, &na->type.in6, 16);
 #ifdef ISC_PLATFORM_HAVESCOPEID
 		sockaddr->type.sin6.sin6_scope_id = isc_netaddr_getzone(na);
 #endif
@@ -483,6 +472,17 @@ isc_sockaddr_islinklocal(const isc_sockaddr_t *sockaddr) {
 	return (ISC_FALSE);
 }
 
+isc_boolean_t
+isc_sockaddr_isnetzero(const isc_sockaddr_t *sockaddr) {
+	isc_netaddr_t netaddr;
+
+	if (sockaddr->type.sa.sa_family == AF_INET) {
+		isc_netaddr_fromsockaddr(&netaddr, sockaddr);
+		return (isc_netaddr_isnetzero(&netaddr));
+	}
+	return (ISC_FALSE);
+}
+
 isc_result_t
 isc_sockaddr_frompath(isc_sockaddr_t *sockaddr, const char *path) {
 #ifdef ISC_PLATFORM_HAVESYSUNH
@@ -495,7 +495,8 @@ isc_sockaddr_frompath(isc_sockaddr_t *sockaddr, const char *path) {
 	sockaddr->type.sunix.sun_len =
 			(unsigned char)sizeof(sockaddr->type.sunix);
 #endif
-	strcpy(sockaddr->type.sunix.sun_path, path);
+	strlcpy(sockaddr->type.sunix.sun_path, path,
+		sizeof(sockaddr->type.sunix.sun_path));
 	return (ISC_R_SUCCESS);
 #else
 	UNUSED(sockaddr);

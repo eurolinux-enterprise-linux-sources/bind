@@ -1,18 +1,12 @@
 /*
- * Copyright (C) 2004-2007, 2009, 2011  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /* $Id: acl.h,v 1.35 2011/06/17 23:47:49 tbox Exp $ */
@@ -38,9 +32,16 @@
 #include <isc/netaddr.h>
 #include <isc/refcount.h>
 
+#ifdef HAVE_GEOIP
+#include <dns/geoip.h>
+#endif
 #include <dns/name.h>
 #include <dns/types.h>
 #include <dns/iptable.h>
+
+#ifdef HAVE_GEOIP
+#include <GeoIP.h>
+#endif
 
 /***
  *** Types
@@ -52,8 +53,11 @@ typedef enum {
 	dns_aclelementtype_nestedacl,
 	dns_aclelementtype_localhost,
 	dns_aclelementtype_localnets,
+#ifdef HAVE_GEOIP
+	dns_aclelementtype_geoip,
+#endif /* HAVE_GEOIP */
 	dns_aclelementtype_any
-} dns_aclelemettype_t;
+} dns_aclelementtype_t;
 
 typedef struct dns_aclipprefix dns_aclipprefix_t;
 
@@ -63,9 +67,12 @@ struct dns_aclipprefix {
 };
 
 struct dns_aclelement {
-	dns_aclelemettype_t	type;
+	dns_aclelementtype_t	type;
 	isc_boolean_t		negative;
 	dns_name_t		keyname;
+#ifdef HAVE_GEOIP
+	dns_geoip_elem_t	geoip_elem;
+#endif /* HAVE_GEOIP */
 	dns_acl_t		*nestedacl;
 	int			node_num;
 };
@@ -88,6 +95,10 @@ struct dns_aclenv {
 	dns_acl_t *localhost;
 	dns_acl_t *localnets;
 	isc_boolean_t match_mapped;
+#ifdef HAVE_GEOIP
+	dns_geoip_databases_t *geoip;
+	isc_boolean_t geoip_use_ecs;
+#endif
 };
 
 #define DNS_ACL_MAGIC		ISC_MAGIC('D','a','c','l')
@@ -196,12 +207,28 @@ dns_acl_match(const isc_netaddr_t *reqaddr,
 	      const dns_aclenv_t *env,
 	      int *match,
 	      const dns_aclelement_t **matchelt);
+
+isc_result_t
+dns_acl_match2(const isc_netaddr_t *reqaddr,
+	       const dns_name_t *reqsigner,
+	       const isc_netaddr_t *ecs,
+	       isc_uint8_t ecslen,
+	       isc_uint8_t *scope,
+	       const dns_acl_t *acl,
+	       const dns_aclenv_t *env,
+	       int *match,
+	       const dns_aclelement_t **matchelt);
 /*%<
  * General, low-level ACL matching.  This is expected to
  * be useful even for weird stuff like the topology and sortlist statements.
  *
  * Match the address 'reqaddr', and optionally the key name 'reqsigner',
- * against 'acl'.  'reqsigner' may be NULL.
+ * and optionally the client prefix 'ecs' of length 'ecslen'
+ * (reported via EDNS client subnet option) against 'acl'.
+ *
+ * 'reqsigner' and 'ecs' may be NULL.  If an ACL matches against 'ecs'
+ * and 'ecslen', then 'scope' will be set to indicate the netmask that
+ * matched.
  *
  * If there is a match, '*match' will be set to an integer whose absolute
  * value corresponds to the order in which the matching value was inserted
@@ -214,6 +241,10 @@ dns_acl_match(const isc_netaddr_t *reqaddr,
  * and 'matchelt' is non-NULL, *matchelt will be pointed to the matching
  * element.
  *
+ * 'env' points to the current ACL environment, including the
+ * current values of localhost and localnets and (if applicable)
+ * the GeoIP context.
+ *
  * Returns:
  *\li	#ISC_R_SUCCESS		Always succeeds.
  */
@@ -224,6 +255,16 @@ dns_aclelement_match(const isc_netaddr_t *reqaddr,
 		     const dns_aclelement_t *e,
 		     const dns_aclenv_t *env,
 		     const dns_aclelement_t **matchelt);
+
+isc_boolean_t
+dns_aclelement_match2(const isc_netaddr_t *reqaddr,
+		      const dns_name_t *reqsigner,
+		      const isc_netaddr_t *ecs,
+		      isc_uint8_t ecslen,
+		      isc_uint8_t *scope,
+		      const dns_aclelement_t *e,
+		      const dns_aclenv_t *env,
+		      const dns_aclelement_t **matchelt);
 /*%<
  * Like dns_acl_match, but matches against the single ACL element 'e'
  * rather than a complete ACL, and returns ISC_TRUE iff it matched.

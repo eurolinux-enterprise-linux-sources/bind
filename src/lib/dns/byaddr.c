@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009, 2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: byaddr.c,v 1.41 2009/09/02 23:48:02 tbox Exp $ */
 
 /*! \file */
 
@@ -84,11 +77,13 @@ dns_byaddr_createptrname2(isc_netaddr_t *address, unsigned int options,
 	if (address->family == AF_INET) {
 		(void)snprintf(textname, sizeof(textname),
 			       "%u.%u.%u.%u.in-addr.arpa.",
-			       (bytes[3] & 0xff),
-			       (bytes[2] & 0xff),
-			       (bytes[1] & 0xff),
-			       (bytes[0] & 0xff));
+			       (bytes[3] & 0xffU),
+			       (bytes[2] & 0xffU),
+			       (bytes[1] & 0xffU),
+			       (bytes[0] & 0xffU));
 	} else if (address->family == AF_INET6) {
+		size_t remaining;
+
 		cp = textname;
 		for (i = 15; i >= 0; i--) {
 			*cp++ = hex_digits[bytes[i] & 0x0f];
@@ -96,10 +91,12 @@ dns_byaddr_createptrname2(isc_netaddr_t *address, unsigned int options,
 			*cp++ = hex_digits[(bytes[i] >> 4) & 0x0f];
 			*cp++ = '.';
 		}
-		if ((options & DNS_BYADDROPT_IPV6INT) != 0)
-			strcpy(cp, "ip6.int.");
-		else
-			strcpy(cp, "ip6.arpa.");
+		remaining = sizeof(textname) - (cp - textname);
+		if ((options & DNS_BYADDROPT_IPV6INT) != 0) {
+			strlcpy(cp, "ip6.int.", remaining);
+		} else {
+			strlcpy(cp, "ip6.arpa.", remaining);
+		}
 	} else
 		return (ISC_R_NOTIMPLEMENTED);
 
@@ -109,7 +106,6 @@ dns_byaddr_createptrname2(isc_netaddr_t *address, unsigned int options,
 	return (dns_name_fromtext(name, &buffer, dns_rootname, 0, NULL));
 }
 
-#ifdef BIND9
 struct dns_byaddr {
 	/* Unlocked. */
 	unsigned int		magic;
@@ -315,4 +311,3 @@ dns_byaddr_destroy(dns_byaddr_t **byaddrp) {
 
 	*byaddrp = NULL;
 }
-#endif /* BIND9 */

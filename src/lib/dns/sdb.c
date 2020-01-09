@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004-2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000, 2001, 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
 
 /*! \file */
 
@@ -113,10 +105,10 @@ typedef struct sdb_rdatasetiter {
 #define VALID_SDBNODE(sdbn)	VALID_SDBLOOKUP(sdbn)
 
 /* These values are taken from RFC1537 */
-#define SDB_DEFAULT_REFRESH	(60 * 60 * 8)
-#define SDB_DEFAULT_RETRY	(60 * 60 * 2)
-#define SDB_DEFAULT_EXPIRE	(60 * 60 * 24 * 7)
-#define SDB_DEFAULT_MINIMUM	(60 * 60 * 24)
+#define SDB_DEFAULT_REFRESH	28800U		/* 8 hours */
+#define SDB_DEFAULT_RETRY	7200U		/* 2 hours */
+#define SDB_DEFAULT_EXPIRE	604800U		/* 7 days */
+#define SDB_DEFAULT_MINIMUM	86400U		/* 1 day */
 
 /* This is a reasonable value */
 #define SDB_DEFAULT_TTL		(60 * 60 * 24)
@@ -305,12 +297,10 @@ dns_sdb_putrdata(dns_sdblookup_t *lookup, dns_rdatatype_t typeval,
 		rdatalist = isc_mem_get(mctx, sizeof(dns_rdatalist_t));
 		if (rdatalist == NULL)
 			return (ISC_R_NOMEMORY);
+		dns_rdatalist_init(rdatalist);
 		rdatalist->rdclass = lookup->sdb->common.rdclass;
 		rdatalist->type = typeval;
-		rdatalist->covers = 0;
 		rdatalist->ttl = ttl;
-		ISC_LIST_INIT(rdatalist->rdata);
-		ISC_LINK_INIT(rdatalist, link);
 		ISC_LIST_APPEND(lookup->lists, rdatalist, link);
 	} else
 		if (rdatalist->ttl != ttl)
@@ -441,8 +431,7 @@ getnode(dns_sdballnodes_t *allnodes, const char *name, dns_sdbnode_t **nodep) {
 	isc_buffer_t b;
 	isc_result_t result;
 
-	dns_fixedname_init(&fnewname);
-	newname = dns_fixedname_name(&fnewname);
+	newname = dns_fixedname_initname(&fnewname);
 
 	if ((imp->flags & DNS_SDBFLAG_RELATIVERDATA) != 0)
 		origin = &sdb->common.origin;
@@ -596,17 +585,16 @@ detach(dns_db_t **dbp) {
 }
 
 static isc_result_t
-beginload(dns_db_t *db, dns_addrdatasetfunc_t *addp, dns_dbload_t **dbloadp) {
+beginload(dns_db_t *db, dns_rdatacallbacks_t *callbacks) {
 	UNUSED(db);
-	UNUSED(addp);
-	UNUSED(dbloadp);
+	UNUSED(callbacks);
 	return (ISC_R_NOTIMPLEMENTED);
 }
 
 static isc_result_t
-endload(dns_db_t *db, dns_dbload_t **dbloadp) {
+endload(dns_db_t *db, dns_rdatacallbacks_t *callbacks) {
 	UNUSED(db);
-	UNUSED(dbloadp);
+	UNUSED(callbacks);
 	return (ISC_R_NOTIMPLEMENTED);
 }
 
@@ -844,8 +832,7 @@ findext(dns_db_t *db, dns_name_t *name, dns_dbversion_t *version,
 	olabels = dns_name_countlabels(&db->origin);
 	nlabels = dns_name_countlabels(name);
 
-	dns_fixedname_init(&fname);
-	xname = dns_fixedname_name(&fname);
+	xname = dns_fixedname_initname(&fname);
 
 	if (rdataset == NULL) {
 		dns_rdataset_init(&xrdataset);
@@ -1246,9 +1233,9 @@ ispersistent(dns_db_t *db) {
 }
 
 static void
-overmem(dns_db_t *db, isc_boolean_t overmem) {
+overmem(dns_db_t *db, isc_boolean_t over) {
 	UNUSED(db);
-	UNUSED(overmem);
+	UNUSED(over);
 }
 
 static void
@@ -1263,6 +1250,7 @@ static dns_dbmethods_t sdb_methods = {
 	detach,
 	beginload,
 	endload,
+	NULL,
 	dump,
 	currentversion,
 	newversion,
@@ -1295,10 +1283,14 @@ static dns_dbmethods_t sdb_methods = {
 	NULL,			/* resigned */
 	NULL,			/* isdnssec */
 	NULL,			/* getrrsetstats */
-	NULL,			/* rpz_enabled */
-	NULL,			/* rpz_findips */
+	NULL,			/* rpz_attach */
+	NULL,			/* rpz_ready */
 	findnodeext,
-	findext
+	findext,
+	NULL,			/* setcachestats */
+	NULL,			/* hashsize */
+	NULL,			/* nodefullname */
+	NULL			/* getsize */
 };
 
 static isc_result_t
@@ -1412,7 +1404,7 @@ rdataset_clone(dns_rdataset_t *source, dns_rdataset_t *target) {
 	source->private5 = tempdb;
 }
 
-static dns_rdatasetmethods_t methods = {
+static dns_rdatasetmethods_t sdb_rdataset_methods = {
 	disassociate,
 	isc__rdatalist_first,
 	isc__rdatalist_next,
@@ -1421,6 +1413,9 @@ static dns_rdatasetmethods_t methods = {
 	isc__rdatalist_count,
 	isc__rdatalist_addnoqname,
 	isc__rdatalist_getnoqname,
+	NULL,
+	NULL,
+	NULL,
 	NULL,
 	NULL,
 	NULL,
@@ -1446,7 +1441,7 @@ list_tordataset(dns_rdatalist_t *rdatalist,
 	RUNTIME_CHECK(dns_rdatalist_tordataset(rdatalist, rdataset) ==
 		      ISC_R_SUCCESS);
 
-	rdataset->methods = &methods;
+	rdataset->methods = &sdb_rdataset_methods;
 	dns_db_attachnode(db, node, &rdataset->private5);
 }
 

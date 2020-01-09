@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004-2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: rdata.h,v 1.80 2011/03/20 02:31:53 marka Exp $ */
 
 #ifndef DNS_RDATA_H
 #define DNS_RDATA_H 1
@@ -165,11 +157,17 @@ struct dns_rdata {
 
 /*% Split the rdata into multiple lines to try to keep it
  within the "width". */
-#define DNS_STYLEFLAG_MULTILINE		0x00000001U
+#define DNS_STYLEFLAG_MULTILINE		0x00000001ULL
 
 /*% Output explanatory comments. */
-#define DNS_STYLEFLAG_COMMENT		0x00000002U
-#define DNS_STYLEFLAG_RRCOMMENT		0x00000004U
+#define DNS_STYLEFLAG_COMMENT		0x00000002ULL
+#define DNS_STYLEFLAG_RRCOMMENT		0x00000004ULL
+
+/*% Output KEYDATA in human readable format. */
+#define DNS_STYLEFLAG_KEYDATA		0x00000008ULL
+
+/*% Output textual RR type and RDATA in RFC 3597 unknown format */
+#define DNS_STYLEFLAG_UNKNOWNFORMAT	0x00000010ULL
 
 #define DNS_RDATA_DOWNCASE		DNS_NAME_DOWNCASE
 #define DNS_RDATA_CHECKNAMES		DNS_NAME_CHECKNAMES
@@ -499,7 +497,7 @@ dns_rdata_fromstruct(dns_rdata_t *rdata, dns_rdataclass_t rdclass,
  */
 
 isc_result_t
-dns_rdata_tostruct(dns_rdata_t *rdata, void *target, isc_mem_t *mctx);
+dns_rdata_tostruct(const dns_rdata_t *rdata, void *target, isc_mem_t *mctx);
 /*%<
  * Convert an rdata into its C structure representation.
  *

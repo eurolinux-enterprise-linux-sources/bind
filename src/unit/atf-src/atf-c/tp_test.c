@@ -1,7 +1,4 @@
-/*
- * Automated Testing Framework (atf)
- *
- * Copyright (c) 2010 The NetBSD Foundation, Inc.
+/* Copyright (c) 2010 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,15 +21,14 @@
  * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
+
+#include "atf-c/tp.h"
 
 #include <string.h>
 #include <unistd.h>
 
 #include <atf-c.h>
-
-#include "detail/test_helpers.h"
 
 ATF_TC(getopt);
 ATF_TC_HEAD(getopt, tc)
@@ -54,13 +50,16 @@ ATF_TC_BODY(getopt, tc)
     char *const argv[] = { arg1, arg2, arg3, arg4, NULL };
 
     int ch;
+    bool zflag;
 
     /* Given that this obviously is a test program, and that we used the
      * same driver to start, we can test getopt(3) right here without doing
      * any fancy stuff. */
+    zflag = false;
     while ((ch = getopt(argc, argv, ":Z")) != -1) {
         switch (ch) {
         case 'Z':
+            zflag = true;
             break;
 
         case '?':
@@ -70,17 +69,12 @@ ATF_TC_BODY(getopt, tc)
         }
     }
 
+    ATF_REQUIRE(zflag);
     ATF_REQUIRE_EQ_MSG(1, argc - optind, "Invalid number of arguments left "
         "after the call to getopt(3)");
     ATF_CHECK_STREQ_MSG("foo", argv[optind], "The non-option argument is "
         "invalid");
 }
-
-/* ---------------------------------------------------------------------
- * Tests cases for the header file.
- * --------------------------------------------------------------------- */
-
-HEADER_TC(include, "atf-c/tp.h");
 
 /* ---------------------------------------------------------------------
  * Main.
@@ -89,9 +83,6 @@ HEADER_TC(include, "atf-c/tp.h");
 ATF_TP_ADD_TCS(tp)
 {
     ATF_TP_ADD_TC(tp, getopt);
-
-    /* Add the test cases for the header file. */
-    ATF_TP_ADD_TC(tp, include);
 
     return atf_no_error();
 }

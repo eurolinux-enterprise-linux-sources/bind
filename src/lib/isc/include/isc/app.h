@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007, 2009, 2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2001  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: app.h,v 1.11 2009/09/02 23:48:03 tbox Exp $ */
 
 #ifndef ISC_APP_H
 #define ISC_APP_H 1
@@ -203,6 +196,16 @@ isc_app_run(void);
  *\li	ISC_R_RELOAD			Reload has been requested.
  */
 
+isc_boolean_t
+isc_app_isrunning(void);
+/*!<
+ * \brief Return if the ISC library application is running.
+ *
+ * Returns:
+ *\li	ISC_TRUE    App is running.
+ *\li	ISC_FALSE   App is not running.
+ */
+
 isc_result_t
 isc_app_ctxshutdown(isc_appctx_t *ctx);
 
@@ -352,7 +355,6 @@ isc_appctx_settimermgr(isc_appctx_t *ctx, isc_timermgr_t *timermgr);
  *\li	'timermgr' is a valid timer manager.
  */
 
-#ifdef USE_APPIMPREGISTER
 /*%<
  * See isc_appctx_create() above.
  */
@@ -375,7 +377,6 @@ isc__app_register(void);
  * usually do not have to care about this function: it would call
  * isc_lib_register(), which internally calls this function.
  */
-#endif /* USE_APPIMPREGISTER */
 
 ISC_LANG_ENDDECLS
 

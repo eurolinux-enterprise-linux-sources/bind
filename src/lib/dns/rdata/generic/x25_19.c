@@ -1,23 +1,13 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: x25_19.c,v 1.41 2009/12/04 22:06:37 tbox Exp $ */
-
-/* Reviewed: Thu Mar 16 16:15:57 PST 2000 by bwelling */
 
 /* RFC1183 */
 
@@ -31,7 +21,7 @@ fromtext_x25(ARGS_FROMTEXT) {
 	isc_token_t token;
 	unsigned int i;
 
-	REQUIRE(type == 19);
+	REQUIRE(type == dns_rdatatype_x25);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -56,18 +46,18 @@ totext_x25(ARGS_TOTEXT) {
 
 	UNUSED(tctx);
 
-	REQUIRE(rdata->type == 19);
+	REQUIRE(rdata->type == dns_rdatatype_x25);
 	REQUIRE(rdata->length != 0);
 
 	dns_rdata_toregion(rdata, &region);
-	return (txt_totext(&region, target));
+	return (txt_totext(&region, ISC_TRUE, target));
 }
 
 static inline isc_result_t
 fromwire_x25(ARGS_FROMWIRE) {
 	isc_region_t sr;
 
-	REQUIRE(type == 19);
+	REQUIRE(type == dns_rdatatype_x25);
 
 	UNUSED(type);
 	UNUSED(dctx);
@@ -84,7 +74,7 @@ static inline isc_result_t
 towire_x25(ARGS_TOWIRE) {
 	UNUSED(cctx);
 
-	REQUIRE(rdata->type == 19);
+	REQUIRE(rdata->type == dns_rdatatype_x25);
 	REQUIRE(rdata->length != 0);
 
 	return (mem_tobuffer(target, rdata->data, rdata->length));
@@ -97,7 +87,7 @@ compare_x25(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 19);
+	REQUIRE(rdata1->type == dns_rdatatype_x25);
 	REQUIRE(rdata1->length != 0);
 	REQUIRE(rdata2->length != 0);
 
@@ -111,7 +101,7 @@ fromstruct_x25(ARGS_FROMSTRUCT) {
 	dns_rdata_x25_t *x25 = source;
 	isc_uint8_t i;
 
-	REQUIRE(type == 19);
+	REQUIRE(type == dns_rdatatype_x25);
 	REQUIRE(source != NULL);
 	REQUIRE(x25->common.rdtype == type);
 	REQUIRE(x25->common.rdclass == rdclass);
@@ -136,7 +126,7 @@ tostruct_x25(ARGS_TOSTRUCT) {
 	dns_rdata_x25_t *x25 = target;
 	isc_region_t r;
 
-	REQUIRE(rdata->type == 19);
+	REQUIRE(rdata->type == dns_rdatatype_x25);
 	REQUIRE(target != NULL);
 	REQUIRE(rdata->length != 0);
 
@@ -159,7 +149,7 @@ static inline void
 freestruct_x25(ARGS_FREESTRUCT) {
 	dns_rdata_x25_t *x25 = source;
 	REQUIRE(source != NULL);
-	REQUIRE(x25->common.rdtype == 19);
+	REQUIRE(x25->common.rdtype == dns_rdatatype_x25);
 
 	if (x25->mctx == NULL)
 		return;
@@ -171,7 +161,7 @@ freestruct_x25(ARGS_FREESTRUCT) {
 
 static inline isc_result_t
 additionaldata_x25(ARGS_ADDLDATA) {
-	REQUIRE(rdata->type == 19);
+	REQUIRE(rdata->type == dns_rdatatype_x25);
 
 	UNUSED(rdata);
 	UNUSED(add);
@@ -184,7 +174,7 @@ static inline isc_result_t
 digest_x25(ARGS_DIGEST) {
 	isc_region_t r;
 
-	REQUIRE(rdata->type == 19);
+	REQUIRE(rdata->type == dns_rdatatype_x25);
 
 	dns_rdata_toregion(rdata, &r);
 
@@ -194,7 +184,7 @@ digest_x25(ARGS_DIGEST) {
 static inline isc_boolean_t
 checkowner_x25(ARGS_CHECKOWNER) {
 
-	REQUIRE(type == 19);
+	REQUIRE(type == dns_rdatatype_x25);
 
 	UNUSED(name);
 	UNUSED(type);
@@ -207,7 +197,7 @@ checkowner_x25(ARGS_CHECKOWNER) {
 static inline isc_boolean_t
 checknames_x25(ARGS_CHECKNAMES) {
 
-	REQUIRE(rdata->type == 19);
+	REQUIRE(rdata->type == dns_rdatatype_x25);
 
 	UNUSED(rdata);
 	UNUSED(owner);

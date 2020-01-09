@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004, 2005, 2007  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: ifiter_sysctl.c,v 1.25 2007/06/19 23:47:18 tbox Exp $ */
 
 /*! \file
  * \brief
@@ -30,6 +23,8 @@
 #include <net/route.h>
 #include <net/if_dl.h>
 
+#include <isc/print.h>
+
 /* XXX what about Alpha? */
 #ifdef sgi
 #define ROUNDUP(a) ((a) > 0 ? \
@@ -37,7 +32,7 @@
 		sizeof(__uint64_t))
 #else
 #define ROUNDUP(a) ((a) > 0 ? (1 + (((a) - 1) | (sizeof(long) - 1))) \
-                    : sizeof(long))
+		    : sizeof(long))
 #endif
 
 #define IFITER_MAGIC		ISC_MAGIC('I', 'F', 'I', 'S')
@@ -58,9 +53,9 @@ struct isc_interfaceiter {
 static int mib[6] = {
 	CTL_NET,
 	PF_ROUTE,
-        0,
+	0,
 	0, 			/* Any address family. */
-        NET_RT_IFLIST,
+	NET_RT_IFLIST,
 	0 			/* Flags. */
 };
 
@@ -171,7 +166,7 @@ internal_current(isc_interfaceiter_t *iter) {
 			namelen = sizeof(iter->current.name) - 1;
 
 		memset(iter->current.name, 0, sizeof(iter->current.name));
-		memcpy(iter->current.name, sdl->sdl_data, namelen);
+		memmove(iter->current.name, sdl->sdl_data, namelen);
 
 		iter->current.flags = 0;
 
@@ -258,7 +253,8 @@ internal_current(isc_interfaceiter_t *iter) {
 
 		return (ISC_R_SUCCESS);
 	} else {
-		printf(isc_msgcat_get(isc_msgcat, ISC_MSGSET_IFITERSYSCTL,
+		printf("%s",
+		       isc_msgcat_get(isc_msgcat, ISC_MSGSET_IFITERSYSCTL,
 				      ISC_MSG_UNEXPECTEDTYPE,
 				      "warning: unexpected interface list "
 				      "message type\n"));

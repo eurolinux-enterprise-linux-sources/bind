@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004-2007  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2001, 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: print.h,v 1.26 2007/06/19 23:47:18 tbox Exp $ */
 
 #ifndef ISC_PRINT_H
 #define ISC_PRINT_H 1
@@ -38,10 +30,23 @@
  */
 #if !defined(ISC_PLATFORM_NEEDVSNPRINTF) && defined(ISC__PRINT_SOURCE)
 #define ISC_PLATFORM_NEEDVSNPRINTF
+#undef snprintf
+#undef vsnprintf
 #endif
 
 #if !defined(ISC_PLATFORM_NEEDSPRINTF) && defined(ISC__PRINT_SOURCE)
 #define ISC_PLATFORM_NEEDSPRINTF
+#undef sprintf
+#endif
+
+#if !defined(ISC_PLATFORM_NEEDFPRINTF) && defined(ISC__PRINT_SOURCE)
+#define ISC_PLATFORM_NEEDFPRINTF
+#undef fprintf
+#endif
+
+#if !defined(ISC_PLATFORM_NEEDPRINTF) && defined(ISC__PRINT_SOURCE)
+#define ISC_PLATFORM_NEEDPRINTF
+#undef printf
 #endif
 
 /***
@@ -57,10 +62,8 @@
 #include <stdarg.h>
 #include <stddef.h>
 #endif
-#ifdef ISC_PLATFORM_NEEDSPRINTF
-#include <stdio.h>
-#endif
 
+#include <stdio.h>
 
 ISC_LANG_BEGINDECLS
 
@@ -68,18 +71,35 @@ ISC_LANG_BEGINDECLS
 int
 isc_print_vsnprintf(char *str, size_t size, const char *format, va_list ap)
      ISC_FORMAT_PRINTF(3, 0);
+#undef vsnprintf
 #define vsnprintf isc_print_vsnprintf
 
 int
 isc_print_snprintf(char *str, size_t size, const char *format, ...)
      ISC_FORMAT_PRINTF(3, 4);
+#undef snprintf
 #define snprintf isc_print_snprintf
 #endif /* ISC_PLATFORM_NEEDVSNPRINTF */
 
 #ifdef ISC_PLATFORM_NEEDSPRINTF
 int
 isc_print_sprintf(char *str, const char *format, ...) ISC_FORMAT_PRINTF(2, 3);
+#undef sprintf
 #define sprintf isc_print_sprintf
+#endif
+
+#ifdef ISC_PLATFORM_NEEDPRINTF
+int
+isc_print_printf(const char *format, ...) ISC_FORMAT_PRINTF(1, 2);
+#undef printf
+#define printf isc_print_printf
+#endif
+
+#ifdef ISC_PLATFORM_NEEDFPRINTF
+int
+isc_print_fprintf(FILE * fp, const char *format, ...) ISC_FORMAT_PRINTF(2, 3);
+#undef fprintf
+#define fprintf isc_print_fprintf
 #endif
 
 ISC_LANG_ENDDECLS

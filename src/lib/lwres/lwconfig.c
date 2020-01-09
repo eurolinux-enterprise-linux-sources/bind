@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004-2008, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
 
 /*! \file */
 
@@ -67,9 +59,12 @@
 #include <lwres/lwres.h>
 #include <lwres/net.h>
 #include <lwres/result.h>
+#include <lwres/stdlib.h>
+#include <lwres/string.h>
 
 #include "assert_p.h"
 #include "context_p.h"
+#include "print_p.h"
 
 
 #if ! defined(NS_INADDRSZ)
@@ -204,6 +199,7 @@ lwres_resetaddr(lwres_addr_t *addr) {
 	memset(addr->address, 0, LWRES_ADDR_MAXLEN);
 	addr->family = 0;
 	addr->length = 0;
+	addr->zone = 0;
 }
 
 static char *
@@ -237,6 +233,8 @@ lwres_conf_init(lwres_context_t *ctx) {
 	confdata->resdebug = 0;
 	confdata->ndots = 1;
 	confdata->no_tld_query = 0;
+	confdata->attempts = 0;
+	confdata->timeout = 0;
 
 	for (i = 0; i < LWRES_CONFMAXNAMESERVERS; i++)
 		lwres_resetaddr(&confdata->nameservers[i]);
@@ -289,6 +287,8 @@ lwres_conf_clear(lwres_context_t *ctx) {
 	confdata->resdebug = 0;
 	confdata->ndots = 1;
 	confdata->no_tld_query = 0;
+	confdata->attempts = 0;
+	confdata->timeout = 0;
 }
 
 static lwres_result_t
@@ -449,25 +449,57 @@ static lwres_result_t
 lwres_create_addr(const char *buffer, lwres_addr_t *addr, int convert_zero) {
 	struct in_addr v4;
 	struct in6_addr v6;
+	char buf[sizeof("ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255") +
+		 sizeof("%4294967295")];
+	char *percent;
+	size_t n;
+
+	n = strlcpy(buf, buffer, sizeof(buf));
+	if (n >= sizeof(buf))
+		return (LWRES_R_FAILURE);
+
+	percent = strchr(buf, '%');
+	if (percent != NULL)
+		*percent = 0;
 
 	if (lwres_net_aton(buffer, &v4) == 1) {
 		if (convert_zero) {
 			unsigned char zeroaddress[] = {0, 0, 0, 0};
 			unsigned char loopaddress[] = {127, 0, 0, 1};
 			if (memcmp(&v4, zeroaddress, 4) == 0)
-				memcpy(&v4, loopaddress, 4);
+				memmove(&v4, loopaddress, 4);
 		}
 		addr->family = LWRES_ADDRTYPE_V4;
 		addr->length = NS_INADDRSZ;
-		memcpy((void *)addr->address, &v4, NS_INADDRSZ);
+		addr->zone = 0;
+		memmove((void *)addr->address, &v4, NS_INADDRSZ);
 
-	} else if (lwres_net_pton(AF_INET6, buffer, &v6) == 1) {
+	} else if (lwres_net_pton(AF_INET6, buf, &v6) == 1) {
 		addr->family = LWRES_ADDRTYPE_V6;
 		addr->length = NS_IN6ADDRSZ;
-		memcpy((void *)addr->address, &v6, NS_IN6ADDRSZ);
-	} else {
+		memmove((void *)addr->address, &v6, NS_IN6ADDRSZ);
+		if (percent != NULL) {
+			unsigned long zone;
+			char *ep;
+
+			percent++;
+
+#ifdef HAVE_IF_NAMETOINDEX
+			zone = if_nametoindex(percent);
+			if (zone != 0U) {
+				addr->zone = zone;
+				return (LWRES_R_SUCCESS);
+			}
+#endif
+			zone = strtoul(percent, &ep, 10);
+			if (ep != percent && *ep == 0)
+				addr->zone = zone;
+			else
+				return (LWRES_R_FAILURE);
+		} else
+			addr->zone = 0;
+	} else
 		return (LWRES_R_FAILURE); /* Unrecognised format. */
-	}
 
 	return (LWRES_R_SUCCESS);
 }
@@ -530,6 +562,8 @@ static lwres_result_t
 lwres_conf_parseoption(lwres_context_t *ctx,  FILE *fp) {
 	int delim;
 	long ndots;
+	long attempts;
+	long timeout;
 	char *p;
 	char word[LWRES_CONFMAXLINELEN];
 	lwres_conf_t *confdata;
@@ -546,6 +580,8 @@ lwres_conf_parseoption(lwres_context_t *ctx,  FILE *fp) {
 			confdata->resdebug = 1;
 		} else if (strcmp("no_tld_query", word) == 0) {
 			confdata->no_tld_query = 1;
+		} else if (strcmp("debug", word) == 0) {
+			confdata->resdebug = 1;
 		} else if (strncmp("ndots:", word, 6) == 0) {
 			ndots = strtol(word + 6, &p, 10);
 			if (*p != '\0') /* Bad string. */
@@ -553,6 +589,18 @@ lwres_conf_parseoption(lwres_context_t *ctx,  FILE *fp) {
 			if (ndots < 0 || ndots > 0xff) /* Out of range. */
 				return (LWRES_R_FAILURE);
 			confdata->ndots = (lwres_uint8_t)ndots;
+		} else if (strncmp("timeout:", word, 8) == 0) {
+			timeout = strtol(word + 8, &p, 10);
+			if (*p != '\0') /* Bad string. */
+				return (LWRES_R_FAILURE);
+			confdata->timeout = (lwres_int32_t)timeout;
+		} else if (strncmp("attempts:", word, 9) == 0) {
+			attempts = strtol(word + 9, &p, 10);
+			if (*p != '\0') /* Bad string. */
+				return (LWRES_R_FAILURE);
+			if (attempts < 0) /* Out of range. */
+				return (LWRES_R_FAILURE);
+			confdata->attempts = (lwres_int32_t)attempts;
 		}
 
 		if (delim == EOF || delim == '\n')
@@ -630,6 +678,7 @@ lwres_conf_print(lwres_context_t *ctx, FILE *fp) {
 	int i;
 	int af;
 	char tmp[sizeof("ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255")];
+	char buf[sizeof("%4000000000")];
 	const char *p;
 	lwres_conf_t *confdata;
 	lwres_addr_t tmpaddr;
@@ -647,7 +696,13 @@ lwres_conf_print(lwres_context_t *ctx, FILE *fp) {
 		if (p != tmp)
 			return (LWRES_R_FAILURE);
 
-		fprintf(fp, "nameserver %s\n", tmp);
+		if (af == AF_INET6 && confdata->lwservers[i].zone != 0) {
+			snprintf(buf, sizeof(buf), "%%%u",
+				confdata->nameservers[i].zone);
+		} else
+			buf[0] = 0;
+
+		fprintf(fp, "nameserver %s%s\n", tmp, buf);
 	}
 
 	for (i = 0; i < confdata->lwnext; i++) {
@@ -658,7 +713,13 @@ lwres_conf_print(lwres_context_t *ctx, FILE *fp) {
 		if (p != tmp)
 			return (LWRES_R_FAILURE);
 
-		fprintf(fp, "lwserver %s\n", tmp);
+		if (af == AF_INET6 && confdata->lwservers[i].zone != 0) {
+			snprintf(buf, sizeof(buf), "%%%u",
+				confdata->nameservers[i].zone);
+		} else
+			buf[0] = 0;
+
+		fprintf(fp, "lwserver %s%s\n", tmp, buf);
 	}
 
 	if (confdata->domainname != NULL) {
@@ -716,6 +777,12 @@ lwres_conf_print(lwres_context_t *ctx, FILE *fp) {
 
 	if (confdata->no_tld_query)
 		fprintf(fp, "options no_tld_query\n");
+
+	if (confdata->attempts)
+		fprintf(fp, "options attempts:%d\n", confdata->attempts);
+
+	if (confdata->timeout)
+		fprintf(fp, "options timeout:%d\n", confdata->timeout);
 
 	return (LWRES_R_SUCCESS);
 }

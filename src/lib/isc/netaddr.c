@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2010-2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 /*! \file */
 
@@ -173,7 +166,7 @@ isc_netaddr_totext(const isc_netaddr_t *netaddr, isc_buffer_t *target) {
 		return (ISC_R_NOSPACE);
 
 	isc_buffer_putmem(target, (unsigned char *)abuf, alen);
-	isc_buffer_putmem(target, (unsigned char *)zbuf, zlen);
+	isc_buffer_putmem(target, (unsigned char *)zbuf, (unsigned int)zlen);
 
 	return (ISC_R_SUCCESS);
 }
@@ -235,11 +228,12 @@ isc_netaddr_prefixok(const isc_netaddr_t *na, unsigned int prefixlen) {
 	nbytes = prefixlen / 8;
 	nbits = prefixlen % 8;
 	if (nbits != 0) {
+		INSIST(nbytes < ipbytes);
 		if ((p[nbytes] & (0xff>>nbits)) != 0U)
 			return (ISC_R_FAILURE);
 		nbytes++;
 	}
-	if (memcmp(p + nbytes, zeros, ipbytes - nbytes) != 0)
+	if (nbytes < ipbytes && memcmp(p + nbytes, zeros, ipbytes - nbytes) != 0)
 		return (ISC_R_FAILURE);
 	return (ISC_R_SUCCESS);
 }
@@ -278,7 +272,6 @@ isc_netaddr_masktoprefixlen(const isc_netaddr_t *s, unsigned int *lenp) {
 	for (; i < ipbytes; i++) {
 		if (p[i] != 0)
 			return (ISC_R_MASKNONCONTIG);
-		i++;
 	}
 	*lenp = nbytes * 8 + nbits;
 	return (ISC_R_SUCCESS);
@@ -306,7 +299,7 @@ isc_netaddr_frompath(isc_netaddr_t *netaddr, const char *path) {
 
 	memset(netaddr, 0, sizeof(*netaddr));
 	netaddr->family = AF_UNIX;
-	strcpy(netaddr->type.un, path);
+	strlcpy(netaddr->type.un, path, sizeof(netaddr->type.un));
 	netaddr->zone = 0;
 	return (ISC_R_SUCCESS);
 #else
@@ -340,7 +333,7 @@ isc_netaddr_fromsockaddr(isc_netaddr_t *t, const isc_sockaddr_t *s) {
 		t->zone = 0;
 		break;
 	case AF_INET6:
-		memcpy(&t->type.in6, &s->type.sin6.sin6_addr, 16);
+		memmove(&t->type.in6, &s->type.sin6.sin6_addr, 16);
 #ifdef ISC_PLATFORM_HAVESCOPEID
 		t->zone = s->type.sin6.sin6_scope_id;
 #else
@@ -349,7 +342,7 @@ isc_netaddr_fromsockaddr(isc_netaddr_t *t, const isc_sockaddr_t *s) {
 		break;
 #ifdef ISC_PLATFORM_HAVESYSUNH
 	case AF_UNIX:
-		memcpy(t->type.un, s->type.sunix.sun_path, sizeof(t->type.un));
+		memmove(t->type.un, s->type.sunix.sun_path, sizeof(t->type.un));
 		t->zone = 0;
 		break;
 #endif
@@ -418,6 +411,22 @@ isc_netaddr_issitelocal(isc_netaddr_t *na) {
 	}
 }
 
+#define ISC_IPADDR_ISNETZERO(i) \
+	       (((isc_uint32_t)(i) & ISC__IPADDR(0xff000000)) \
+		== ISC__IPADDR(0x00000000))
+
+isc_boolean_t
+isc_netaddr_isnetzero(isc_netaddr_t *na) {
+	switch (na->family) {
+	case AF_INET:
+		return (ISC_TF(ISC_IPADDR_ISNETZERO(na->type.in.s_addr)));
+	case AF_INET6:
+		return (ISC_FALSE);
+	default:
+		return (ISC_FALSE);
+	}
+}
+
 void
 isc_netaddr_fromv4mapped(isc_netaddr_t *t, const isc_netaddr_t *s) {
 	isc_netaddr_t *src;
@@ -429,6 +438,19 @@ isc_netaddr_fromv4mapped(isc_netaddr_t *t, const isc_netaddr_t *s) {
 
 	memset(t, 0, sizeof(*t));
 	t->family = AF_INET;
-	memcpy(&t->type.in, (char *)&src->type.in6 + 12, 4);
+	memmove(&t->type.in, (char *)&src->type.in6 + 12, 4);
 	return;
+}
+
+isc_boolean_t
+isc_netaddr_isloopback(const isc_netaddr_t *na) {
+	switch (na->family) {
+	case AF_INET:
+		return (ISC_TF((ntohl(na->type.in.s_addr) & 0xff000000U) ==
+			       0x7f000000U));
+	case AF_INET6:
+		return (IN6_IS_ADDR_LOOPBACK(&na->type.in6));
+	default:
+		return (ISC_FALSE);
+	}
 }

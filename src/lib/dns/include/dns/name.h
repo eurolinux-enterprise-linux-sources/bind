@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007, 2009-2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: name.h,v 1.137 2011/01/13 04:59:26 tbox Exp $ */
 
 #ifndef DNS_NAME_H
 #define DNS_NAME_H 1
@@ -152,6 +145,42 @@ struct dns_name {
 LIBDNS_EXTERNAL_DATA extern dns_name_t *dns_rootname;
 LIBDNS_EXTERNAL_DATA extern dns_name_t *dns_wildcardname;
 
+/*%<
+ * DNS_NAME_INITNONABSOLUTE and DNS_NAME_INITABSOLUTE are macros for
+ * initializing dns_name_t structures.
+ *
+ * Note[1]: 'length' is set to (sizeof(A) - 1) in DNS_NAME_INITNONABSOLUTE
+ * and sizeof(A) in DNS_NAME_INITABSOLUTE to allow C strings to be used
+ * to initialize 'ndata'.
+ *
+ * Note[2]: The final value of offsets for DNS_NAME_INITABSOLUTE should
+ * match (sizeof(A) - 1) which is the offset of the root label.
+ *
+ * Typical usage:
+ *	unsigned char data[] = "\005value";
+ *	unsigned char offsets[] = { 0 };
+ *	dns_name_t value = DNS_NAME_INITNONABSOLUTE(data, offsets);
+ *
+ *	unsigned char data[] = "\005value";
+ *	unsigned char offsets[] = { 0, 6 };
+ *	dns_name_t value = DNS_NAME_INITABSOLUTE(data, offsets);
+ */
+#define DNS_NAME_INITNONABSOLUTE(A,B) { \
+	DNS_NAME_MAGIC, \
+	A, (sizeof(A) - 1), sizeof(B), \
+	DNS_NAMEATTR_READONLY, \
+	B, NULL, { (void *)-1, (void *)-1}, \
+	{NULL, NULL} \
+}
+
+#define DNS_NAME_INITABSOLUTE(A,B) { \
+	DNS_NAME_MAGIC, \
+	A, sizeof(A), sizeof(B), \
+	DNS_NAMEATTR_READONLY | DNS_NAMEATTR_ABSOLUTE, \
+	B, NULL, { (void *)-1, (void *)-1}, \
+	{NULL, NULL} \
+}
+
 /*%
  * Standard size of a wire format name
  */
@@ -231,6 +260,11 @@ dns_name_invalidate(dns_name_t *name);
  * \li	If the name had a dedicated buffer, that association is ended.
  */
 
+isc_boolean_t
+dns_name_isvalid(const dns_name_t *name);
+/*%<
+ * Check whether 'name' points to a valid dns_name
+ */
 
 /***
  *** Dedicated Buffers
@@ -341,7 +375,11 @@ unsigned int
 dns_name_hashbylabel(dns_name_t *name, isc_boolean_t case_sensitive);
 /*%<
  * Provide a hash value for 'name', where the hash value is the sum
- * of the hash values of each label.
+ * of the hash values of each label.  This function should only be used
+ * when incremental hashing is necessary, for example, during RBT
+ * traversal. It is not currently used in BIND. Generally,
+ * dns_name_fullhash() is the correct function to use for name
+ * hashing.
  *
  * Note: if 'case_sensitive' is ISC_FALSE, then names which differ only in
  * case will have the same hash value.
@@ -795,8 +833,6 @@ dns_name_fromtext(dns_name_t *name, isc_buffer_t *source,
  *\li	#DNS_R_EMPTYLABEL
  *\li	#DNS_R_LABELTOOLONG
  *\li	#DNS_R_BADESCAPE
- *\li	(#DNS_R_BADBITSTRING: should not be returned)
- *\li	(#DNS_R_BITSTRINGTOOLONG: should not be returned)
  *\li	#DNS_R_BADDOTTEDQUAD
  *\li	#ISC_R_NOSPACE
  *\li	#ISC_R_UNEXPECTEDEND
@@ -806,14 +842,15 @@ dns_name_fromtext(dns_name_t *name, isc_buffer_t *source,
 #define DNS_NAME_MASTERFILE	0x02U	/* escape $ and @ */
 
 isc_result_t
-dns_name_toprincipal(dns_name_t *name, isc_buffer_t *target);
+dns_name_toprincipal(const dns_name_t *name, isc_buffer_t *target);
 
 isc_result_t
-dns_name_totext(dns_name_t *name, isc_boolean_t omit_final_dot,
+dns_name_totext(const dns_name_t *name, isc_boolean_t omit_final_dot,
 		isc_buffer_t *target);
 
 isc_result_t
-dns_name_totext2(dns_name_t *name, unsigned int options, isc_buffer_t *target);
+dns_name_totext2(const dns_name_t *name, unsigned int options,
+		 isc_buffer_t *target);
 /*%<
  * Convert 'name' into text format, storing the result in 'target'.
  *
@@ -989,10 +1026,6 @@ dns_name_split(dns_name_t *name, unsigned int suffixlabels,
  *
  *\li	'suffix' is a valid name or NULL, and cannot be read-only.
  *
- *\li	If non-NULL, 'prefix' and 'suffix' must have dedicated buffers.
- *
- *\li	'prefix' and 'suffix' cannot point to the same buffer.
- *
  * Ensures:
  *
  *\li	On success:
@@ -1120,7 +1153,7 @@ dns_name_print(dns_name_t *name, FILE *stream);
  */
 
 void
-dns_name_format(dns_name_t *name, char *cp, unsigned int size);
+dns_name_format(const dns_name_t *name, char *cp, unsigned int size);
 /*%<
  * Format 'name' as text appropriate for use in log messages.
  *
@@ -1161,6 +1194,7 @@ dns_name_tostring(dns_name_t *source, char **target, isc_mem_t *mctx);
  * Returns:
  *
  *\li	ISC_R_SUCCESS
+ *\li	ISC_R_NOMEMORY
  *
  *\li	Any error that dns_name_totext() can return.
  */
@@ -1217,7 +1251,7 @@ dns_name_settotextfilter(dns_name_totextfilter_t proc);
  */
 
 isc_result_t
-dns_name_copy(dns_name_t *source, dns_name_t *dest, isc_buffer_t *target);
+dns_name_copy(const dns_name_t *source, dns_name_t *dest, isc_buffer_t *target);
 /*%<
  * Makes 'dest' refer to a copy of the name in 'source'.  The data are
  * either copied to 'target' or the dedicated buffer in 'dest'.
@@ -1281,6 +1315,30 @@ dns_name_destroy(void);
  * Note: dns_name_settotextfilter(NULL); should be called for all
  * threads which have called dns_name_settotextfilter() with a
  * non-NULL argument prior to calling dns_name_destroy();
+ */
+
+isc_boolean_t
+dns_name_isdnssd(const dns_name_t *owner);
+/*%<
+ * Determine if the 'owner' is a DNS-SD prefix.
+ */
+
+isc_boolean_t
+dns_name_isrfc1918(const dns_name_t *owner);
+/*%<
+ * Determine if the 'name' is in the RFC 1918 reverse namespace.
+ */
+
+isc_boolean_t
+dns_name_isula(const dns_name_t *owner);
+/*%<
+ * Determine if the 'name' is in the ULA reverse namespace.
+ */
+
+isc_boolean_t
+dns_name_istat(const dns_name_t *name);
+/*
+ * Determine if 'name' is a potential 'trust-anchor-telementry' name.
  */
 
 ISC_LANG_ENDDECLS

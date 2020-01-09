@@ -1,7 +1,4 @@
-/*
- * Automated Testing Framework (atf)
- *
- * Copyright (c) 2008, 2009, 2010 The NetBSD Foundation, Inc.
+/* Copyright (c) 2008 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,11 +21,10 @@
  * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 
 #if defined(HAVE_CONFIG_H)
-#include "bconfig.h"
+#include "config.h"
 #endif
 
 #include <ctype.h>
@@ -38,15 +34,15 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "atf-c/detail/dynstr.h"
+#include "atf-c/detail/env.h"
+#include "atf-c/detail/fs.h"
+#include "atf-c/detail/map.h"
+#include "atf-c/detail/sanity.h"
 #include "atf-c/error.h"
 #include "atf-c/tc.h"
 #include "atf-c/tp.h"
 #include "atf-c/utils.h"
-
-#include "dynstr.h"
-#include "fs.h"
-#include "map.h"
-#include "sanity.h"
 
 #if defined(HAVE_GNU_GETOPT)
 #   define GETOPT_POSIX "+"
@@ -125,6 +121,13 @@ print_error(const atf_error_t err)
     if (atf_error_is(err, "usage"))
         fprintf(stderr, "%s: See atf-test-program(1) for usage details.\n",
                 progname);
+}
+
+static
+void
+print_warning(const char *message)
+{
+    fprintf(stderr, "%s: WARNING: %s\n", progname, message);
 }
 
 /* ---------------------------------------------------------------------
@@ -277,6 +280,9 @@ list_tcs(const atf_tp_t *tp)
 
         atf_utils_free_charpp(vars);
     }
+#define UNCONST(a) ((void *)(unsigned long)(const void *)(a))
+    free(UNCONST(tcs));
+#undef UNCONST
 }
 
 /* ---------------------------------------------------------------------
@@ -322,11 +328,13 @@ process_params(int argc, char **argv, struct params *p)
 {
     atf_error_t err;
     int ch;
+    int old_opterr;
 
     err = params_init(p, argv[0]);
     if (atf_is_error(err))
         goto out;
 
+    old_opterr = opterr;
     opterr = 0;
     while (!atf_is_error(err) &&
            (ch = getopt(argc, argv, GETOPT_POSIX ":lr:s:v:")) != -1) {
@@ -360,6 +368,7 @@ process_params(int argc, char **argv, struct params *p)
     argv += optind;
 
     /* Clear getopt state just in case the test wants to use it. */
+    opterr = old_opterr;
     optind = 1;
 #if defined(HAVE_OPTRESET)
     optreset = 1;
@@ -483,6 +492,14 @@ run_tc(const atf_tp_t *tp, struct params *p, int *exitcode)
     if (!atf_tp_has_tc(tp, p->m_tcname)) {
         err = usage_error("Unknown test case `%s'", p->m_tcname);
         goto out;
+    }
+
+    if (!atf_env_has("__RUNNING_INSIDE_ATF_RUN") || strcmp(atf_env_get(
+        "__RUNNING_INSIDE_ATF_RUN"), "internal-yes-value") != 0)
+    {
+        print_warning("Running test cases outside of kyua(1) is unsupported");
+        print_warning("No isolation nor timeout control is being applied; you "
+                      "may get unexpected failures; see atf-test-case(4)");
     }
 
     switch (p->m_tcpart) {

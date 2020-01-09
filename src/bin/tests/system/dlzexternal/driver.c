@@ -1,20 +1,13 @@
 /*
- * Copyright (C) 2011-2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
 
 /*
  * This provides a very simple example of an external loadable DLZ
@@ -28,7 +21,6 @@
 #include <stdarg.h>
 
 #include <isc/log.h>
-#include <isc/print.h>
 #include <isc/result.h>
 #include <isc/string.h>
 #include <isc/types.h>
@@ -135,8 +127,14 @@ add_name(struct dlz_example_data *state, struct record *list,
 		return (ISC_R_NOSPACE);
 
 	strncpy(list[i].name, name, sizeof(list[i].name));
+	list[i].name[sizeof(list[i].name) - 1] = '\0';
+
 	strncpy(list[i].type, type, sizeof(list[i].type));
+	list[i].type[sizeof(list[i].type) - 1] = '\0';
+
 	strncpy(list[i].data, data, sizeof(list[i].data));
+	list[i].data[sizeof(list[i].data) - 1] = '\0';
+
 	list[i].ttl = ttl;
 
 	return (ISC_R_SUCCESS);
@@ -233,7 +231,8 @@ dlz_create(const char *dlzname, unsigned int argc, char *argv[],
 	struct dlz_example_data *state;
 	const char *helper_name;
 	va_list ap;
-	char soa_data[200];
+	char soa_data[1024];
+	const char *extra;
 	isc_result_t result;
 	int n;
 
@@ -250,7 +249,7 @@ dlz_create(const char *dlzname, unsigned int argc, char *argv[],
 	}
 	va_end(ap);
 
-	if (argc < 2) {
+	if (argc < 2 || argv[1][0] == '\0') {
 		if (state->log != NULL)
 			state->log(ISC_LOG_ERROR,
 				   "dlz_example: please specify a zone name");
@@ -258,26 +257,36 @@ dlz_create(const char *dlzname, unsigned int argc, char *argv[],
 		return (ISC_R_FAILURE);
 	}
 
-	state->zone_name = strdup(argv[1]);
+	/* Ensure zone name is absolute */
+	state->zone_name = malloc(strlen(argv[1]) + 2);
 	if (state->zone_name == NULL) {
 		free(state);
 		return (ISC_R_NOMEMORY);
 	}
+	if (argv[1][strlen(argv[1]) - 1] == '.')
+		strcpy(state->zone_name, argv[1]);
+	else
+		sprintf(state->zone_name, "%s.", argv[1]);
 
-	n = snprintf(soa_data, sizeof(soa_data),
-		     "%s hostmaster.%s 123 900 600 86400 3600",
-		     state->zone_name, state->zone_name);
+	if (strcmp(state->zone_name, ".") == 0)
+		extra = ".root";
+	else
+		extra = ".";
+
+	n = sprintf(soa_data, "%s hostmaster%s%s 123 900 600 86400 3600",
+		    state->zone_name, extra, state->zone_name);
+
 	if (n < 0)
 		CHECK(ISC_R_FAILURE);
 	if ((unsigned)n >= sizeof(soa_data))
 		CHECK(ISC_R_NOSPACE);
 
-	CHECK(add_name(state, &state->current[0], state->zone_name,
-		       "soa", 3600, soa_data));
-	CHECK(add_name(state, &state->current[0], state->zone_name,
-		       "ns", 3600, state->zone_name));
-	CHECK(add_name(state, &state->current[0], state->zone_name,
-		       "a", 1800, "10.53.0.1"));
+	add_name(state, &state->current[0], state->zone_name,
+		 "soa", 3600, soa_data);
+	add_name(state, &state->current[0], state->zone_name,
+		 "ns", 3600, state->zone_name);
+	add_name(state, &state->current[0], state->zone_name,
+		 "a", 1800, "10.53.0.1");
 
 	if (state->log != NULL)
 		state->log(ISC_LOG_INFO, "dlz_example: started for zone %s",
@@ -307,22 +316,82 @@ dlz_destroy(void *dbdata) {
 	free(state);
 }
 
-
 /*
  * See if we handle a given zone
  */
 isc_result_t
-dlz_findzonedb(void *dbdata, const char *name) {
+dlz_findzonedb(void *dbdata, const char *name,
+	   dns_clientinfomethods_t *methods,
+	   dns_clientinfo_t *clientinfo)
+{
 	struct dlz_example_data *state = (struct dlz_example_data *)dbdata;
+	isc_sockaddr_t *src;
+	char addrbuf[100];
+	char absolute[1024];
 
+	strcpy(addrbuf, "unknown");
+	if (methods != NULL &&
+	    methods->sourceip != NULL &&
+	    methods->version - methods->age <= DNS_CLIENTINFOMETHODS_VERSION &&
+	    DNS_CLIENTINFOMETHODS_VERSION <= methods->version)
+	{
+		methods->sourceip(clientinfo, &src);
+		fmt_address(src, addrbuf, sizeof(addrbuf));
+	}
+
+	state->log(ISC_LOG_INFO,
+		   "dlz_example: dlz_findzonedb called with name '%s' "
+		   "in zone DB '%s' from %s",
+		   name, state->zone_name, addrbuf);
+
+	/*
+	 * Returning ISC_R_NOTFOUND will cause the query logic to
+	 * check the database for parent names, looking for zone cuts.
+	 *
+	 * Returning ISC_R_NOMORE prevents the query logic from doing
+	 * this; it will move onto the next database after a single query.
+	 */
+	if (strcasecmp(name, "test.example.com") == 0)
+		return (ISC_R_NOMORE);
+
+	/*
+	 * For example.net, only return ISC_R_NOMORE when queried
+	 * from 10.53.0.1.
+	 */
+	if (strcasecmp(name, "test.example.net") == 0 &&
+	    strncmp(addrbuf, "10.53.0.1", 9) == 0)
+		return (ISC_R_NOMORE);
+
+	/*
+	 * For bigcname.domain, return success so it appears to be
+	 * the zone origin; this regression tests a bug in which
+	 * zone origin nodes could fail to return SERVFAIL to the client.
+	 */
+	if (strcasecmp(name, "bigcname.domain") == 0)
+		return (ISC_R_SUCCESS);
+
+	/*
+	 * Return success if we have an exact match between the
+	 * zone name and the qname
+	 */
 	if (strcasecmp(state->zone_name, name) == 0)
+		return (ISC_R_SUCCESS);
+
+	snprintf(absolute, sizeof(absolute), "%s.", name);
+	if (strcasecmp(state->zone_name, absolute) == 0)
 		return (ISC_R_SUCCESS);
 
 	return (ISC_R_NOTFOUND);
 }
 
 /*
- * Look up one record
+ * Look up one record in the sample database.
+ *
+ * If the queryname is "source-addr", send back a TXT record containing
+ * the address of the client, to test the use of 'methods' and 'clientinfo'
+ *
+ * If the queryname is "too-long", send back a TXT record that's too long
+ * to process; this should result in a SERVFAIL when queried.
  */
 isc_result_t
 dlz_lookup(const char *zone, const char *name, void *dbdata,
@@ -332,34 +401,87 @@ dlz_lookup(const char *zone, const char *name, void *dbdata,
 	isc_result_t result;
 	struct dlz_example_data *state = (struct dlz_example_data *)dbdata;
 	isc_boolean_t found = ISC_FALSE;
+	void *dbversion = NULL;
 	isc_sockaddr_t *src;
 	char full_name[256];
-	int i;
+	char buf[512];
+	static char last[256];
+	static int count = 0;
+	int i, size;
 
 	UNUSED(zone);
 
-	if (state->putrr == NULL)
+	if (state->putrr == NULL) {
 		return (ISC_R_NOTIMPLEMENTED);
+	}
 
 	if (strcmp(name, "@") == 0) {
-		strncpy(full_name, state->zone_name, 255);
-		full_name[255] = '\0';
-	} else
-		snprintf(full_name, 255, "%s.%s", name, state->zone_name);
+		size = snprintf(full_name, sizeof(full_name),
+				"%s", state->zone_name);
+	} else if (strcmp(state->zone_name, ".") == 0) {
+		size = snprintf(full_name, sizeof(full_name),
+				"%s.", name);
+	} else {
+		size = snprintf(full_name, sizeof(full_name),
+				"%s.%s", name, state->zone_name);
+	}
+
+	if (size < 0 ||
+	    (size_t)size >= sizeof(full_name) ||
+	    (size_t)size >= sizeof(last))
+	{
+		return (ISC_R_NOSPACE);
+	}
+
+	/*
+	 * For test purposes, log all calls to dlz_lookup()
+	 */
+	if (strcasecmp(full_name, last) == 0) {
+		count++;
+	} else {
+		count = 1;
+		memcpy(last, full_name, size + 1);
+	}
+	state->log(ISC_LOG_INFO, "lookup #%d for %s", count, full_name);
+
+	/*
+	 * If we need to know the database version (as set in
+	 * the 'newversion' dlz function) we can pick it up from the
+	 * clientinfo.
+	 *
+	 * This allows a lookup to query the correct version of the DNS
+	 * data, if the DLZ can differentiate between versions.
+	 *
+	 * For example, if a new database transaction is created by
+	 * 'newversion', the lookup should query within the same
+	 * transaction scope if it can.
+	 *
+	 * If the DLZ only operates on 'live' data, then version
+	 * wouldn't necessarily be needed.
+	 */
+	if (clientinfo != NULL &&
+	    clientinfo->version >= DNS_CLIENTINFO_VERSION) {
+		dbversion = clientinfo->dbversion;
+		if (dbversion != NULL && *(isc_boolean_t *)dbversion)
+			state->log(ISC_LOG_INFO,
+				   "dlz_example: lookup against live "
+				   "transaction");
+	}
 
 	if (strcmp(name, "source-addr") == 0) {
-		char buf[100];
-		strcpy(buf, "unknown");
+		strncpy(buf, "unknown", sizeof(buf));
 		if (methods != NULL &&
-		    methods->version - methods->age <=
-			 DNS_CLIENTINFOMETHODS_VERSION &&
+		    methods->sourceip != NULL &&
+		    (methods->version - methods->age <=
+		     DNS_CLIENTINFOMETHODS_VERSION) &&
 		    DNS_CLIENTINFOMETHODS_VERSION <= methods->version)
 		{
 			methods->sourceip(clientinfo, &src);
 			fmt_address(src, buf, sizeof(buf));
 		}
 
-		fprintf(stderr, "connection from: %s\n", buf);
+		state->log(ISC_LOG_INFO,
+			   "dlz_example: lookup connection from %s", buf);
 
 		found = ISC_TRUE;
 		result = state->putrr(lookup, "TXT", 0, buf);
@@ -367,6 +489,36 @@ dlz_lookup(const char *zone, const char *name, void *dbdata,
 			return (result);
 	}
 
+	if (strcmp(name, "too-long") == 0 ||
+	    strcmp(zone, "bigcname.domain") == 0)
+	{
+		for (i = 0; i < 511; i++)
+			buf[i] = 'x';
+		buf[i] = '\0';
+		found = ISC_TRUE;
+		result = state->putrr(lookup, "TXT", 0, buf);
+		if (result != ISC_R_SUCCESS)
+			return (result);
+	}
+
+	/* Tests for DLZ redirection zones */
+	if (strcmp(name, "*") == 0 && strcmp(zone, ".") == 0) {
+		result = state->putrr(lookup, "A", 0, "100.100.100.2");
+		found = ISC_TRUE;
+		if (result != ISC_R_SUCCESS)
+			return (result);
+	}
+
+	if (strcmp(name, "long.name.is.not.there") == 0 &&
+	    strcmp(zone, ".") == 0)
+	{
+		result = state->putrr(lookup, "A", 0, "100.100.100.3");
+		found = ISC_TRUE;
+		if (result != ISC_R_SUCCESS)
+			return (result);
+	}
+
+	/* Answer from current records */
 	for (i = 0; i < MAX_RECORDS; i++) {
 		if (strcasecmp(state->current[i].name, full_name) == 0) {
 			found = ISC_TRUE;
@@ -393,7 +545,7 @@ dlz_allowzonexfr(void *dbdata, const char *name, const char *client) {
 	UNUSED(client);
 
 	/* Just say yes for all our zones */
-	return (dlz_findzonedb(dbdata, name));
+	return (dlz_findzonedb(dbdata, name, NULL, NULL));
 }
 
 /*
@@ -505,10 +657,9 @@ dlz_closeversion(const char *zone, isc_boolean_t commit,
  * Configure a writeable zone
  */
 isc_result_t
-dlz_configure(dns_view_t *view, void *dbdata) {
+dlz_configure(dns_view_t *view, dns_dlzdb_t *dlzdb, void *dbdata) {
 	struct dlz_example_data *state = (struct dlz_example_data *)dbdata;
 	isc_result_t result;
-
 
 	if (state->log != NULL)
 		state->log(ISC_LOG_INFO, "dlz_example: starting configure");
@@ -520,7 +671,7 @@ dlz_configure(dns_view_t *view, void *dbdata) {
 		return (ISC_R_FAILURE);
 	}
 
-	result = state->writeable_zone(view, state->zone_name);
+	result = state->writeable_zone(view, dlzdb, state->zone_name);
 	if (result != ISC_R_SUCCESS) {
 		if (state->log != NULL)
 			state->log(ISC_LOG_ERROR, "dlz_example: failed to "
@@ -568,6 +719,7 @@ modrdataset(struct dlz_example_data *state, const char *name,
 	    const char *rdatastr, struct record *list)
 {
 	char *full_name, *dclass, *type, *data, *ttlstr, *buf;
+	char absolute[1024];
 	isc_result_t result;
 #if defined(WIN32) || defined(_REENTRANT)
 	char *saveptr = NULL;
@@ -604,6 +756,11 @@ modrdataset(struct dlz_example_data *state, const char *name,
 	data = STRTOK_R(NULL, "\t", &saveptr);
 	if (data == NULL)
 		goto error;
+
+	if (name[strlen(name) - 1] != '.') {
+		snprintf(absolute, sizeof(absolute), "%s.", name);
+		name = absolute;
+	}
 
 	result = add_name(state, list, name, type,
 			  strtoul(ttlstr, NULL, 10), data);
@@ -647,7 +804,6 @@ dlz_subrdataset(const char *name, const char *rdatastr,
 
 	return (modrdataset(state, name, rdatastr, &state->deletes[0]));
 }
-
 
 isc_result_t
 dlz_delrdataset(const char *name, const char *type,

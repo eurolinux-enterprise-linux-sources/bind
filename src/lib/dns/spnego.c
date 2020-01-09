@@ -1,20 +1,13 @@
 /*
- * Copyright (C) 2006-2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
 
 /*! \file
  * \brief
@@ -146,6 +139,7 @@
 #include <isc/mem.h>
 #include <isc/once.h>
 #include <isc/random.h>
+#include <isc/safe.h>
 #include <isc/string.h>
 #include <isc/time.h>
 #include <isc/util.h>
@@ -251,16 +245,16 @@ der_get_oid(const unsigned char *p, size_t len,
 	    oid * data, size_t * size);
 static int
 der_get_tag(const unsigned char *p, size_t len,
-	    Der_class * class, Der_type * type,
+	    Der_class * xclass, Der_type * type,
 	    int *tag, size_t * size);
 
 static int
 der_match_tag(const unsigned char *p, size_t len,
-	      Der_class class, Der_type type,
+	      Der_class xclass, Der_type type,
 	      int tag, size_t * size);
 static int
 der_match_tag_and_length(const unsigned char *p, size_t len,
-			 Der_class class, Der_type type, int tag,
+			 Der_class xclass, Der_type type, int tag,
 			 size_t * length_ret, size_t * size);
 
 static int
@@ -286,7 +280,7 @@ static int
 der_put_oid(unsigned char *p, size_t len,
 	    const oid * data, size_t * size);
 static int
-der_put_tag(unsigned char *p, size_t len, Der_class class, Der_type type,
+der_put_tag(unsigned char *p, size_t len, Der_class xclass, Der_type type,
 	    int tag, size_t *);
 static int
 der_put_length_and_tag(unsigned char *, size_t, size_t,
@@ -320,35 +314,39 @@ fix_dce(size_t reallen, size_t * len);
 
 #include "spnego_asn1.c"
 
-static unsigned char gss_krb5_mech_oid_bytes[] = {
-	0x2a, 0x86, 0x48, 0x86, 0xf7, 0x12, 0x01, 0x02, 0x02
+/*
+ * Force the oid arrays to be isc_uint64_t aligned to silence warnings
+ * about the arrays not being properly aligned for (void *).
+ */
+typedef union { unsigned char b[8]; isc_uint64_t _align; } aligned8;
+typedef union { unsigned char b[16]; isc_uint64_t _align[2]; } aligned16;
+
+static aligned16 gss_krb5_mech_oid_bytes = {
+	{ 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x12, 0x01, 0x02, 0x02 }
 };
 
 static gss_OID_desc gss_krb5_mech_oid_desc = {
-	sizeof(gss_krb5_mech_oid_bytes),
-	gss_krb5_mech_oid_bytes
+	9, gss_krb5_mech_oid_bytes.b
 };
 
 static gss_OID GSS_KRB5_MECH = &gss_krb5_mech_oid_desc;
 
-static unsigned char gss_mskrb5_mech_oid_bytes[] = {
-	0x2a, 0x86, 0x48, 0x82, 0xf7, 0x12, 0x01, 0x02, 0x02
+static aligned16 gss_mskrb5_mech_oid_bytes = {
+	{ 0x2a, 0x86, 0x48, 0x82, 0xf7, 0x12, 0x01, 0x02, 0x02 }
 };
 
 static gss_OID_desc gss_mskrb5_mech_oid_desc = {
-	sizeof(gss_mskrb5_mech_oid_bytes),
-	gss_mskrb5_mech_oid_bytes
+	9, gss_mskrb5_mech_oid_bytes.b
 };
 
 static gss_OID GSS_MSKRB5_MECH = &gss_mskrb5_mech_oid_desc;
 
-static unsigned char gss_spnego_mech_oid_bytes[] = {
-	0x2b, 0x06, 0x01, 0x05, 0x05, 0x02
+static aligned8 gss_spnego_mech_oid_bytes = {
+	{ 0x2b, 0x06, 0x01, 0x05, 0x05, 0x02 }
 };
 
 static gss_OID_desc gss_spnego_mech_oid_desc = {
-	sizeof(gss_spnego_mech_oid_bytes),
-	gss_spnego_mech_oid_bytes
+	6, gss_spnego_mech_oid_bytes.b
 };
 
 static gss_OID GSS_SPNEGO_MECH = &gss_spnego_mech_oid_desc;
@@ -372,7 +370,7 @@ gssapi_spnego_decapsulate(OM_uint32 *,
 /* mod_auth_kerb.c */
 
 static int
-cmp_gss_type(gss_buffer_t token, gss_OID oid)
+cmp_gss_type(gss_buffer_t token, gss_OID gssoid)
 {
 	unsigned char *p;
 	size_t len;
@@ -392,10 +390,10 @@ cmp_gss_type(gss_buffer_t token, gss_OID oid)
 	if (*p++ != 0x06)
 		return (GSS_S_DEFECTIVE_TOKEN);
 
-	if (((OM_uint32) *p++) != oid->length)
+	if (((OM_uint32) *p++) != gssoid->length)
 		return (GSS_S_DEFECTIVE_TOKEN);
 
-	return (memcmp(p, oid->elements, oid->length));
+	return (isc_safe_memcompare(p, gssoid->elements, gssoid->length));
 }
 
 /* accept_sec_context.c */
@@ -463,7 +461,7 @@ code_NegTokenArg(OM_uint32 * minor_status,
 		free(buf);
 		return (GSS_S_FAILURE);
 	}
-	memcpy(*outbuf, buf + buf_size - buf_len, buf_len);
+	memmove(*outbuf, buf + buf_size - buf_len, buf_len);
 	*outbuf_size = buf_len;
 
 	free(buf);
@@ -570,7 +568,7 @@ gss_accept_sec_context_spnego(OM_uint32 *minor_status,
 			      gss_cred_id_t *delegated_cred_handle)
 {
 	NegTokenInit init_token;
-	OM_uint32 major_status;
+	OM_uint32 major_status = GSS_S_COMPLETE;
 	OM_uint32 minor_status2;
 	gss_buffer_desc ibuf, obuf;
 	gss_buffer_t ot = NULL;
@@ -635,16 +633,18 @@ gss_accept_sec_context_spnego(OM_uint32 *minor_status,
 			return (GSS_S_DEFECTIVE_TOKEN);
 		}
 		if (mech_len == GSS_KRB5_MECH->length &&
-		    memcmp(GSS_KRB5_MECH->elements,
-			   mechbuf + sizeof(mechbuf) - mech_len,
-			   mech_len) == 0) {
+		    isc_safe_memequal(GSS_KRB5_MECH->elements,
+				      mechbuf + sizeof(mechbuf) - mech_len,
+				      mech_len))
+		{
 			found = 1;
 			break;
 		}
 		if (mech_len == GSS_MSKRB5_MECH->length &&
-		    memcmp(GSS_MSKRB5_MECH->elements,
-			   mechbuf + sizeof(mechbuf) - mech_len,
-			   mech_len) == 0) {
+		    isc_safe_memequal(GSS_MSKRB5_MECH->elements,
+				      mechbuf + sizeof(mechbuf) - mech_len,
+				      mech_len))
+		{
 			found = 1;
 			if (i == 0)
 				pref = GSS_MSKRB5_MECH;
@@ -684,7 +684,7 @@ gss_accept_sec_context_spnego(OM_uint32 *minor_status,
 	if (ot != NULL && ot->length != 0U)
 		gss_release_buffer(&minor_status2, ot);
 
-	return (ret);
+	return (ret != GSS_S_COMPLETE ? (OM_uint32) ret : major_status);
 }
 
 /* decapsulate.c */
@@ -715,7 +715,7 @@ gssapi_verify_mech_header(u_char ** str,
 	p += foo;
 	if (mech_len != mech->length)
 		return (GSS_S_BAD_MECH);
-	if (memcmp(p, mech->elements, mech->length) != 0)
+	if (!isc_safe_memequal(p, mech->elements, mech->length))
 		return (GSS_S_BAD_MECH);
 	p += mech_len;
 	*str = p;
@@ -856,7 +856,7 @@ der_get_octet_string(const unsigned char *p, size_t len,
 		data->data = malloc(len);
 		if (data->data == NULL)
 			return (ENOMEM);
-		memcpy(data->data, p, len);
+		memmove(data->data, p, len);
 	} else
 		data->data = NULL;
 	if (size)
@@ -865,20 +865,20 @@ der_get_octet_string(const unsigned char *p, size_t len,
 }
 
 static int
-der_get_oid(const unsigned char *p, size_t len,
-	    oid *data, size_t *size)
-{
+der_get_oid(const unsigned char *p, size_t len, oid *data, size_t *size) {
 	int n;
 	size_t oldlen = len;
 
 	data->components = NULL;
 	data->length = 0;
-	if (len < 1U)
+	if (len < 1U) {
 		return (ASN1_OVERRUN);
+	}
 
 	data->components = malloc(len * sizeof(*data->components));
-	if (data->components == NULL && len != 0U)
+	if (data->components == NULL) {
 		return (ENOMEM);
+	}
 	data->components[0] = (*p) / 40;
 	data->components[1] = (*p) % 40;
 	--len;
@@ -897,19 +897,20 @@ der_get_oid(const unsigned char *p, size_t len,
 		return (ASN1_OVERRUN);
 	}
 	data->length = n;
-	if (size)
+	if (size) {
 		*size = oldlen;
+	}
 	return (0);
 }
 
 static int
 der_get_tag(const unsigned char *p, size_t len,
-	    Der_class *class, Der_type *type,
+	    Der_class *xclass, Der_type *type,
 	    int *tag, size_t *size)
 {
 	if (len < 1U)
 		return (ASN1_OVERRUN);
-	*class = (Der_class) (((*p) >> 6) & 0x03);
+	*xclass = (Der_class) (((*p) >> 6) & 0x03);
 	*type = (Der_type) (((*p) >> 5) & 0x01);
 	*tag = (*p) & 0x1F;
 	if (size)
@@ -919,7 +920,7 @@ der_get_tag(const unsigned char *p, size_t len,
 
 static int
 der_match_tag(const unsigned char *p, size_t len,
-	      Der_class class, Der_type type,
+	      Der_class xclass, Der_type type,
 	      int tag, size_t *size)
 {
 	size_t l;
@@ -931,7 +932,7 @@ der_match_tag(const unsigned char *p, size_t len,
 	e = der_get_tag(p, len, &thisclass, &thistype, &thistag, &l);
 	if (e)
 		return (e);
-	if (class != thisclass || type != thistype)
+	if (xclass != thisclass || type != thistype)
 		return (ASN1_BAD_ID);
 	if (tag > thistag)
 		return (ASN1_MISPLACED_FIELD);
@@ -944,13 +945,13 @@ der_match_tag(const unsigned char *p, size_t len,
 
 static int
 der_match_tag_and_length(const unsigned char *p, size_t len,
-			 Der_class class, Der_type type, int tag,
+			 Der_class xclass, Der_type type, int tag,
 			 size_t *length_ret, size_t *size)
 {
 	size_t l, ret = 0;
 	int e;
 
-	e = der_match_tag(p, len, class, type, tag, &l);
+	e = der_match_tag(p, len, xclass, type, tag, &l);
 	if (e)
 		return (e);
 	p += l;
@@ -1107,7 +1108,7 @@ length_len(size_t len)
 	if (len < 128U)
 		return (1);
 	else
-		return (len_unsigned(len) + 1);
+		return (len_unsigned((unsigned int)len) + 1);
 }
 
 
@@ -1164,6 +1165,7 @@ der_put_int(unsigned char *p, size_t len, int val, size_t *size)
 				return (ASN1_OVERFLOW);
 			*p-- = 0;
 			len--;
+			POST(len);
 		}
 	} else {
 		val = ~val;
@@ -1179,6 +1181,7 @@ der_put_int(unsigned char *p, size_t len, int val, size_t *size)
 				return (ASN1_OVERFLOW);
 			*p-- = 0xff;
 			len--;
+			POST(len);
 		}
 	}
 	*size = base - p;
@@ -1191,18 +1194,18 @@ der_put_length(unsigned char *p, size_t len, size_t val, size_t *size)
 	if (len < 1U)
 		return (ASN1_OVERFLOW);
 	if (val < 128U) {
-		*p = val;
+		*p = (unsigned char)val;
 		*size = 1;
 		return (0);
 	} else {
 		size_t l;
 		int e;
 
-		e = der_put_unsigned(p, len - 1, val, &l);
+		e = der_put_unsigned(p, len - 1, (unsigned int)val, &l);
 		if (e)
 			return (e);
 		p -= l;
-		*p = 0x80 | l;
+		*p = 0x80 | (unsigned char)l;
 		*size = l + 1;
 		return (0);
 	}
@@ -1217,7 +1220,7 @@ der_put_octet_string(unsigned char *p, size_t len,
 	p -= data->length;
 	len -= data->length;
 	POST(len);
-	memcpy(p + 1, data->data, data->length);
+	memmove(p + 1, data->data, data->length);
 	*size = data->length;
 	return (0);
 }
@@ -1227,10 +1230,10 @@ der_put_oid(unsigned char *p, size_t len,
 	    const oid *data, size_t *size)
 {
 	unsigned char *base = p;
-	int n;
+	size_t n;
 
-	for (n = data->length - 1; n >= 2; --n) {
-		unsigned	u = data->components[n];
+	for (n = data->length; n >= 3u; --n) {
+		unsigned	u = data->components[n - 1];
 
 		if (len < 1U)
 			return (ASN1_OVERFLOW);
@@ -1253,19 +1256,19 @@ der_put_oid(unsigned char *p, size_t len,
 }
 
 static int
-der_put_tag(unsigned char *p, size_t len, Der_class class, Der_type type,
+der_put_tag(unsigned char *p, size_t len, Der_class xclass, Der_type type,
 	    int tag, size_t *size)
 {
 	if (len < 1U)
 		return (ASN1_OVERFLOW);
-	*p = (class << 6) | (type << 5) | tag;	/* XXX */
+	*p = (xclass << 6) | (type << 5) | tag;	/* XXX */
 	*size = 1;
 	return (0);
 }
 
 static int
 der_put_length_and_tag(unsigned char *p, size_t len, size_t len_val,
-		       Der_class class, Der_type type, int tag, size_t *size)
+		       Der_class xclass, Der_type type, int tag, size_t *size)
 {
 	size_t ret = 0;
 	size_t l;
@@ -1277,7 +1280,7 @@ der_put_length_and_tag(unsigned char *p, size_t len, size_t len_val,
 	p -= l;
 	len -= l;
 	ret += l;
-	e = der_put_tag(p, len, class, type, tag, &l);
+	e = der_put_tag(p, len, xclass, type, tag, &l);
 	if (e)
 		return (e);
 	p -= l;
@@ -1397,7 +1400,7 @@ gssapi_mech_make_header(u_char *p,
 	p += len_len;
 	*p++ = 0x06;
 	*p++ = mech->length;
-	memcpy(p, mech->elements, mech->length);
+	memmove(p, mech->elements, mech->length);
 	p += mech->length;
 	return (p);
 }
@@ -1430,7 +1433,7 @@ gssapi_spnego_encapsulate(OM_uint32 * minor_status,
 			gss_release_buffer(minor_status, output_token);
 		return (GSS_S_FAILURE);
 	}
-	memcpy(p, buf, buf_size);
+	memmove(p, buf, buf_size);
 	return (GSS_S_COMPLETE);
 }
 
@@ -1668,7 +1671,7 @@ spnego_reply(OM_uint32 *minor_status,
 		buf = input_token->value;
 		buf_size = input_token->length;
 	} else if ((size_t)mech_len == GSS_KRB5_MECH->length &&
-		   memcmp(GSS_KRB5_MECH->elements, p, mech_len) == 0)
+		   isc_safe_memequal(GSS_KRB5_MECH->elements, p, mech_len))
 		return (gss_init_sec_context(minor_status,
 					     initiator_cred_handle,
 					     context_handle,
@@ -1683,7 +1686,7 @@ spnego_reply(OM_uint32 *minor_status,
 					     ret_flags,
 					     time_rec));
 	else if ((size_t)mech_len == GSS_SPNEGO_MECH->length &&
-		 memcmp(GSS_SPNEGO_MECH->elements, p, mech_len) == 0) {
+		 isc_safe_memequal(GSS_SPNEGO_MECH->elements, p, mech_len)) {
 		ret = gssapi_spnego_decapsulate(minor_status,
 						input_token,
 						&buf,
@@ -1721,9 +1724,9 @@ spnego_reply(OM_uint32 *minor_status,
 			  resp.supportedMech,
 			  &oidlen);
 	if (ret || oidlen != GSS_KRB5_MECH->length ||
-	    memcmp(oidbuf + sizeof(oidbuf) - oidlen,
-		   GSS_KRB5_MECH->elements,
-		   oidlen) != 0) {
+	    !isc_safe_memequal(oidbuf + sizeof(oidbuf) - oidlen,
+			      GSS_KRB5_MECH->elements, oidlen))
+	{
 		free_NegTokenResp(&resp);
 		return GSS_S_BAD_MECH;
 	}

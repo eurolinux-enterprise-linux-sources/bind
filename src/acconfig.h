@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2008, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: acconfig.h,v 1.53 2008/12/01 23:47:44 tbox Exp $ */
 
 /*! \file */
 
@@ -69,9 +61,6 @@
 
 /** define if gai_strerror() exists */
 #undef HAVE_GAISTRERROR
-
-/** define if arc4random() exists */
-#undef HAVE_ARC4RANDOM
 
 /**
  * define if pthread_setconcurrency() should be called to tell the
@@ -132,17 +121,17 @@ int sigwait(const unsigned int *set, int *sig);
 /** define if you have strerror in the C library. */
 #undef HAVE_STRERROR
 
-/** Define if you are running under Compaq TruCluster. */
-#undef HAVE_TRUCLUSTER
-
 /* Define if OpenSSL includes DSA support */
 #undef HAVE_OPENSSL_DSA
 
-/* Define if OpenSSL includes ECDSA support */
-#undef HAVE_OPENSSL_ECDSA
+/* Define if you have getpassphrase in the C library. */
+#undef HAVE_GETPASSPHRASE
 
 /* Define to the length type used by the socket API (socklen_t, size_t, int). */
 #undef ISC_SOCKADDR_LEN_T
 
 /* Define if threads need PTHREAD_SCOPE_SYSTEM */
 #undef NEED_PTHREAD_SCOPE_SYSTEM
+
+/* Define to 1 if you have the uname library function. */
+#undef HAVE_UNAME

@@ -1,21 +1,21 @@
-# Copyright (C) 2012  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
-# Permission to use, copy, modify, and/or distribute this software for any
-# purpose with or without fee is hereby granted, provided that the above
-# copyright notice and this permission notice appear in all copies.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
-# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-# AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
-# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
-# OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-# PERFORMANCE OF THIS SOFTWARE.
+# See the COPYRIGHT file distributed with this work for additional
+# information regarding copyright ownership.
 
-# $Id: setup.sh,v 1.11 2012/02/23 06:53:15 marka Exp $
+SYSTEMTESTTOP=..
+. $SYSTEMTESTTOP/conf.sh
 
-sh clean.sh
+$SHELL clean.sh 
 
-../../../tools/genrandom 400 random.data
+test -r $RANDFILE || $GENRANDOM 400 $RANDFILE
 
-(cd ns3; sh -e sign.sh)
+copy_setports ns1/named.conf.in ns1/named.conf
+copy_setports ns2/named.conf.in ns2/named.conf
+copy_setports ns3/named.conf.in ns3/named.conf
+
+(cd ns3; $SHELL -e sign.sh)

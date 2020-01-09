@@ -1,20 +1,13 @@
 /*
- * Copyright (C) 2009-2011, 2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: ecdb.c,v 1.10 2011/12/20 00:06:53 marka Exp $ */
 
 #include "config.h"
 
@@ -115,7 +108,10 @@ static dns_rdatasetmethods_t rdataset_methods = {
 	NULL,			/* setadditional */
 	NULL,			/* putadditional */
 	rdataset_settrust,	/* settrust */
-	NULL			/* expire */
+	NULL,			/* expire */
+	NULL,			/* clearprefetch */
+	NULL,			/* setownercase */
+	NULL			/* getownercase */
 };
 
 typedef struct ecdb_rdatasetiter {
@@ -550,6 +546,7 @@ static dns_dbmethods_t ecdb_methods = {
 	detach,
 	NULL,			/* beginload */
 	NULL,			/* endload */
+	NULL,			/* serialize */
 	NULL,			/* dump */
 	NULL,			/* currentversion */
 	NULL,			/* newversion */
@@ -582,10 +579,14 @@ static dns_dbmethods_t ecdb_methods = {
 	NULL,			/* resigned */
 	NULL,			/* isdnssec */
 	NULL,			/* getrrsetstats */
-	NULL,			/* rpz_enabled */
-	NULL,			/* rpz_findips */
+	NULL,			/* rpz_attach */
+	NULL,			/* rpz_ready */
 	NULL,			/* findnodeext */
-	NULL			/* findext */
+	NULL,			/* findext */
+	NULL,			/* setcachestats */
+	NULL,			/* hashsize */
+	NULL,			/* nodefullname */
+	NULL			/* getsize */
 };
 
 static isc_result_t
@@ -772,19 +773,24 @@ rdataset_settrust(dns_rdataset_t *rdataset, dns_trust_t trust) {
 
 static void
 rdatasetiter_destroy(dns_rdatasetiter_t **iteratorp) {
-	ecdb_rdatasetiter_t *ecdbiterator;
 	isc_mem_t *mctx;
+	union {
+		dns_rdatasetiter_t *rdatasetiterator;
+		ecdb_rdatasetiter_t *ecdbiterator;
+	} u;
 
 	REQUIRE(iteratorp != NULL);
-	ecdbiterator = (ecdb_rdatasetiter_t *)*iteratorp;
-	REQUIRE(DNS_RDATASETITER_VALID(&ecdbiterator->common));
+	REQUIRE(DNS_RDATASETITER_VALID(*iteratorp));
 
-	mctx = ecdbiterator->common.db->mctx;
+	u.rdatasetiterator = *iteratorp;
 
-	ecdbiterator->common.magic = 0;
+	mctx = u.ecdbiterator->common.db->mctx;
+	u.ecdbiterator->common.magic = 0;
 
-	dns_db_detachnode(ecdbiterator->common.db, &ecdbiterator->common.node);
-	isc_mem_put(mctx, ecdbiterator, sizeof(ecdb_rdatasetiter_t));
+	dns_db_detachnode(u.ecdbiterator->common.db,
+			  &u.ecdbiterator->common.node);
+	isc_mem_put(mctx, u.ecdbiterator,
+		    sizeof(ecdb_rdatasetiter_t));
 
 	*iteratorp = NULL;
 }

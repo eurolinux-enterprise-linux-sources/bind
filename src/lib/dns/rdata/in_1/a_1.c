@@ -1,23 +1,13 @@
 /*
- * Copyright (C) 2004, 2007, 2009  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: a_1.c,v 1.55 2009/12/04 22:06:37 tbox Exp $ */
-
-/* Reviewed: Thu Mar 16 16:52:50 PST 2000 by bwelling */
 
 #ifndef RDATA_IN_1_A_1_C
 #define RDATA_IN_1_A_1_C
@@ -34,8 +24,8 @@ fromtext_in_a(ARGS_FROMTEXT) {
 	struct in_addr addr;
 	isc_region_t region;
 
-	REQUIRE(type == 1);
-	REQUIRE(rdclass == 1);
+	REQUIRE(type == dns_rdatatype_a);
+	REQUIRE(rdclass == dns_rdataclass_in);
 
 	UNUSED(type);
 	UNUSED(origin);
@@ -50,7 +40,7 @@ fromtext_in_a(ARGS_FROMTEXT) {
 	isc_buffer_availableregion(target, &region);
 	if (region.length < 4)
 		return (ISC_R_NOSPACE);
-	memcpy(region.base, &addr, 4);
+	memmove(region.base, &addr, 4);
 	isc_buffer_add(target, 4);
 	return (ISC_R_SUCCESS);
 }
@@ -59,8 +49,8 @@ static inline isc_result_t
 totext_in_a(ARGS_TOTEXT) {
 	isc_region_t region;
 
-	REQUIRE(rdata->type == 1);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_a);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 	REQUIRE(rdata->length == 4);
 
 	UNUSED(tctx);
@@ -74,8 +64,8 @@ fromwire_in_a(ARGS_FROMWIRE) {
 	isc_region_t sregion;
 	isc_region_t tregion;
 
-	REQUIRE(type == 1);
-	REQUIRE(rdclass == 1);
+	REQUIRE(type == dns_rdatatype_a);
+	REQUIRE(rdclass == dns_rdataclass_in);
 
 	UNUSED(type);
 	UNUSED(dctx);
@@ -89,7 +79,7 @@ fromwire_in_a(ARGS_FROMWIRE) {
 	if (tregion.length < 4)
 		return (ISC_R_NOSPACE);
 
-	memcpy(tregion.base, sregion.base, 4);
+	memmove(tregion.base, sregion.base, 4);
 	isc_buffer_forward(source, 4);
 	isc_buffer_add(target, 4);
 	return (ISC_R_SUCCESS);
@@ -99,8 +89,8 @@ static inline isc_result_t
 towire_in_a(ARGS_TOWIRE) {
 	isc_region_t region;
 
-	REQUIRE(rdata->type == 1);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_a);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 	REQUIRE(rdata->length == 4);
 
 	UNUSED(cctx);
@@ -108,7 +98,7 @@ towire_in_a(ARGS_TOWIRE) {
 	isc_buffer_availableregion(target, &region);
 	if (region.length < rdata->length)
 		return (ISC_R_NOSPACE);
-	memcpy(region.base, rdata->data, rdata->length);
+	memmove(region.base, rdata->data, rdata->length);
 	isc_buffer_add(target, 4);
 	return (ISC_R_SUCCESS);
 }
@@ -120,8 +110,8 @@ compare_in_a(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 1);
-	REQUIRE(rdata1->rdclass == 1);
+	REQUIRE(rdata1->type == dns_rdatatype_a);
+	REQUIRE(rdata1->rdclass == dns_rdataclass_in);
 	REQUIRE(rdata1->length == 4);
 	REQUIRE(rdata2->length == 4);
 
@@ -135,8 +125,8 @@ fromstruct_in_a(ARGS_FROMSTRUCT) {
 	dns_rdata_in_a_t *a = source;
 	isc_uint32_t n;
 
-	REQUIRE(type == 1);
-	REQUIRE(rdclass == 1);
+	REQUIRE(type == dns_rdatatype_a);
+	REQUIRE(rdclass == dns_rdataclass_in);
 	REQUIRE(source != NULL);
 	REQUIRE(a->common.rdtype == type);
 	REQUIRE(a->common.rdclass == rdclass);
@@ -156,8 +146,8 @@ tostruct_in_a(ARGS_TOSTRUCT) {
 	isc_uint32_t n;
 	isc_region_t region;
 
-	REQUIRE(rdata->type == 1);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_a);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 	REQUIRE(rdata->length == 4);
 
 	UNUSED(mctx);
@@ -178,16 +168,16 @@ freestruct_in_a(ARGS_FREESTRUCT) {
 	dns_rdata_in_a_t *a = source;
 
 	REQUIRE(source != NULL);
-	REQUIRE(a->common.rdtype == 1);
-	REQUIRE(a->common.rdclass == 1);
+	REQUIRE(a->common.rdtype == dns_rdatatype_a);
+	REQUIRE(a->common.rdclass == dns_rdataclass_in);
 
 	UNUSED(a);
 }
 
 static inline isc_result_t
 additionaldata_in_a(ARGS_ADDLDATA) {
-	REQUIRE(rdata->type == 1);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_a);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 
 	UNUSED(rdata);
 	UNUSED(add);
@@ -200,8 +190,8 @@ static inline isc_result_t
 digest_in_a(ARGS_DIGEST) {
 	isc_region_t r;
 
-	REQUIRE(rdata->type == 1);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_a);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 
 	dns_rdata_toregion(rdata, &r);
 
@@ -210,12 +200,26 @@ digest_in_a(ARGS_DIGEST) {
 
 static inline isc_boolean_t
 checkowner_in_a(ARGS_CHECKOWNER) {
+	dns_name_t prefix, suffix;
 
-	REQUIRE(type == 1);
-	REQUIRE(rdclass == 1);
+	REQUIRE(type == dns_rdatatype_a);
+	REQUIRE(rdclass == dns_rdataclass_in);
 
 	UNUSED(type);
 	UNUSED(rdclass);
+
+	/*
+	 * Handle Active Diretory gc._msdcs.<forest> name.
+	 */
+	if (dns_name_countlabels(name) > 2U) {
+		dns_name_init(&prefix, NULL);
+		dns_name_init(&suffix, NULL);
+		dns_name_split(name, dns_name_countlabels(name) - 2,
+			       &prefix, &suffix);
+		if (dns_name_equal(&gc_msdcs, &prefix) &&
+		    dns_name_ishostname(&suffix, ISC_FALSE))
+			return (ISC_TRUE);
+	}
 
 	return (dns_name_ishostname(name, wildcard));
 }
@@ -223,8 +227,8 @@ checkowner_in_a(ARGS_CHECKOWNER) {
 static inline isc_boolean_t
 checknames_in_a(ARGS_CHECKNAMES) {
 
-	REQUIRE(rdata->type == 1);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_a);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 
 	UNUSED(rdata);
 	UNUSED(owner);

@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: portlist.c,v 1.13 2007/06/19 23:47:16 tbox Exp $ */
 
 /*! \file */
 
@@ -80,7 +73,7 @@ dns_portlist_create(isc_mem_t *mctx, dns_portlist_t **portlistp) {
 	portlist = isc_mem_get(mctx, sizeof(*portlist));
 	if (portlist == NULL)
 		return (ISC_R_NOMEMORY);
-        result = isc_mutex_init(&portlist->lock);
+	result = isc_mutex_init(&portlist->lock);
 	if (result != ISC_R_SUCCESS) {
 		isc_mem_put(mctx, portlist, sizeof(*portlist));
 		return (result);
@@ -111,7 +104,7 @@ find_port(dns_element_t *list, unsigned int len, in_port_t port) {
 	for (;;) {
 		if (list[xtry].port == port)
 			return (&list[xtry]);
-	        if (port > list[xtry].port) {
+		if (port > list[xtry].port) {
 			if (xtry == max)
 				break;
 			min = xtry;
@@ -164,8 +157,8 @@ dns_portlist_add(dns_portlist_t *portlist, int af, in_port_t port) {
 			goto unlock;
 		}
 		if (portlist->list != NULL) {
-			memcpy(el, portlist->list,
-			       portlist->allocated * sizeof(*el)); 
+			memmove(el, portlist->list,
+				portlist->allocated * sizeof(*el));
 			isc_mem_put(portlist->mctx, portlist->list,
 				    portlist->allocated * sizeof(*el));
 		}
@@ -215,7 +208,7 @@ isc_boolean_t
 dns_portlist_match(dns_portlist_t *portlist, int af, in_port_t port) {
 	dns_element_t *el;
 	isc_boolean_t result = ISC_FALSE;
-	
+
 	REQUIRE(DNS_VALID_PORTLIST(portlist));
 	REQUIRE(af == AF_INET || af == AF_INET6);
 	LOCK(&portlist->lock);
@@ -227,7 +220,7 @@ dns_portlist_match(dns_portlist_t *portlist, int af, in_port_t port) {
 			if (af == AF_INET6 && (el->flags & DNS_PL_INET6) != 0)
 				result = ISC_TRUE;
 		}
-	}	
+	}
 	UNLOCK(&portlist->lock);
 	return (result);
 }

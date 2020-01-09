@@ -1,20 +1,13 @@
 /*
- * Copyright (C) 2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: dnssec-verify.c,v 1.1.2.1 2011/03/16 06:37:51 each Exp $ */
 
 /*! \file */
 
@@ -69,6 +62,10 @@
 
 #include <dst/dst.h>
 
+#ifdef PKCS11CRYPTO
+#include <pk11/result.h>
+#endif
+
 #include "dnssectool.h"
 
 const char *program = "dnssec-verify";
@@ -100,8 +97,7 @@ loadzone(char *file, char *origin, dns_rdataclass_t rdclass, dns_db_t **db) {
 	isc_buffer_init(&b, origin, len);
 	isc_buffer_add(&b, len);
 
-	dns_fixedname_init(&fname);
-	name = dns_fixedname_name(&fname);
+	name = dns_fixedname_initname(&fname);
 	result = dns_name_fromtext(name, &b, dns_rootname, 0, NULL);
 	if (result != ISC_R_SUCCESS)
 		fatal("failed converting name '%s' to dns format: %s",
@@ -112,9 +108,26 @@ loadzone(char *file, char *origin, dns_rdataclass_t rdclass, dns_db_t **db) {
 	check_result(result, "dns_db_create()");
 
 	result = dns_db_load2(*db, file, inputformat);
-	if (result != ISC_R_SUCCESS && result != DNS_R_SEENINCLUDE)
+	switch (result) {
+	case DNS_R_SEENINCLUDE:
+	case ISC_R_SUCCESS:
+		break;
+	case DNS_R_NOTZONETOP:
+		/*
+		 * Comparing pointers (vs. using strcmp()) is intentional: we
+		 * want to check whether -o was supplied on the command line,
+		 * not whether origin and file contain the same string.
+		 */
+		if (origin == file) {
+			fatal("failed loading zone '%s' from file '%s': "
+			      "use -o to specify a different zone origin",
+			      origin, file);
+		}
+		/* FALLTHROUGH */
+	default:
 		fatal("failed loading zone from '%s': %s",
 		      file, isc_result_totext(result));
+	}
 }
 
 ISC_PLATFORM_NORETURN_PRE static void
@@ -131,13 +144,17 @@ usage(void) {
 
 	fprintf(stderr, "Options: (default value in parenthesis) \n");
 	fprintf(stderr, "\t-v debuglevel (0)\n");
+	fprintf(stderr, "\t-V:\tprint version information\n");
 	fprintf(stderr, "\t-o origin:\n");
 	fprintf(stderr, "\t\tzone origin (name of zonefile)\n");
 	fprintf(stderr, "\t-I format:\n");
 	fprintf(stderr, "\t\tfile format of input zonefile (text)\n");
 	fprintf(stderr, "\t-c class (IN)\n");
 	fprintf(stderr, "\t-E engine:\n");
-#ifdef USE_PKCS11
+#if defined(PKCS11CRYPTO)
+	fprintf(stderr, "\t\tpath to PKCS#11 provider library "
+		"(default is %s)\n", PK11_LIB_LOCATION);
+#elif defined(USE_PKCS11)
 	fprintf(stderr, "\t\tname of an OpenSSL engine to use "
 				"(default is \"pkcs11\")\n");
 #else
@@ -156,16 +173,17 @@ main(int argc, char *argv[]) {
 	isc_result_t result;
 	isc_log_t *log = NULL;
 #ifdef USE_PKCS11
-	const char *engine = "pkcs11";
+	const char *engine = PKCS11_ENGINE;
 #else
 	const char *engine = NULL;
 #endif
 	char *classname = NULL;
 	dns_rdataclass_t rdclass;
-	char ch, *endp;
+	char *endp;
+	int ch;
 
 #define CMDLINE_FLAGS \
-	"m:o:I:c:E:v:xz"
+	"hm:o:I:c:E:v:Vxz"
 
 	/*
 	 * Process memory debugging argument first.
@@ -195,6 +213,9 @@ main(int argc, char *argv[]) {
 	if (result != ISC_R_SUCCESS)
 		fatal("out of memory");
 
+#ifdef PKCS11CRYPTO
+	pk11_result_register();
+#endif
 	dns_result_register();
 
 	isc_commandline_errprint = ISC_FALSE;
@@ -207,10 +228,6 @@ main(int argc, char *argv[]) {
 
 		case 'E':
 			engine = isc_commandline_argument;
-			break;
-
-		case 'h':
-			usage();
 			break;
 
 		case 'I':
@@ -243,8 +260,15 @@ main(int argc, char *argv[]) {
 			if (isc_commandline_option != '?')
 				fprintf(stderr, "%s: invalid argument -%c\n",
 					program, isc_commandline_option);
+			/* FALLTHROUGH */
+
+		case 'h':
+			/* Does not return. */
 			usage();
-			break;
+
+		case 'V':
+			/* Does not return. */
+			version(program);
 
 		default:
 			fprintf(stderr, "%s: unhandled option -%c\n",
@@ -269,7 +293,7 @@ main(int argc, char *argv[]) {
 
 	rdclass = strtoclass(classname);
 
-	setup_logging(verbose, mctx, &log);
+	setup_logging(mctx, &log);
 
 	argc -= isc_commandline_index;
 	argv += isc_commandline_index;

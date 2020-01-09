@@ -1,27 +1,15 @@
 /*
- * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
 
 /*! \file */
-
-/*
- * Principal Author: DCL
- */
 
 #include <config.h>
 
@@ -34,6 +22,7 @@
 #include <isc/log.h>
 #include <isc/net.h>
 #include <isc/mem.h>
+#include <isc/print.h>
 #include <isc/random.h>
 #include <isc/socket.h>
 #include <isc/stdtime.h>
@@ -41,6 +30,8 @@
 #include <isc/task.h>
 #include <isc/thread.h>
 #include <isc/util.h>
+
+#include <pk11/site.h>
 
 #include <isccfg/namedconf.h>
 
@@ -75,18 +66,21 @@ static int nserveraddrs;
 static int currentaddr = 0;
 static unsigned int remoteport = 0;
 static isc_socketmgr_t *socketmgr = NULL;
-static unsigned char databuf[2048];
+static isc_buffer_t *databuf;
 static isccc_ccmsg_t ccmsg;
+static isc_uint32_t algorithm;
 static isccc_region_t secret;
 static isc_boolean_t failed = ISC_FALSE;
 static isc_boolean_t c_flag = ISC_FALSE;
-static isc_mem_t *mctx;
+static isc_mem_t *rndc_mctx;
 static int sends, recvs, connects;
 static char *command;
 static char *args;
 static char program[256];
 static isc_socket_t *sock = NULL;
 static isc_uint32_t serial;
+static isc_boolean_t quiet = ISC_FALSE;
+static isc_boolean_t showresult = ISC_FALSE;
 
 static void rndc_startconnect(isc_sockaddr_t *addr, isc_task_t *task);
 
@@ -97,86 +91,116 @@ static void
 usage(int status) {
 	fprintf(stderr, "\
 Usage: %s [-b address] [-c config] [-s server] [-p port]\n\
-	[-k key-file ] [-y key] [-V] command\n\
+	[-k key-file ] [-y key] [-r] [-V] command\n\
 \n\
 command is one of the following:\n\
 \n\
-  reload	Reload configuration file and zones.\n\
-  reload zone [class [view]]\n\
-		Reload a single zone.\n\
-  refresh zone [class [view]]\n\
-		Schedule immediate maintenance for a zone.\n\
-  retransfer zone [class [view]]\n\
-		Retransfer a single zone without checking serial number.\n\
-  freeze	Suspend updates to all dynamic zones.\n\
-  freeze zone [class [view]]\n\
-		Suspend updates to a dynamic zone.\n\
-  thaw		Enable updates to all dynamic zones and reload them.\n\
-  thaw zone [class [view]]\n\
-		Enable updates to a frozen dynamic zone and reload it.\n\
-  sync [-clean]	Dump changes to all dynamic zones to disk, and optionally\n\
-		remove their journal files.\n\
-  sync [-clean] zone [class [view]]\n\
-		Dump a single zone's changes to disk, and optionally\n\
-		remove its journal file.\n\
-  notify zone [class [view]]\n\
-		Resend NOTIFY messages for the zone.\n\
-  reconfig	Reload configuration file and new zones only.\n\
-  sign zone [class [view]]\n\
-		Update zone keys, and sign as needed.\n\
-  loadkeys zone [class [view]]\n\
-		Update keys without signing immediately.\n\
-  stats		Write server statistics to the statistics file.\n\
-  querylog newstate\n\
-		Enable / disable query logging.\n\
-  dumpdb [-all|-cache|-zones] [view ...]\n\
+  addzone zone [class [view]] { zone-options }\n\
+		Add zone to given view. Requires allow-new-zones option.\n\
+  delzone [-clean] zone [class [view]]\n\
+		Removes zone from given view.\n\
+  dnstap -reopen\n\
+		Close, truncate and re-open the DNSTAP output file.\n\
+  dnstap -roll count\n\
+		Close, rename and re-open the DNSTAP output file(s).\n\
+  dumpdb [-all|-cache|-zones|-adb|-bad|-fail] [view ...]\n\
 		Dump cache(s) to the dump file (named_dump.db).\n\
-  secroots [view ...]\n\
-		Write security roots to the secroots file.\n\
-  stop		Save pending updates to master files and stop the server.\n\
-  stop -p	Save pending updates to master files and stop the server\n\
-		reporting process id.\n\
-  halt		Stop the server without saving pending updates.\n\
-  halt -p	Stop the server without saving pending updates reporting\n\
-		process id.\n\
-  trace		Increment debugging level by one.\n\
-  trace level	Change the debugging level.\n\
-  notrace	Set debugging level to 0.\n\
   flush 	Flushes all of the server's caches.\n\
   flush [view]	Flushes the server's cache for a view.\n\
   flushname name [view]\n\
 		Flush the given name from the server's cache(s)\n\
   flushtree name [view]\n\
 		Flush all names under the given name from the server's cache(s)\n\
-  status	Display status of the server.\n\
+  freeze	Suspend updates to all dynamic zones.\n\
+  freeze zone [class [view]]\n\
+		Suspend updates to a dynamic zone.\n\
+  halt		Stop the server without saving pending updates.\n\
+  halt -p	Stop the server without saving pending updates reporting\n\
+		process id.\n\
+  loadkeys zone [class [view]]\n\
+		Update keys without signing immediately.\n\
+  managed-keys refresh [class [view]]\n\
+		Check trust anchor for RFC 5011 key changes\n\
+  managed-keys status [class [view]]\n\
+		Display RFC 5011 managed keys information\n\
+  managed-keys sync [class [view]]\n\
+		Write RFC 5011 managed keys to disk\n\
+  modzone zone [class [view]] { zone-options }\n\
+		Modify a zone's configuration.\n\
+		Requires allow-new-zones option.\n\
+  notify zone [class [view]]\n\
+		Resend NOTIFY messages for the zone.\n\
+  notrace	Set debugging level to 0.\n\
+  nta -dump\n\
+		List all negative trust anchors.\n\
+  nta [-lifetime duration] [-force] domain [view]\n\
+		Set a negative trust anchor, disabling DNSSEC validation\n\
+		for the given domain.\n\
+		Using -lifetime specifies the duration of the NTA, up\n\
+		to one week.\n\
+		Using -force prevents the NTA from expiring before its\n\
+		full lifetime, even if the domain can validate sooner.\n\
+  nta -remove domain [view]\n\
+		Remove a negative trust anchor, re-enabling validation\n\
+		for the given domain.\n\
+  querylog [ on | off ]\n\
+		Enable / disable query logging.\n\
+  reconfig	Reload configuration file and new zones only.\n\
   recursing	Dump the queries that are currently recursing (named.recursing)\n\
-  tsig-list	List all currently active TSIG keys, including both statically\n\
-		configured and TKEY-negotiated keys.\n\
-  tsig-delete keyname [view]	\n\
-		Delete a TKEY-negotiated TSIG key.\n\
-  validation newstate [view]\n\
-		Enable / disable DNSSEC validation.\n\
-  addzone [\"file\"] zone [class [view]] { zone-options }\n\
-		Add zone to given view. Requires new-zone-file option.\n\
-  delzone [\"file\"] zone [class [view]]\n\
-		Removes zone from given view. Requires new-zone-file option.\n\
-  signing -list zone [class [view]]\n\
-		List the private records showing the state of DNSSEC\n\
-		signing in the given zone.\n\
-  signing -clear <keyid>/<algorithm> zone [class [view]]\n\
-		Remove the private record that indicating the given key\n\
-		has finished signing the given zone.\n\
+  refresh zone [class [view]]\n\
+		Schedule immediate maintenance for a zone.\n\
+  reload	Reload configuration file and zones.\n\
+  reload zone [class [view]]\n\
+		Reload a single zone.\n\
+  retransfer zone [class [view]]\n\
+		Retransfer a single zone without checking serial number.\n\
+  scan		Scan available network interfaces for changes.\n\
+  secroots [view ...]\n\
+		Write security roots to the secroots file.\n\
+  showzone zone [class [view]]\n\
+		Print a zone's configuration.\n\
+  sign zone [class [view]]\n\
+		Update zone keys, and sign as needed.\n\
   signing -clear all zone [class [view]]\n\
 		Remove the private records for all keys that have\n\
 		finished signing the given zone.\n\
-  signing -nsec3param none zone [class [view]]\n\
-		Remove NSEC3 chains from zone.\n\
+  signing -clear <keyid>/<algorithm> zone [class [view]]\n\
+		Remove the private record that indicating the given key\n\
+		has finished signing the given zone.\n\
+  signing -list zone [class [view]]\n\
+		List the private records showing the state of DNSSEC\n\
+		signing in the given zone.\n\
   signing -nsec3param hash flags iterations salt zone [class [view]]\n\
 		Add NSEC3 chain to zone if already signed.\n\
 		Prime zone with NSEC3 chain if not yet signed.\n\
-  *restart	Restart the server.\n\
+  signing -nsec3param none zone [class [view]]\n\
+		Remove NSEC3 chains from zone.\n\
+  signing -serial <value> zone [class [view]]\n\
+		Set the zones's serial to <value>.\n\
+  stats		Write server statistics to the statistics file.\n\
+  status	Display status of the server.\n\
+  stop		Save pending updates to master files and stop the server.\n\
+  stop -p	Save pending updates to master files and stop the server\n\
+		reporting process id.\n\
+  sync [-clean]	Dump changes to all dynamic zones to disk, and optionally\n\
+		remove their journal files.\n\
+  sync [-clean] zone [class [view]]\n\
+		Dump a single zone's changes to disk, and optionally\n\
+		remove its journal file.\n\
+  thaw		Enable updates to all dynamic zones and reload them.\n\
+  thaw zone [class [view]]\n\
+		Enable updates to a frozen dynamic zone and reload it.\n\
+  trace		Increment debugging level by one.\n\
+  trace level	Change the debugging level.\n\
+  tsig-delete keyname [view]\n\
+		Delete a TKEY-negotiated TSIG key.\n\
+  tsig-list	List all currently active TSIG keys, including both statically\n\
+		configured and TKEY-negotiated keys.\n\
+  validation [ yes | no | status ] [view]\n\
+		Enable / disable DNSSEC validation.\n\
+  zonestatus zone [class [view]]\n\
+		Display the current status of a zone.\n\
 \n\
-* == not yet implemented\n\
 Version: %s\n",
 		progname, version);
 
@@ -249,11 +273,12 @@ rndc_recvdone(isc_task_t *task, isc_event_t *event) {
 	source.rstart = isc_buffer_base(&ccmsg.buffer);
 	source.rend = isc_buffer_used(&ccmsg.buffer);
 
-	DO("parse message", isccc_cc_fromwire(&source, &response, &secret));
+	DO("parse message",
+	   isccc_cc_fromwire(&source, &response, algorithm, &secret));
 
 	data = isccc_alist_lookup(response, "_data");
-	if (data == NULL)
-		fatal("no data section in response");
+	if (!isccc_alist_alistp(data))
+		fatal("bad or missing data section in response");
 	result = isccc_cc_lookupstring(data, "err", &errormsg);
 	if (result == ISC_R_SUCCESS) {
 		failed = ISC_TRUE;
@@ -266,11 +291,21 @@ rndc_recvdone(isc_task_t *task, isc_event_t *event) {
 
 	result = isccc_cc_lookupstring(data, "text", &textmsg);
 	if (result == ISC_R_SUCCESS) {
-		if (strlen(textmsg) != 0U)
-			printf("%s\n", textmsg);
+		if ((!quiet || failed) && strlen(textmsg) != 0U)
+			fprintf(failed ? stderr : stdout, "%s\n", textmsg);
 	} else if (result != ISC_R_NOTFOUND)
 		fprintf(stderr, "%s: parsing response failed: %s\n",
 			progname, isc_result_totext(result));
+
+	if (showresult) {
+		isc_result_t eresult;
+
+		result = isccc_cc_lookupuint32(data, "result", &eresult);
+		if (result == ISC_R_SUCCESS)
+			printf("%s %u\n", isc_result_toid(eresult), eresult);
+		else
+			printf("NONE -1\n");
+	}
 
 	isc_event_free(&event);
 	isccc_sexpr_free(&response);
@@ -292,8 +327,6 @@ rndc_recvnonce(isc_task_t *task, isc_event_t *event) {
 	isccc_time_t now;
 	isc_region_t r;
 	isccc_sexpr_t *data;
-	isccc_region_t message;
-	isc_uint32_t len;
 	isc_buffer_t b;
 
 	recvs--;
@@ -304,7 +337,8 @@ rndc_recvnonce(isc_task_t *task, isc_event_t *event) {
 		      "* the remote server is using an older version of"
 		      " the command protocol,\n"
 		      "* this host is not authorized to connect,\n"
-		      "* the clocks are not synchronized, or\n"
+		      "* the clocks are not synchronized,\n"
+		      "* the key signing algorithm is incorrect, or\n"
 		      "* the key is invalid.");
 
 	if (ccmsg.result != ISC_R_SUCCESS)
@@ -313,11 +347,12 @@ rndc_recvnonce(isc_task_t *task, isc_event_t *event) {
 	source.rstart = isc_buffer_base(&ccmsg.buffer);
 	source.rend = isc_buffer_used(&ccmsg.buffer);
 
-	DO("parse message", isccc_cc_fromwire(&source, &response, &secret));
+	DO("parse message",
+	   isccc_cc_fromwire(&source, &response, algorithm, &secret));
 
 	_ctrl = isccc_alist_lookup(response, "_ctrl");
-	if (_ctrl == NULL)
-		fatal("_ctrl section missing");
+	if (!isccc_alist_alistp(_ctrl))
+		fatal("bad or missing ctrl section in response");
 	nonce = 0;
 	if (isccc_cc_lookupuint32(_ctrl, "_nonce", &nonce) != ISC_R_SUCCESS)
 		nonce = 0;
@@ -338,14 +373,19 @@ rndc_recvnonce(isc_task_t *task, isc_event_t *event) {
 		if (isccc_cc_defineuint32(_ctrl, "_nonce", nonce) == NULL)
 			fatal("out of memory");
 	}
-	message.rstart = databuf + 4;
-	message.rend = databuf + sizeof(databuf);
-	DO("render message", isccc_cc_towire(request, &message, &secret));
-	len = sizeof(databuf) - REGION_SIZE(message);
-	isc_buffer_init(&b, databuf, 4);
-	isc_buffer_putuint32(&b, len - 4);
-	r.length = len;
-	r.base = databuf;
+
+	isc_buffer_clear(databuf);
+	/* Skip the length field (4 bytes) */
+	isc_buffer_add(databuf, 4);
+
+	DO("render message",
+	   isccc_cc_towire(request, &databuf, algorithm, &secret));
+
+	isc_buffer_init(&b, databuf->base, 4);
+	isc_buffer_putuint32(&b, databuf->used - 4);
+
+	r.base = databuf->base;
+	r.length = databuf->used;
 
 	isccc_ccmsg_cancelread(&ccmsg);
 	DO("schedule recv", isccc_ccmsg_readmessage(&ccmsg, task,
@@ -357,6 +397,7 @@ rndc_recvnonce(isc_task_t *task, isc_event_t *event) {
 
 	isc_event_free(&event);
 	isccc_sexpr_free(&response);
+	isccc_sexpr_free(&request);
 	return;
 }
 
@@ -367,9 +408,7 @@ rndc_connected(isc_task_t *task, isc_event_t *event) {
 	isccc_sexpr_t *request = NULL;
 	isccc_sexpr_t *data;
 	isccc_time_t now;
-	isccc_region_t message;
 	isc_region_t r;
-	isc_uint32_t len;
 	isc_buffer_t b;
 	isc_result_t result;
 
@@ -400,16 +439,21 @@ rndc_connected(isc_task_t *task, isc_event_t *event) {
 		fatal("_data section missing");
 	if (isccc_cc_definestring(data, "type", "null") == NULL)
 		fatal("out of memory");
-	message.rstart = databuf + 4;
-	message.rend = databuf + sizeof(databuf);
-	DO("render message", isccc_cc_towire(request, &message, &secret));
-	len = sizeof(databuf) - REGION_SIZE(message);
-	isc_buffer_init(&b, databuf, 4);
-	isc_buffer_putuint32(&b, len - 4);
-	r.length = len;
-	r.base = databuf;
 
-	isccc_ccmsg_init(mctx, sock, &ccmsg);
+	isc_buffer_clear(databuf);
+	/* Skip the length field (4 bytes) */
+	isc_buffer_add(databuf, 4);
+
+	DO("render message",
+	   isccc_cc_towire(request, &databuf, algorithm, &secret));
+
+	isc_buffer_init(&b, databuf->base, 4);
+	isc_buffer_putuint32(&b, databuf->used - 4);
+
+	r.base = databuf->base;
+	r.length = databuf->used;
+
+	isccc_ccmsg_init(rndc_mctx, sock, &ccmsg);
 	isccc_ccmsg_setmaxsize(&ccmsg, 1024 * 1024);
 
 	DO("schedule recv", isccc_ccmsg_readmessage(&ccmsg, task,
@@ -419,6 +463,7 @@ rndc_connected(isc_task_t *task, isc_event_t *event) {
 					   NULL));
 	sends++;
 	isc_event_free(&event);
+	isccc_sexpr_free(&request);
 }
 
 static void
@@ -482,7 +527,7 @@ parse_config(isc_mem_t *mctx, isc_log_t *log, const char *keyname,
 	const cfg_obj_t *address = NULL;
 	const cfg_listelt_t *elt;
 	const char *secretstr;
-	const char *algorithm;
+	const char *algorithmstr;
 	static char secretarray[1024];
 	const cfg_type_t *conftype = &cfg_type_rndcconf;
 	isc_boolean_t key_only = ISC_FALSE;
@@ -586,10 +631,25 @@ parse_config(isc_mem_t *mctx, isc_log_t *log, const char *keyname,
 		fatal("key must have algorithm and secret");
 
 	secretstr = cfg_obj_asstring(secretobj);
-	algorithm = cfg_obj_asstring(algorithmobj);
+	algorithmstr = cfg_obj_asstring(algorithmobj);
 
-	if (strcasecmp(algorithm, "hmac-md5") != 0)
-		fatal("unsupported algorithm: %s", algorithm);
+#ifndef PK11_MD5_DISABLE
+	if (strcasecmp(algorithmstr, "hmac-md5") == 0)
+		algorithm = ISCCC_ALG_HMACMD5;
+	else
+#endif
+	if (strcasecmp(algorithmstr, "hmac-sha1") == 0)
+		algorithm = ISCCC_ALG_HMACSHA1;
+	else if (strcasecmp(algorithmstr, "hmac-sha224") == 0)
+		algorithm = ISCCC_ALG_HMACSHA224;
+	else if (strcasecmp(algorithmstr, "hmac-sha256") == 0)
+		algorithm = ISCCC_ALG_HMACSHA256;
+	else if (strcasecmp(algorithmstr, "hmac-sha384") == 0)
+		algorithm = ISCCC_ALG_HMACSHA384;
+	else if (strcasecmp(algorithmstr, "hmac-sha512") == 0)
+		algorithm = ISCCC_ALG_HMACSHA512;
+	else
+		fatal("unsupported algorithm: %s", algorithmstr);
 
 	secret.rstart = (unsigned char *)secretarray;
 	secret.rend = (unsigned char *)secretarray + sizeof(secretarray);
@@ -706,8 +766,8 @@ parse_config(isc_mem_t *mctx, isc_log_t *log, const char *keyname,
 
 int
 main(int argc, char **argv) {
-	isc_boolean_t show_final_mem = ISC_FALSE;
 	isc_result_t result = ISC_R_SUCCESS;
+	isc_boolean_t show_final_mem = ISC_FALSE;
 	isc_taskmgr_t *taskmgr = NULL;
 	isc_task_t *task = NULL;
 	isc_log_t *log = NULL;
@@ -725,7 +785,7 @@ main(int argc, char **argv) {
 
 	result = isc_file_progname(*argv, program, sizeof(program));
 	if (result != ISC_R_SUCCESS)
-		memcpy(program, "rndc", 5);
+		memmove(program, "rndc", 5);
 	progname = program;
 
 	admin_conffile = RNDC_CONFFILE;
@@ -740,7 +800,7 @@ main(int argc, char **argv) {
 
 	isc_commandline_errprint = ISC_FALSE;
 
-	while ((ch = isc_commandline_parse(argc, argv, "b:c:hk:Mmp:s:Vy:"))
+	while ((ch = isc_commandline_parse(argc, argv, "b:c:hk:Mmp:qrs:Vy:"))
 	       != -1) {
 		switch (ch) {
 		case 'b':
@@ -777,6 +837,14 @@ main(int argc, char **argv) {
 			if (remoteport > 65535 || remoteport == 0)
 				fatal("port '%s' out of range",
 				      isc_commandline_argument);
+			break;
+
+		case 'q':
+			quiet = ISC_TRUE;
+			break;
+
+		case 'r':
+			showresult = ISC_TRUE;
 			break;
 
 		case 's':
@@ -816,12 +884,12 @@ main(int argc, char **argv) {
 
 	isc_random_get(&serial);
 
-	DO("create memory context", isc_mem_create(0, 0, &mctx));
-	DO("create socket manager", isc_socketmgr_create(mctx, &socketmgr));
-	DO("create task manager", isc_taskmgr_create(mctx, 1, 0, &taskmgr));
+	DO("create memory context", isc_mem_create(0, 0, &rndc_mctx));
+	DO("create socket manager", isc_socketmgr_create(rndc_mctx, &socketmgr));
+	DO("create task manager", isc_taskmgr_create(rndc_mctx, 1, 0, &taskmgr));
 	DO("create task", isc_task_create(taskmgr, 0, &task));
 
-	DO("create logging context", isc_log_create(mctx, &log, &logconfig));
+	DO("create logging context", isc_log_create(rndc_mctx, &log, &logconfig));
 	isc_log_setcontext(log);
 	DO("setting log tag", isc_log_settag(logconfig, progname));
 	logdest.file.stream = stderr;
@@ -835,11 +903,14 @@ main(int argc, char **argv) {
 	DO("enabling log channel", isc_log_usechannel(logconfig, "stderr",
 						      NULL, NULL));
 
-	parse_config(mctx, log, keyname, &pctx, &config);
+	parse_config(rndc_mctx, log, keyname, &pctx, &config);
 
 	isccc_result_register();
 
 	command = *argv;
+
+	DO("allocate data buffer",
+	   isc_buffer_allocate(rndc_mctx, &databuf, 2048));
 
 	/*
 	 * Convert argc/argv into a space-delimited command string
@@ -850,14 +921,14 @@ main(int argc, char **argv) {
 	for (i = 0; i < argc; i++)
 		argslen += strlen(argv[i]) + 1;
 
-	args = isc_mem_get(mctx, argslen);
+	args = isc_mem_get(rndc_mctx, argslen);
 	if (args == NULL)
 		DO("isc_mem_get", ISC_R_NOMEMORY);
 
 	p = args;
 	for (i = 0; i < argc; i++) {
 		size_t len = strlen(argv[i]);
-		memcpy(p, argv[i], len);
+		memmove(p, argv[i], len);
 		p += len;
 		*p++ = ' ';
 	}
@@ -874,7 +945,7 @@ main(int argc, char **argv) {
 	if (nserveraddrs == 0)
 		get_addresses(servername, (in_port_t) remoteport);
 
-	DO("post event", isc_app_onrun(mctx, task, rndc_start, NULL));
+	DO("post event", isc_app_onrun(rndc_mctx, task, rndc_start, NULL));
 
 	result = isc_app_run();
 	if (result != ISC_R_SUCCESS)
@@ -892,15 +963,17 @@ main(int argc, char **argv) {
 	cfg_obj_destroy(pctx, &config);
 	cfg_parser_destroy(&pctx);
 
-	isc_mem_put(mctx, args, argslen);
+	isc_mem_put(rndc_mctx, args, argslen);
 	isccc_ccmsg_invalidate(&ccmsg);
 
 	dns_name_destroy();
 
-	if (show_final_mem)
-		isc_mem_stats(mctx, stderr);
+	isc_buffer_free(&databuf);
 
-	isc_mem_destroy(&mctx);
+	if (show_final_mem)
+		isc_mem_stats(rndc_mctx, stderr);
+
+	isc_mem_destroy(&rndc_mctx);
 
 	if (failed)
 		return (1);

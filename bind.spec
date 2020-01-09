@@ -2,37 +2,73 @@
 # Red Hat BIND package .spec file
 #
 
-#%%global PATCHVER P2
-#%%global PREVER rc2
-#%%global VERSION %{version}%{PREVER}
-%global VERSION %{version}
-#%%global VERSION %{version}-%{PATCHVER}
+%global PATCHVER P2
+#%%global PREVER rc1
+%global BINDVERSION %{version}%{?PREVER}%{?PATCHVER:-%{PATCHVER}}
 
-%{?!SDB:       %global SDB       1}
-%{?!test:      %global test      0}
+# bcond_without is built by default, unless --without X is passed
+# bcond_with is built only when --with X is passed to build
+%bcond_without UNITTEST
+%bcond_with    SYSTEMTEST
+%bcond_without SDB
+%bcond_without GSSTSIG
+# it is not possible to build the package without PKCS11 sub-package
+# due to extensive changes to Makefiles
+%bcond_without PKCS11
+%bcond_without DEVEL
+%bcond_with    LMDB
+%bcond_with    DLZ
+%bcond_without EXPORT_LIBS
+%if 0%{?fedora} >= 17
+%bcond_without KYUA
+%else
+%bcond_with    KYUA
+%endif
+
 %{?!bind_uid:  %global bind_uid  25}
 %{?!bind_gid:  %global bind_gid  25}
-%{?!GSSTSIG:   %global GSSTSIG   1}
-%{?!PKCS11:    %global PKCS11    1}
-%{?!DEVEL:     %global DEVEL     1}
 %global        bind_dir          /var/named
 %global        chroot_prefix     %{bind_dir}/chroot
 %global        selinuxbooleans   named_write_master_zones=1
-%if %{SDB}
+%if %{with SDB}
 %global        chroot_sdb_prefix %{bind_dir}/chroot_sdb
 %endif
+## The order of libs is important. See lib/Makefile.in for details
+%define bind_export_libs isc dns isccfg irs
+%{!?_export_dir:%global _export_dir /bind9-export/}
+# libisc-nosym requires to be linked with unresolved symbols
+# When libisc-nosym linking is fixed, it can be defined to 1
+# Visit https://bugzilla.redhat.com/show_bug.cgi?id=1540300
+%undefine _strict_symbol_defs_build
 #
+
+# lib*.so.X versions of selected libraries
+%global sover_dns 1102
+%global sover_isc 169
+%global sover_irs 160
+%global sover_isccfg 160
+
+# Fix permissions on existing device files on upgrade
+%define chroot_fix_devices() \
+if [ $1 -gt 1 ]; then \
+  for DEV in "%{1}/dev"/{null,random,zero}; do \
+    if [ -e "$DEV" ] && [ "$(/bin/stat --printf="%G %a" "$DEV")" = "root 644" ]; \
+    then \
+      /bin/chmod 0664 "$DEV" \
+      /bin/chgrp named "$DEV" \
+    fi \
+  done \
+fi
+
 Summary:  The Berkeley Internet Name Domain (BIND) DNS (Domain Name System) server
 Name:     bind
-License:  ISC
-Version:  9.9.4
-Release:  74%{?PATCHVER}%{?PREVER}%{?dist}.2
+License:  MPLv2.0
+Version:  9.11.4
+Release:  9%{?PATCHVER:.%{PATCHVER}}%{?PREVER:.%{PREVER}}%{?dist}
 Epoch:    32
 Url:      http://www.isc.org/products/BIND/
-Buildroot:%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-Group:    System Environment/Daemons
 #
-Source:   https://ftp.isc.org/isc/bind9/%{VERSION}/bind-%{VERSION}.tar.gz
+Source:   https://ftp.isc.org/isc/bind9/%{BINDVERSION}/bind-%{BINDVERSION}.tar.gz
 Source1:  named.sysconfig
 Source3:  named.logrotate
 Source7:  bind-9.3.1rc1-sdb_tools-Makefile.in
@@ -40,7 +76,7 @@ Source8:  dnszone.schema
 Source12: README.sdb_pgsql
 Source25: named.conf.sample
 Source26: named.conf
-Source28: config-16.tar.bz2
+Source28: config-18.tar.bz2
 # Up-to-date bind.keys from upstream
 # Fetch a new one from page https://www.isc.org/bind-keys
 Source29: bind.keys
@@ -62,181 +98,129 @@ Source44: named-chroot-setup.service
 Source45: named-sdb-chroot-setup.service
 Source46: named-setup-rndc.service
 Source47: named-pkcs11.service
-# added due to GeoIP functionality tests
-# patch tool does not support binary patches
-Source48: geoip-testing-data.tar.xz
+Source48: setup-named-softhsm.sh
+Source49: named-chroot.files
 
 # Common patches
-Patch5:  bind-nonexec.patch
 Patch10: bind-9.5-PIE.patch
 Patch16: bind-9.3.2-redhat_doc.patch
 Patch72: bind-9.5-dlz-64bit.patch
-Patch87: bind-9.5-parallel-build.patch
 Patch101:bind-96-old-api.patch
 Patch102:bind-95-rh452060.patch
 Patch106:bind93-rh490837.patch
 Patch109:bind97-rh478718.patch
-Patch110:bind97-rh570851.patch
-Patch111:bind97-exportlib.patch
 Patch112:bind97-rh645544.patch
-Patch119:bind97-rh693982.patch
-Patch123:bind98-rh735103.patch
 Patch124:bind93-rh726120.patch
-# FIXME: This disables dlzexternal, which I will enable later again
-# Make tests on all architectures and disable it
-Patch127:bind99-forward.patch
 Patch130:bind-9.9.1-P2-dlz-libdb.patch
+# Make tests on all architectures and disable it
 Patch131:bind-9.9.1-P2-multlib-conflict.patch
 Patch133:bind99-rh640538.patch
 Patch134:bind97-rh669163.patch
-Patch137:bind99-rrl.patch
-# Install dns/update.h header for bind-dyndb-ldap plugin
-Patch138:bind-9.9.3-include-update-h.patch
-Patch139:bind99-ISC-Bugs-34738.patch
-Patch140:bind99-ISC-Bugs-34870-v3.patch
-Patch141:bind99-ISC-Bugs-35073.patch
-Patch142:bind99-ISC-Bugs-35080.patch
-Patch143:bind99-CVE-2014-0591.patch
-Patch144:bind99-rh1067424.patch
-Patch145:bind99-rh1072379.patch
-Patch146:bind99-rh1098959.patch
-Patch147:bind99-CVE-2014-8500.patch
-Patch148:bind99-CVE-2015-1349.patch
-Patch149:bind99-rh1215687-limits.patch
-Patch154:bind99-rh1215164.patch
-Patch155:bind99-rh1214827.patch
-Patch156:bind99-CVE-2015-4620.patch
-Patch157:bind99-CVE-2015-5477.patch
-Patch158:bind-99-socket-maxevents.patch
-Patch159:bind99-CVE-2015-5722.patch
-Patch160:bind99-CVE-2015-8000.patch
-Patch161:bind99-CVE-2015-8704.patch
-Patch162:bind99-CVE-2016-1285-CVE-2016-1286.patch
-Patch163:bind99-rh1291185.patch
-Patch164:bind99-rh1259514.patch
-Patch165:bind99-rh1306610.patch
-Patch166:bind99-rh1220594-geoip.patch
-Patch167:bind99-automatic-interface-scanning-rh1294506.patch
-# commit 51bcc28543ce205f7af238ef2f3889ef020a0961 ISC 4467
-patch168:bind99-CVE-2016-2776.patch
-# commit bbb7c613b3e41495db627909660334695b48e60b ISC 4489
-patch169:bind99-CVE-2016-8864.patch
-# commit d372472f604d45f85b3bbae5d6f523fb561a8823 ISC 4508
-patch170:bind99-CVE-2016-9131.patch
-# commit a14b7f0187315767a1fa855f116fe937a7b402e3 ISC 4510
-patch171:bind99-CVE-2016-9147.patch
-# commit 69cb8ebf157183d9c36a9813f945348dd81b521f ISC 4517
-Patch172:bind99-CVE-2016-9444.patch
-# commit 2c74ad28efe5710ad04562c6f9902bc48d3be0ed ISC 4530
-Patch173:bind99-rt43779.patch
-# commit 062b04898be720ed0855efc192847fcbc667b3e1 ISC 4406
-Patch174:bind99-CVE-2016-2775.patch
-# ISC 4557
-Patch175:bind99-CVE-2017-3135.patch
-# ISC 4558
-Patch176:bind99-rt44318.patch
-# commit c550e75ade4ceb4ece96f660292799519a5c3183 ISC 4567
-Patch177:bind99-rh1392362.patch
-# commit 1f3ac11cb4ecfab52f517ebf78493b0f05318be2
-Patch178:bind99-coverity-fixes2.patch
-# ISC 4575
-Patch179:bind99-CVE-2017-3136.patch
-# ISC 4578
-Patch180:bind99-CVE-2017-3137.patch
-# commit 5e746ab61ed8158f784b86111fef95581a08b7dd ISC 3905
-Patch181:bind99-rh1416304.patch
-# ISC 4643
-Patch182: bind99-CVE-2017-3142+3143.patch
-# commit e3894cd3a92be79a64072835008ec589b17c601a
-Patch183: bind99-rh1472862.patch
-# commit 2fc1b8102d4bf02162012c27ab95e98a7438bd8f ISC 4647
-Patch184: bind99-rh1476013.patch
-# commit 51aed1827453f40ee56b165d45c5d58d96838d94
-Patch185: bind99-rh1470637-tests.patch
-# commit 51b00c6c783ccf5dca86119ff8f4f8b994298ca4 ISC 4712
-Patch186: bind99-rh1470637.patch
-# commit 6a3fa181d1253db5191139e20231512eebaddeeb ISC 3745
-Patch187: bind99-rh1464850.patch
-# commit 871f3c8beeb2134b17414ec167b90a57adb8e122 ISC 3980
-Patch188: bind99-rh1464850-2.patch
-# commit 4eb998928b9aef0ceda42d7529980d658138698a ISC 3525
-Patch189: bind99-rh1501531.patch
-# ISC 4858
-Patch190: bind99-CVE-2017-3145.patch
-Patch191: bind99-rh1510008.patch
-Patch192: bind99-nta.patch
-Patch193: bind99-rh1510008-2.patch
-Patch194: bind99-fips.patch
-Patch195: bind99-fips-tests.patch
-# commit c3fbf330bc014f0470371e8da590d14a1d62977e ISC 4377
-Patch196: bind99-rh1549130.patch
-# commit cb735b3f902d4bb5f6e30328d5828d38efa63573
-Patch197: bind99-rh1549130-2.patch
-Patch198: bind99-CVE-2018-5740.patch
-Patch199: bind99-rh1647539.patch
-Patch200: bind99-CVE-2018-5743.patch
-# Accept keep-response-order support & warning
-Patch201: bind99-CVE-2018-5743-option.patch
+# Fedora specific patch to distribute native-pkcs#11 functionality
+Patch136:bind-9.10-dist-native-pkcs11.patch
 
-# Native PKCS#11 functionality from 9.10
-Patch150:bind-9.9-allow_external_dnskey.patch
-Patch151:bind-9.9-native-pkcs11.patch
-Patch152:bind-9.9-dist-native-pkcs11.patch
-Patch153:bind99-coverity-fixes.patch
+# [ISC-Bugs #42525] non-portable use of strlcat in contrib/sdb/ldap/zone2ldap.c
+# introduced by https://source.isc.org/cgi-bin/gitweb.cgi?p=bind9.git;a=commit;h=fc9f0ac5778f78003a7acc957a23711811fec122
+Patch137:bind-9.10-use-of-strlcat.patch
+Patch140:bind-9.11-rh1410433.patch
+Patch145:bind-9.11-rh1205168.patch
+# [ISC-Bugs #46853] commit cb616c6d5c2ece1fac37fa6e0bca2b53d4043098 ISC 4851
+Patch149:bind-9.11-kyua-pkcs11.patch
+Patch153:bind-9.11-export-suffix.patch
+Patch154:bind-9.11-oot-manual.patch
+Patch155:bind-9.11-pk11.patch
+Patch156:bind-9.11-fips-code.patch
+Patch157:bind-9.11-fips-tests.patch
+# commit 66ba2fdad583d962a1f4971c85d58381f0849e4d
+# commit b105ccee68ccc3c18e6ea530063b3c8e5a42571c
+# commit 083461d3329ff6f2410745848a926090586a9846
+Patch158:bind-9.11-rh1624100.patch
+Patch159:bind-9.11-host-idn-disable.patch
+# RHEL 7 feature reset patches
+# Disables sending cookies by default
+Patch160:bind-9.11-no-default-cookies.patch
+# Disables listening on IPv6 by default
+Patch161:bind-9.11-no-default-ipv6.patch
+# Accept dnssec-lookaside yes with a warning
+Patch162:bind-9.11-dnssec-lookaside.patch
+# Downgrade libidn2 usage back to libidn
+Patch163:bind-9.11-libidn.patch
+# https://gitlab.isc.org/isc-projects/bind9/issues/225
+Patch164:bind-9.11-ed448-disable.patch
+# random_test fails too often by random, disable it
+Patch165:bind-9.11-unit-disable-random.patch
+Patch166:bind-9.11-rh1685940.patch
+Patch167:bind-9.11-CVE-2018-5743.patch
+Patch168:bind-9.11-CVE-2018-5743-atomic.patch
+Patch169:bind-9.11-CVE-2019-6471.patch
 
 # SDB patches
 Patch11: bind-9.3.2b2-sdbsrc.patch
-Patch12: bind-9.5-sdb.patch
-Patch62: bind-9.5-sdb-sqlite-bld.patch
+Patch12: bind-9.10-sdb.patch
 
 # needs inpection
 Patch17: bind-9.3.2b1-fix_sdb_ldap.patch
-Patch104: bind99-dyndb.patch
+Patch18: bind-9.11-zone2ldap.patch
 
-# IDN paches
-Patch73: bind-9.5-libidn.patch
-Patch83: bind-9.5-libidn2.patch
-Patch85: bind-9.5-libidn3.patch
-Patch94: bind95-rh461409.patch
-Patch135:bind99-libidn4.patch
-
-#
+Requires(post):   systemd
 Requires(preun):  systemd
 Requires(postun): systemd
 Requires:       coreutils
-Requires:       systemd-units
-Requires(post): grep, systemd
+Requires(pre):  shadow-utils
 Requires(post): shadow-utils
 Requires(post): glibc-common
-Requires(pre):  shadow-utils
-Requires:       bind-libs = %{epoch}:%{version}-%{release}
+Requires(post): grep
+Requires:       bind-libs%{?_isa} = %{epoch}:%{version}-%{release}
+Requires:       bind-libs-lite%{?_isa} = %{epoch}:%{version}-%{release}
 Obsoletes:      bind-config < 30:9.3.2-34.fc6
 Provides:       bind-config = 30:9.3.2-34.fc6
 Obsoletes:      caching-nameserver < 31:9.4.1-7.fc8
 Provides:       caching-nameserver = 31:9.4.1-7.fc8
 Obsoletes:      dnssec-conf < 1.27-2
-Provides:       dnssec-conf = 1.27-1
+Provides:       dnssec-conf = 1.27-2
+BuildRequires:  gcc, make
 Requires:       python-ply
 Provides:       python-isc = %{epoch}:%{version}-%{release}
 Provides:       python-bind = %{epoch}:%{version}-%{release}
 # selinux_set_booleans requires
 Requires(post):      policycoreutils-python, libselinux-utils, selinux-policy
 Requires(postun):    policycoreutils-python, libselinux-utils, selinux-policy
-Requires(posttrans): policycoreutils-python, libselinux-utils, selinux-policy
+# Ensures at least one selinux-policy-X is installed when post is executed.
+# Needed for selinux-policy-targeted to be already installed, but not requiring it explicitly
+# Should be satisfied with selinux-policy-minimum if no selinux policy is used
+Requires(post):      selinux-policy-base
+Requires(postun):    selinux-policy-base
 BuildRequires:  openssl-devel, libtool, autoconf, pkgconfig, libcap-devel
 BuildRequires:  libidn-devel, libxml2-devel, GeoIP-devel
-BuildRequires:  systemd-units
+BuildRequires:  systemd
+# needed for %%{__python} macro
+BuildRequires:  python-devel
 BuildRequires:  python-ply
 BuildRequires:  selinux-policy
-%if %{SDB}
-BuildRequires:  openldap-devel, postgresql-devel, sqlite-devel, mysql-devel
+BuildRequires:  findutils sed
+%if %{with SDB}
+BuildRequires:  openldap-devel, postgresql-devel, sqlite-devel, mariadb-devel
 BuildRequires:  libdb-devel
 %endif
-%if %{test}
-BuildRequires:  net-tools
+%if %{with KYUA}
+# make unit dependencies
+BuildRequires:  libatf-c-devel kyua
+%else
+# shipped atf library requires c++
+BuildRequires:  gcc-c++
 %endif
-%if %{GSSTSIG}
+%if %{with PKCS11}
+BuildRequires:  softhsm
+%endif
+%if %{with SYSTEMTEST}
+# bin/tests/system dependencies
+BuildRequires:  net-tools perl(Net::DNS) perl(Net::DNS::Nameserver)
+%endif
+%if %{with GSSTSIG}
 BuildRequires:  krb5-devel
+%endif
+%if %{with LMDB}
+BuildRequires:  lmdb-devel
 %endif
 # Needed to regenerate dig.1 manpage
 BuildRequires: docbook-style-xsl, libxslt
@@ -248,13 +232,15 @@ which resolves host names to IP addresses; a resolver library
 (routines for applications to use when interfacing with DNS); and
 tools for verifying that the DNS server is operating properly.
 
-%if %{PKCS11}
+%if %{with PKCS11}
 %package pkcs11
 Summary: Bind with native PKCS#11 functionality for crypto
-Group:   System Environment/Daemons
-Requires: bind = %{epoch}:%{version}-%{release}
-Requires: bind-libs = %{epoch}:%{version}-%{release}
-Requires: bind-pkcs11-libs = %{epoch}:%{version}-%{release}
+Requires: systemd
+Requires: bind%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: bind-libs%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: bind-libs-lite%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: bind-pkcs11-libs%{?_isa} = %{epoch}:%{version}-%{release}
+#Recommends: softhsm
 
 %description pkcs11
 This is a version of BIND server built with native PKCS#11 functionality.
@@ -264,8 +250,8 @@ This version of BIND binary is supported only in setup with the IPA server.
 
 %package pkcs11-utils
 Summary: Bind tools with native PKCS#11 for using DNSSEC
-Group:   System Environment/Daemons
-Requires: bind-pkcs11-libs = %{epoch}:%{version}-%{release}
+Requires: bind-pkcs11-libs%{?_isa} = %{epoch}:%{version}-%{release}
+Obsoletes: bind-pkcs11 < 32:9.9.4-16.P2 
 
 %description pkcs11-utils
 This is a set of PKCS#11 utilities that when used together create rsa
@@ -276,7 +262,7 @@ compiled with native PKCS#11 functionality are included.
 Summary: Bind libraries compiled with native PKCS#11
 Group:   System Environment/Daemons
 Requires: bind-license = %{epoch}:%{version}-%{release}
-Requires: bind-libs = %{epoch}:%{version}-%{release}
+Requires: bind-libs%{?_isa} = %{epoch}:%{version}-%{release}
 
 %description pkcs11-libs
 This is a set of BIND libraries (dns, isc) compiled with native PKCS#11
@@ -285,20 +271,21 @@ functionality.
 %package pkcs11-devel
 Summary: Development files for Bind libraries compiled with native PKCS#11
 Group:   System Environment/Daemons
-Requires: bind-pkcs11-libs = %{epoch}:%{version}-%{release}
+Requires: bind-pkcs11-libs%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: bind-lite-devel%{?_isa} = %{epoch}:%{version}-%{release}
 
 %description pkcs11-devel
 This a set of development files for BIND libraries (dns, isc) compiled
 with native PKCS#11 functionality.
 %endif
 
-%if %{SDB}
+%if %{with SDB}
 %package sdb
 Summary: BIND server with database backends and DLZ support
-Group:   System Environment/Daemons
-Requires: bind
-Requires: bind-libs = %{epoch}:%{version}-%{release}
-Requires: systemd-units
+Requires: systemd
+Requires: bind%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: bind-libs%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: bind-libs-lite%{?_isa} = %{epoch}:%{version}-%{release}
 
 %description sdb
 BIND (Berkeley Internet Name Domain) is an implementation of the DNS
@@ -313,7 +300,6 @@ or in the filesystem (dirdb), in addition to the standard in-memory RBT
 
 %package libs-lite
 Summary:  Libraries for working with the DNS protocol
-Group:    Applications/System
 Obsoletes:bind-libbind-devel < 31:9.3.3-4.fc7
 Provides: bind-libbind-devel = 31:9.3.3-4.fc7
 Requires: bind-license = %{epoch}:%{version}-%{release}
@@ -324,8 +310,8 @@ programs to work with DNS protocol.
 
 %package libs
 Summary: Libraries used by the BIND DNS packages
-Group:    Applications/System
 Requires: bind-license = %{epoch}:%{version}-%{release}
+Requires: bind-libs-lite%{?_isa} = %{epoch}:%{version}-%{release}
 
 %description libs
 Contains heavyweight version of BIND suite libraries used by both named DNS
@@ -333,7 +319,6 @@ server and utilities in bind-utils package.
 
 %package license
 Summary:  License of the BIND DNS suite
-Group:    Applications/System
 BuildArch:noarch
 
 %description license
@@ -341,8 +326,8 @@ Contains license of the BIND DNS suite.
 
 %package utils
 Summary: Utilities for querying DNS name servers
-Group:   Applications/System
-Requires: bind-libs = %{epoch}:%{version}-%{release}
+Requires: bind-libs%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: bind-libs-lite%{?_isa} = %{epoch}:%{version}-%{release}
 
 %description utils
 Bind-utils contains a collection of utilities for querying DNS (Domain
@@ -354,13 +339,13 @@ network addresses.
 You should install bind-utils if you need to get information from DNS name
 servers.
 
-%if %{DEVEL}
+%if %{with DEVEL}
 %package devel
 Summary:  Header files and libraries needed for BIND DNS development
-Group:    Development/Libraries
 Obsoletes:bind-libbind-devel < 31:9.3.3-4.fc7
 Provides: bind-libbind-devel = 31:9.3.3-4.fc7
-Requires: bind-libs = %{epoch}:%{version}-%{release}
+Requires: bind-libs%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: bind-lite-devel%{?_isa} = %{epoch}:%{version}-%{release}
 
 %description devel
 The bind-devel package contains full version of the header files and libraries
@@ -369,8 +354,7 @@ required for development with ISC BIND 9
 
 %package lite-devel
 Summary:  Lite version of header files and libraries needed for BIND DNS development
-Group:    Development/Libraries
-Requires: bind-libs-lite = %{epoch}:%{version}-%{release}
+Requires: bind-libs-lite%{?_isa} = %{epoch}:%{version}-%{release}
 
 %description lite-devel
 The bind-lite-devel package contains lite version of the header
@@ -378,24 +362,24 @@ files and libraries required for development with ISC BIND 9
 
 %package chroot
 Summary:        A chroot runtime environment for the ISC BIND DNS server, named(8)
-Group:          System Environment/Daemons
 Prefix:         %{chroot_prefix}
-Requires(post): grep
-Requires(preun):grep
-Requires:       bind = %{epoch}:%{version}-%{release}
-Requires:       systemd-units
+# grep is required due to setup-named-chroot.sh script
+Requires:       grep
+Requires:       bind%{?_isa} = %{epoch}:%{version}-%{release}
 
 %description chroot
 This package contains a tree of files which can be used as a
 chroot(2) jail for the named(8) program from the BIND package.
 Based on the code from Jan "Yenya" Kasprzak <kas@fi.muni.cz>
 
-%if %{SDB}
+%if %{with SDB}
 %package sdb-chroot
 Summary:        A chroot runtime environment for the ISC BIND DNS server, named-sdb(8)
+Prefix:         %{chroot_sdb_prefix}
 Group:          System Environment/Daemons
-Prefix:         %{chroot_prefix}
-Requires:       bind-sdb
+# grep is required due to setup-named-chroot.sh script
+Requires:       grep
+Requires:       bind-sdb%{?_isa} = %{epoch}:%{version}-%{release}
 Requires:       systemd-units
 
 %description sdb-chroot
@@ -405,121 +389,131 @@ Based on the code from Jan "Yenya" Kasprzak <kas@fi.muni.cz>
 %endif
 
 
+%if %{with DLZ}
+%package dlz-bdb
+Summary: BIND server bdb DLZ module
+Requires: bind%{?_isa} = %{epoch}:%{version}-%{release}
+
+%description dlz-bdb
+Dynamic Loadable Zones module for BIND server.
+
+%package dlz-filesystem
+Summary: BIND server filesystem DLZ module
+Requires: bind%{?_isa} = %{epoch}:%{version}-%{release}
+
+%description dlz-filesystem
+Dynamic Loadable Zones module for BIND server.
+
+%package dlz-ldap
+Summary: BIND server ldap DLZ module
+Requires: bind%{?_isa} = %{epoch}:%{version}-%{release}
+
+%description dlz-ldap
+Dynamic Loadable Zones module for BIND server.
+
+%package dlz-mysql
+Summary: BIND server mysql DLZ module
+Requires: bind%{?_isa} = %{epoch}:%{version}-%{release}
+
+%description dlz-mysql
+Dynamic Loadable Zones module for BIND server.
+
+%package dlz-mysqldyn
+Summary: BIND server mysqldyn DLZ module
+Requires: bind%{?_isa} = %{epoch}:%{version}-%{release}
+
+%description dlz-mysqldyn
+Dynamic Loadable Zones module for BIND server.
+
+%package dlz-sqlite3
+Summary: BIND server sqlite3 DLZ module
+Requires: bind%{?_isa} = %{epoch}:%{version}-%{release}
+
+%description dlz-sqlite3
+Dynamic Loadable Zones module for BIND server.
+%endif
+
+
+%if %{with EXPORT_LIBS}
+%package export-libs
+Summary:   ISC libs for DHCP application
+%if 0%{?fedora} >= 1
+Obsoletes: bind99-libs < 9.9.11-4
+Provides:  bind99-libs = 9.9.11-4
+# This subpackage will not use shared license, but distribute its own
+%endif
+
+%description export-libs
+BIND (Berkeley Internet Name Domain) is an implementation of the DNS
+(Domain Name System) protocols. This package set contains only export
+version of BIND libraries, that are used for building ISC DHCP.
+
+%package export-devel
+Summary:  Header files and libraries needed for BIND export libraries
+Requires: %{name}-export-libs%{?_isa} = %{epoch}:%{version}-%{release}
+Requires: openssl-devel
+Requires: libcap-devel
+
+%if 0%{?fedora} >= 1
+Obsoletes: bind99-devel < 9.9.11-4
+# To prevent linking against wrong set of libraries,
+# do not coexist with bind99-devel
+Conflicts: bind99-devel
+%endif
+
+%description export-devel
+This package contains export version of the header files and libraries
+required for development with ISC BIND. These headers and libraries
+are used for building ISC DHCP.
+%endif
+
 %prep
-%setup -q -n %{name}-%{VERSION}
+%setup -q -n %{name}-%{BINDVERSION}
 
 # Common patches
-%patch5 -p1 -b .nonexec
 %patch10 -p1 -b .PIE
 %patch16 -p1 -b .redhat_doc
-%ifnarch alpha ia64
 %patch72 -p1 -b .64bit
-%endif
-%patch73 -p1 -b .libidn
-%patch83 -p1 -b .libidn2
-%patch85 -p1 -b .libidn3
-%patch87 -p1 -b .parallel
-%patch94 -p1 -b .rh461409
-
 %patch102 -p1 -b .rh452060
 %patch106 -p0 -b .rh490837
 %patch109 -p1 -b .rh478718
-%patch110 -p1 -b .rh570851
-%patch111 -p1 -b .exportlib
 %patch112 -p1 -b .rh645544
-%patch119 -p1 -b .rh693982
-%patch123 -p1 -b .rh735103
 %patch124 -p1 -b .rh726120
-%patch127 -p1 -b .forward
 %patch130 -p1 -b .libdb
 %patch131 -p1 -b .multlib-conflict
-%patch137 -p1 -b .rrl
-%patch138 -p1 -b .update
-%patch139 -p1 -b .journal
-%patch140 -p1 -b .send_buffers
-%patch141 -p1 -b .leak_35073
-%patch142 -p1 -b .rbt_crash
-%patch143 -p1 -b .CVE-2014-059
-%patch144 -p1 -b .rh1067424
-%patch145 -p1 -b .rh1072379
-%patch146 -p1 -b .rh1098959
-%patch147 -p1 -b .CVE-2014-8500
-%patch148 -p1 -b .CVE-2015-1349
-%patch149 -p1 -b .rh1215687-limits
-
-%patch150 -p1 -b .external_key
-%patch151 -p1 -b .native_pkcs11
-# http://cov01.lab.eng.brq.redhat.com/covscanhub/waiving/9377/
-%patch153 -p1 -b .coverity_9377
-%patch154 -p1 -b .rh1215164
-%patch155 -p1 -b .nsupdate_realm
-%patch156 -p1 -b .CVE-2015-4620
-%patch157 -p1 -b .CVE-2015-5477
-%patch158 -p1 -b .sock-maxevents
-%patch159 -p1 -b .CVE-2015-5722
-%patch160 -p1 -b .CVE-2015-8000
-%patch161 -p1 -b .CVE-2015-8704
-%patch162 -p1 -b .CVE-2016-1285-CVE-2016-1286
-%patch163 -p1 -b .rh1291185
-%patch164 -p1 -b .rh1259514
-%patch165 -p1 -b .rh1306610-caa
-%patch104 -p1 -b .dyndb
-
-# GeoIP support
-%patch166 -p1 -b .rh1220594-geoip
-# extract the binary testing data
-tar -xf %{SOURCE48} -C bin/tests/system/geoip/data
-
-%patch167 -p1 -b .rh1294506
-%patch168 -p1 -b .CVE-2016-2776
-%patch169 -p1 -b .CVE-2016-8864
-%patch170 -p1 -b .CVE-2016-9131
-%patch171 -p1 -b .CVE-2016-9147
-%patch172 -p1 -b .CVE-2016-9444
-%patch173 -p1 -b .rt43779
-%patch174 -p1 -b .CVE-2016-2775
-%patch175 -p1 -b .CVE-2017-3135
-%patch176 -p1 -b .rt44318
-%patch177 -p1 -b .rh1392362
-%patch178 -p1 -b .coverity2
-%patch179 -p1 -b .CVE-2017-3136
-%patch180 -p1 -b .CVE-2017-3137
-%patch181 -p1 -b .rh1416304
-%patch182 -p1 -b .CVE-2017-3142+3143
-%patch183 -p1 -b .rh1472862
-%patch184 -p1 -b .rh1476013
-%patch185 -p1 -b .rh1470637-tests
-%patch186 -p1 -b .rh1470637
-%patch187 -p1 -b .rh1464850
-%patch188 -p1 -b .rh1464850
-%patch189 -p1 -b .rh1501531
-%patch190 -p1 -b .CVE-2017-3145
-%patch191 -p1 -b .dnssec-keymgr
-%patch192 -p1 -b .rh1452091
-%patch193 -p1 -b .dnssec-keymgr-2
-%patch194 -p1 -b .fips
-%patch195 -p1 -b .fips-tests
-%patch196 -p1 -b .rh1549130
-%patch197 -p1 -b .rh1549130-2
-%patch198 -p1 -b .CVE-2018-5740
-%patch199 -p1 -b .rh1647539
-%patch200 -p1 -b .CVE-2018-5743
-%patch201 -p1 -b .keep-response-order
+%patch140 -p1 -b .rh1410433
+%patch145 -p1 -b .rh1205168
+%patch153 -p1 -b .export_suffix
+%patch154 -p1 -b .oot-man
+%patch155 -p1 -b .pk11-internal
+%patch156 -p1 -b .fips-code
+%patch157 -p1 -b .fips-tests
+%patch158 -p1 -b .rh1624100
+%patch159 -p1 -b .host-idn-disable
+%patch160 -p1 -b .rebase
+%patch161 -p1 -b .rebase
+%patch162 -p1 -b .rebase
+%patch163 -p1 -b .rebase
+%patch164 -p1 -b .noed448
+%patch165 -p1 -b .random_test-disable
+%patch166 -p1 -b .dhcp-entropy
+%patch167 -p1 -b .CVE-2018-5743
+%patch168 -p1 -b .CVE-2018-5743-atomic
+%patch169 -p1 -b .CVE-2019-6471
 
 # Override upstream builtin keys
 cp -fp %{SOURCE29} bind.keys
 
-%if %{PKCS11}
+%if %{with PKCS11}
 cp -r bin/named{,-pkcs11}
 cp -r bin/dnssec{,-pkcs11}
 cp -r lib/isc{,-pkcs11}
 cp -r lib/dns{,-pkcs11}
-cp -r lib/export/isc{,-pkcs11}
-cp -r lib/export/dns{,-pkcs11}
-%patch152 -p1 -b .dist_pkcs11
+%patch136 -p1 -b .dist_pkcs11
+%patch149 -p1 -b .kyua-pkcs11
 %endif
 
-%if %{SDB}
+%if %{with SDB}
 %patch101 -p1 -b .old-api
 mkdir bin/named-sdb
 cp -r bin/named/* bin/named-sdb
@@ -543,16 +537,13 @@ cp -fp contrib/sdb/ldap/{zone2ldap.1,zone2ldap.c} bin/sdb_tools
 cp -fp contrib/sdb/pgsql/zonetodb.c bin/sdb_tools
 cp -fp contrib/sdb/sqlite/zone2sqlite.c bin/sdb_tools
 %patch12 -p1 -b .sdb
-%endif
-%if %{SDB}
 %patch17 -p1 -b .fix_sdb_ldap
+%patch18 -p1 -b .fix_zone2ldap
+%patch137 -p1 -b .strlcat_fix
 %endif
-%if %{SDB}
-%patch62 -p1 -b .sdb-sqlite-bld
-%endif
+
 %patch133 -p1 -b .rh640538
 %patch134 -p1 -b .rh669163
-%patch135 -p1 -b .libidn4
 
 # Sparc and s390 arches need to use -fPIE
 %ifarch sparcv9 sparc64 s390 s390x
@@ -560,10 +551,34 @@ for i in bin/named{,-sdb}/{,unix}/Makefile.in; do
   sed -i 's|fpie|fPIE|g' $i
 done
 %endif
-
 :;
 
+
 %build
+## We use out of tree configure/build for export libs
+%define _configure "../configure"
+
+# normal and pkcs11 unit tests
+%define unit_prepare_build() \
+  cp -uv Kyuafile Atffile "%{1}/" \
+  find lib -name 'K*.key' -exec cp -uv '{}' "%{1}/{}" ';' \
+  find lib -name 'Kyuafile' -exec cp -uv '{}' "%{1}/{}" ';' \
+  find lib -name 'Atffile' -exec cp -uv '{}' "%{1}/{}" ';' \
+  find lib -name 'testdata' -type d -exec cp -Tav '{}' "%{1}/{}" ';' \
+  find lib -name 'testkeys' -type d -exec cp -Tav '{}' "%{1}/{}" ';' \
+
+%define systemtest_prepare_build() \
+  cp -Tuav bin/tests "%{1}/bin/tests/" \
+  cp -uv version "%{1}" \
+
+%if %{with KYUA}
+# Use system installed libatf-c library with kyua tool
+ATF_PATH=/usr
+%else
+# Use bundled atf library with atf-run
+ATF_PATH=yes
+%endif
+
 export CFLAGS="$CFLAGS $RPM_OPT_FLAGS"
 export CPPFLAGS="$CPPFLAGS -DDIG_SIGCHASE"
 export STD_CDEFINES="$CPPFLAGS"
@@ -574,7 +589,12 @@ version
 
 libtoolize -c -f; aclocal -I libtool.m4 --force; autoconf -f
 
+mkdir build
+pushd build
+LIBDIR_SUFFIX=
+export LIBDIR_SUFFIX
 %configure \
+  --with-python=%{__python} \
   --with-libtool \
   --localstatedir=/var \
   --enable-threads \
@@ -584,16 +604,16 @@ libtoolize -c -f; aclocal -I libtool.m4 --force; autoconf -f
   --enable-rrl \
   --with-pic \
   --disable-static \
-  --disable-openssl-version-check \
-  --enable-exportlib \
-  --with-export-libdir=%{_libdir} \
-  --with-export-includedir=%{_includedir} \
   --includedir=%{_includedir}/bind9 \
-%if %{PKCS11}
+  --with-tuning=large \
+  --with-geoip \
+  --with-libidn \
+  --enable-openssl-hash \
+%if %{with PKCS11}
   --enable-native-pkcs11 \
   --with-pkcs11=%{_libdir}/pkcs11/libsofthsm2.so \
 %endif
-%if %{SDB}
+%if %{with SDB}
   --with-dlopen=yes \
   --with-dlz-ldap=yes \
   --with-dlz-postgres=yes \
@@ -601,15 +621,31 @@ libtoolize -c -f; aclocal -I libtool.m4 --force; autoconf -f
   --with-dlz-filesystem=yes \
   --with-dlz-bdb=yes \
 %endif
-%if %{GSSTSIG}
+%if %{with GSSTSIG}
   --with-gssapi=yes \
   --disable-isc-spnego \
+%endif
+%if %{with LMDB}
+  --with-lmdb=yes \
+%else
+  --with-lmdb=no \
+%endif
+%if %{with UNITTEST}
+  --with-atf=${ATF_PATH} \
 %endif
   --enable-fixed-rrset \
   --with-tuning=large \
   --with-docbook-xsl=%{_datadir}/sgml/docbook/xsl-stylesheets \
+  --enable-full-report \
 ;
 make %{?_smp_mflags}
+
+### FIXME hack!!!
+### xsltproc doesn't find properly configured files
+### and use ones from source tree
+### copy generated files to the original location
+cp -rv doc/* ../doc/
+
 
 # Regenerate dig.1 manpage
 pushd bin/dig
@@ -619,8 +655,139 @@ pushd bin/python
 make man
 popd
 
-%if %{test}
+%if ! %{with KYUA}
+# Do not build atf again for export libs
+ATF_PATH="`pwd`/unit/atf"
+
+# Atf libs are built. Prevent their installation
+sed -i -e \
+'/^SUBDIRS =/s/atf-src//i' \
+unit/Makefile
+%endif
+
+%if %{with DLZ}
+  pushd contrib/dlz
+  pushd bin/dlzbdb
+    make
+  popd
+  pushd modules
+  for DIR in bdbhpt filesystem ldap mysql mysqldyn sqlite3; do
+    make -C $DIR CFLAGS="-fPIC -I../include $CFLAGS $LDFLAGS"
+  done
+  popd
+  popd
+%endif
+popd # build
+
+%unit_prepare_build build
+%systemtest_prepare_build build
+
+%if %{with EXPORT_LIBS}
+cp isc-config.sh.1 isc-export-config.sh.1
+
+## Create export libs ##
+mkdir -p export-libs
+pushd export-libs
+LIBDIR_SUFFIX=%{_export_dir}
+export LIBDIR_SUFFIX
+## minimal subset of options to make clients aka dhcp working
+%{configure} \
+        --with-libtool \
+        --disable-static \
+        --disable-epoll \
+        --disable-kqueue \
+        --libdir=%{_libdir}%{_export_dir} \
+        --includedir=%{_includedir}%{_export_dir}/ \
+        --disable-threads \
+        --enable-openssl-hash \
+%if %{with GSSTSIG}
+        --with-gssapi=yes \
+        --disable-isc-spnego \
+%endif
+%if %{with UNITTEST}
+        --with-atf=${ATF_PATH} \
+%endif
+        --enable-fixed-rrset \
+        --disable-rpz-nsip \
+        --disable-rpz-nsdname \
+        --without-lmdb \
+        --without-libxml2 \
+        --without-libjson \
+        --without-zlib \
+        --without-dlopen \
+        --enable-full-report
+
+## We don't want to build other libs than -export twice
+## FIXME this should be in patch instead of SED'ing
+## but do we really like/want to patch generated files?
+
+mv isc-config.sh isc-export-config.sh
+
+sed -i \
+-e '/^SUBDIRS =/s/.*/SUBDIRS = make lib/i' \
+-e 's/isc-config.sh/isc-export-config.sh/g' \
+-e 's/bind9-config/bind9-export-config/g' \
+Makefile
+
+sed -i -e \
+"/^SUBDIRS =/s/.*/SUBDIRS = %{bind_export_libs}/i" \
+lib/Makefile
+
+sed -i -e \
+'/^SUBDIRS =/s/atf-src//i' \
+unit/Makefile
+
+for lib in %{bind_export_libs}
+do
+        find .  -name Makefile -exec sed  "s/lib${lib}\./lib${lib}-export\./g" -i {} \;
+        sed -e "s/-l${lib}\([^[:alpha:]]\)/-l${lib}-export\1/g" \
+            -e "s/lib${lib}\./lib${lib}-export\./g" \
+            -i isc-export-config.sh
+done;
+
+make %{?_smp_mflags}
+popd
+
+# export library unit tests
+%unit_prepare_build export-libs
+# Do not try pkcs11 and lwres in export libs
+sed -e '/^\s*include(.*-pkcs11/ d' -e '/^\s*include(.*lwres/ d' \
+        -i export-libs/lib/Kyuafile
+sed -e '/^tp:.*-pkcs11/ d' -e '/^tp:\s*lwres/ d' \
+        -i export-libs/lib/Atffile
+
+## End of export libs
+%endif
+
 %check
+%if %{with PKCS11}
+  # Tests require initialization of pkcs11 token
+  export SOFTHSM2_CONF="`pwd`/softhsm2.conf"
+  sh %{SOURCE48} "${SOFTHSM2_CONF}" "`pwd`/softhsm-tokens"
+%endif
+
+%if %{with UNITTEST}
+  pushd build
+  make unit
+  e=$?
+  if [ "$e" -ne 0 ]; then
+    echo "ERROR: this build of BIND failed 'make unit'. Aborting."
+    exit $e;
+  fi;
+  popd
+
+  pushd export-libs
+  make unit
+  e=$?
+  if [ "$e" -ne 0 ]; then
+    echo "ERROR: this build of BIND export-libs failed 'make unit'. Aborting."
+    exit $e;
+  fi;
+  popd
+
+%endif
+
+%if %{with SYSTEMTEST}
 if [ "`whoami`" = 'root' ]; then
   set -e
   chmod -R a+rwX .
@@ -641,10 +808,9 @@ if [ "`whoami`" = 'root' ]; then
 else
   echo 'only root can run the tests (they require an ifconfig).'
 %endif
+:
 
 %install
-rm -rf ${RPM_BUILD_ROOT}
-
 # Build directory hierarchy
 mkdir -p ${RPM_BUILD_ROOT}/etc/logrotate.d
 mkdir -p ${RPM_BUILD_ROOT}%{_libdir}/bind
@@ -665,14 +831,11 @@ popd
 mkdir -p ${RPM_BUILD_ROOT}/%{chroot_prefix}/etc/{pki/dnssec-keys,named}
 mkdir -p ${RPM_BUILD_ROOT}/%{chroot_prefix}/%{_libdir}/bind
 # these are required to prevent them being erased during upgrade of previous
-touch ${RPM_BUILD_ROOT}/%{chroot_prefix}/dev/null
-touch ${RPM_BUILD_ROOT}/%{chroot_prefix}/dev/random
-touch ${RPM_BUILD_ROOT}/%{chroot_prefix}/dev/zero
 touch ${RPM_BUILD_ROOT}/%{chroot_prefix}/etc/named.conf
 #end chroot
 
 #sdb-chroot
-%if %{SDB}
+%if %{with SDB}
 mkdir -p ${RPM_BUILD_ROOT}/%{chroot_sdb_prefix}/{dev,etc,var,run/named}
 mkdir -p ${RPM_BUILD_ROOT}/%{chroot_sdb_prefix}/var/{log,named,tmp}
 
@@ -684,14 +847,24 @@ popd
 mkdir -p ${RPM_BUILD_ROOT}/%{chroot_sdb_prefix}/etc/{pki/dnssec-keys,named}
 mkdir -p ${RPM_BUILD_ROOT}/%{chroot_sdb_prefix}/%{_libdir}/bind
 # these are required to prevent them being erased during upgrade of previous
-touch ${RPM_BUILD_ROOT}/%{chroot_sdb_prefix}/dev/null
-touch ${RPM_BUILD_ROOT}/%{chroot_sdb_prefix}/dev/random
-touch ${RPM_BUILD_ROOT}/%{chroot_sdb_prefix}/dev/zero
 touch ${RPM_BUILD_ROOT}/%{chroot_sdb_prefix}/etc/named.conf
 %endif
 #end sdb-chroot
+pushd build
 
 make DESTDIR=${RPM_BUILD_ROOT} install
+popd
+
+%if %{with EXPORT_LIBS}
+pushd export-libs
+make DESTDIR=${RPM_BUILD_ROOT} install
+mkdir -p ${RPM_BUILD_ROOT}%{_sysconfdir}/ld.so.conf.d
+echo "%{_libdir}/%{_export_dir}" > %{buildroot}%{_sysconfdir}/ld.so.conf.d/%{name}-export-%{_arch}.conf
+cp -fp config.h ${RPM_BUILD_ROOT}/%{_includedir}%{_export_dir}
+rm -rf ${RPM_BUILD_ROOT}/%{_includedir}%{_export_dir}/pkcs11/
+rm -f ${RPM_BUILD_ROOT}/%{_includedir}%{_export_dir}/pk11/{constants,internal,pk11,result}.h
+popd
+%endif
 
 # Remove unwanted files
 rm -f ${RPM_BUILD_ROOT}/etc/bind.keys
@@ -703,12 +876,13 @@ install -m 644 %{SOURCE38} ${RPM_BUILD_ROOT}%{_unitdir}
 install -m 644 %{SOURCE44} ${RPM_BUILD_ROOT}%{_unitdir}
 install -m 644 %{SOURCE46} ${RPM_BUILD_ROOT}%{_unitdir}
 
-%if %{SDB}
+%if %{with SDB}
 install -m 644 %{SOURCE39} ${RPM_BUILD_ROOT}%{_unitdir}
 install -m 644 %{SOURCE40} ${RPM_BUILD_ROOT}%{_unitdir}
 install -m 644 %{SOURCE45} ${RPM_BUILD_ROOT}%{_unitdir}
 %endif
-%if %{PKCS11}
+
+%if %{with PKCS11}
 install -m 644 %{SOURCE47} ${RPM_BUILD_ROOT}%{_unitdir}
 %endif
 
@@ -716,28 +890,47 @@ mkdir -p ${RPM_BUILD_ROOT}%{_libexecdir}
 install -m 755 %{SOURCE41} ${RPM_BUILD_ROOT}%{_libexecdir}/setup-named-chroot.sh
 install -m 755 %{SOURCE42} ${RPM_BUILD_ROOT}%{_libexecdir}/generate-rndc-key.sh
 
+%if %{with PKCS11}
+install -m 755 %{SOURCE48} ${RPM_BUILD_ROOT}%{_libexecdir}/setup-named-softhsm.sh
+%endif
+
 install -m 644 %SOURCE3 ${RPM_BUILD_ROOT}/etc/logrotate.d/named
 mkdir -p ${RPM_BUILD_ROOT}%{_sysconfdir}/sysconfig
 install -m 644 %{SOURCE1} ${RPM_BUILD_ROOT}%{_sysconfdir}/sysconfig/named
-%if %{SDB}
+install -m 644 %{SOURCE49} ${RPM_BUILD_ROOT}%{_sysconfdir}/named-chroot.files
+%if %{with SDB}
 mkdir -p ${RPM_BUILD_ROOT}/etc/openldap/schema
 install -m 644 %{SOURCE8} ${RPM_BUILD_ROOT}/etc/openldap/schema/dnszone.schema
 install -m 644 %{SOURCE12} contrib/sdb/pgsql/
 %endif
 
-# Install isc/errno2result.h header
-install -m 644 lib/isc/unix/errno2result.h ${RPM_BUILD_ROOT}%{_includedir}/isc
+%if %{with DLZ}
+  pushd contrib/dlz
+  pushd bin/dlzbdb
+  make DESTDIR=${RPM_BUILD_ROOT} install
+  popd
+  pushd modules
+  for DIR in bdbhpt filesystem ldap mysql mysqldyn sqlite3; do
+    make -C $DIR DESTDIR=${RPM_BUILD_ROOT} libdir=%{_libdir}/bind install
+  done
+  mv mysqldyn/testing/README mysqldyn/testing/README.testing
+  popd
+  popd
+%endif
 
+# Install isc/errno2result.h header
+install -m 644 lib/isc/unix/errno2result.h ${RPM_BUILD_ROOT}%{_includedir}/bind9/isc
+
+pushd build
 # Files required to run test-suite outside of build tree:
 cp -fp config.h ${RPM_BUILD_ROOT}/%{_includedir}/bind9
-cp -fp lib/dns/include/dns/forward.h ${RPM_BUILD_ROOT}/%{_includedir}/dns
-cp -fp lib/isc/unix/include/isc/keyboard.h ${RPM_BUILD_ROOT}/%{_includedir}/isc
+popd
 
 # Remove libtool .la files:
 find ${RPM_BUILD_ROOT}/%{_libdir} -name '*.la' -exec '/bin/rm' '-f' '{}' ';';
 
 # Remove -devel files out of buildroot if not needed
-%if !%{DEVEL}
+%if !%{with DEVEL}
 rm -f ${RPM_BUILD_ROOT}/%{_libdir}/bind9/*so
 rm -rf ${RPM_BUILD_ROOT}/%{_includedir}/bind9
 rm -f ${RPM_BUILD_ROOT}/%{_mandir}/man1/isc-config.sh.1*
@@ -746,7 +939,7 @@ rm -f ${RPM_BUILD_ROOT}/%{_bindir}/isc-config.sh
 %endif
 
 # SDB manpages
-%if %{SDB}
+%if %{with SDB}
 install -m 644 %{SOURCE31} ${RPM_BUILD_ROOT}%{_mandir}/man1/ldap2zone.1
 install -m 644 %{SOURCE32} ${RPM_BUILD_ROOT}%{_mandir}/man8/named-sdb.8
 install -m 644 %{SOURCE33} ${RPM_BUILD_ROOT}%{_mandir}/man1/zonetodb.1
@@ -754,7 +947,7 @@ install -m 644 %{SOURCE34} ${RPM_BUILD_ROOT}%{_mandir}/man1/zone2sqlite.1
 %endif
 
 # PKCS11 versions manpages
-%if %{PKCS11}
+%if %{with PKCS11}
 pushd ${RPM_BUILD_ROOT}%{_mandir}/man8
 ln -s named.8.gz named-pkcs11.8.gz
 ln -s dnssec-checkds.8.gz dnssec-checkds-pkcs11.8.gz
@@ -775,6 +968,7 @@ touch ${RPM_BUILD_ROOT}%{_localstatedir}/log/named.log
 
 # configuration files:
 tar -C ${RPM_BUILD_ROOT} -xjf %{SOURCE28}
+install -m 640 %{SOURCE26} ${RPM_BUILD_ROOT}/etc/named.conf
 touch ${RPM_BUILD_ROOT}/etc/rndc.key
 touch ${RPM_BUILD_ROOT}/etc/rndc.conf
 mkdir ${RPM_BUILD_ROOT}/etc/named
@@ -804,7 +998,7 @@ install -m 644 %{SOURCE43} ${RPM_BUILD_ROOT}%{_sysconfdir}/rwtab.d/named
 %pre
 if [ "$1" -eq 1 ]; then
   /usr/sbin/groupadd -g %{bind_gid} -f -r named >/dev/null 2>&1 || :;
-  /usr/sbin/useradd  -u %{bind_uid} -r -N -M -g named -s /bin/false -d /var/named -c Named named >/dev/null 2>&1 || :;
+  /usr/sbin/useradd  -u %{bind_uid} -r -N -M -g named -s /sbin/nologin -d /var/named -c Named named >/dev/null 2>&1 || :;
 fi;
 :;
 
@@ -817,10 +1011,15 @@ if [ "$1" -eq 1 ]; then
   [ -e /etc/rndc.key ] && chown root:named /etc/rndc.key
   [ -e /etc/rndc.key ] && chmod 0640 /etc/rndc.key
 else
-  # Upgrade, use invalid shell
-  if getent passwd named | grep ':/sbin/nologin$' >/dev/null; then
-    usermod -s /bin/false named
+  # Upgrade, use nologin shell again
+  if getent passwd named | grep ':/bin/false$' >/dev/null; then
+    /sbin/usermod -s /sbin/nologin named
   fi
+fi
+. /etc/selinux/config
+if %{_sbindir}/selinuxenabled && [ "${SELINUX}" != "disabled" ] ; then
+  %selinux_set_booleans -s targeted %{selinuxbooleans}
+  %selinux_set_booleans -s mls %{selinuxbooleans}
 fi
 %systemd_post named.service
 :;
@@ -833,16 +1032,14 @@ fi
 /sbin/ldconfig
 %systemd_postun_with_restart named.service
 # Unset on both upgrade and install. Boolean would be unset from now
-# until %posttrans on upgrade. Write requests might fail during update.
-(export LC_ALL=C; %{selinux_unset_booleans %{selinuxbooleans}})
+# until %%posttrans on upgrade. Write requests might fail during update.
+. /etc/selinux/config
+if %{_sbindir}/selinuxenabled && [ "${SELINUX}" != "disabled" ] ; then
+  %selinux_unset_booleans -s targeted %{selinuxbooleans}
+  %selinux_unset_booleans -s mls %{selinuxbooleans}
+fi
 
-%posttrans
-# selinux-policy-targeted is required for following macro to work.
-# This package should not depend on it explicitly, but anaconda ensures
-# it is installed. Run after all packages are installed.
-(export LC_ALL=C; %{selinux_set_booleans %{selinuxbooleans}})
-
-%if %{SDB}
+%if %{with SDB}
 %post sdb
 # Initial installation 
 %systemd_post named-sdb.service
@@ -856,7 +1053,7 @@ fi
 %systemd_postun_with_restart named-sdb.service
 %endif
 
-%if %{PKCS11}
+%if %{with PKCS11}
 %post pkcs11
 # Initial installation
 %systemd_post named-pkcs11.service
@@ -881,13 +1078,17 @@ fi
 /sbin/chkconfig --del named >/dev/null 2>&1 || :
 /bin/systemctl try-restart named.service >/dev/null 2>&1 || :
 
-%post libs -p /sbin/ldconfig
+%ldconfig_scriptlets libs
+%ldconfig_scriptlets libs-lite
 
-%postun libs -p /sbin/ldconfig
+%if %{with PKCS11}
+%ldconfig_scriptlets pkcs11-libs
+%endif
 
-%post libs-lite -p /sbin/ldconfig
-
-%postun libs-lite -p /sbin/ldconfig
+%if %{with EXPORT_LIBS}
+%post export-libs -p /sbin/ldconfig
+%postun export-libs -p /sbin/ldconfig
+%endif
 
 %pre chroot
 # updating
@@ -901,28 +1102,18 @@ fi
 
 %post chroot
 %systemd_post named-chroot.service
-if [ "$1" -gt 0 ]; then
-  [ -e %{chroot_prefix}/dev/random ] || \
-    /bin/mknod %{chroot_prefix}/dev/random c 1 8
-  [ -e %{chroot_prefix}/dev/zero ] || \
-    /bin/mknod %{chroot_prefix}/dev/zero c 1 5
-  [ -e %{chroot_prefix}/dev/null ] || \
-    /bin/mknod %{chroot_prefix}/dev/null c 1 3
-fi;
+%chroot_fix_devices %{chroot_prefix}
 :;
 
 %posttrans chroot
 if [ -x /usr/sbin/selinuxenabled ] && /usr/sbin/selinuxenabled; then
   [ -x /sbin/restorecon ] && /sbin/restorecon %{chroot_prefix}/dev/* > /dev/null 2>&1;
 fi;
-:;
 
 %preun chroot
-%systemd_preun named-chroot.service 
-if [ "$1" -eq 0 ]; then
-  # Package removal, not upgrade
-  rm -f %{chroot_prefix}/dev/{random,zero,null}
-fi
+# wait for stop of both named-chroot and named-chroot-setup services
+# on uninstall
+%systemd_preun named-chroot.service named-chroot-setup.service
 :;
 
 %postun chroot
@@ -930,18 +1121,11 @@ fi
 %systemd_postun_with_restart named-chroot.service
 
 
-%if %{SDB}
+%if %{with SDB}
 
 %post sdb-chroot
 %systemd_post named-sdb-chroot.service
-if [ "$1" -gt 0 ]; then
-  [ -e %{chroot_sdb_prefix}/dev/random ] || \
-    /bin/mknod %{chroot_sdb_prefix}/dev/random c 1 8
-  [ -e %{chroot_sdb_prefix}/dev/zero ] || \
-    /bin/mknod %{chroot_sdb_prefix}/dev/zero c 1 5
-  [ -e %{chroot_sdb_prefix}/dev/null ] || \
-    /bin/mknod %{chroot_sdb_prefix}/dev/null c 1 3
-fi;
+%chroot_fix_devices %{chroot_sdb_prefix}
 :;
 
 %posttrans sdb-chroot
@@ -952,10 +1136,6 @@ fi;
 
 %preun sdb-chroot
 %systemd_preun named-sdb-chroot.service 
-if [ "$1" -eq 0 ]; then
-  # Package removal, not upgrade
-  rm -f %{chroot_sdb_prefix}/dev/{random,zero,null}
-fi
 :;
 
 %postun sdb-chroot
@@ -969,7 +1149,6 @@ rm -rf ${RPM_BUILD_ROOT}
 :;
 
 %files
-%defattr(-,root,root,-)
 %{_libdir}/bind
 %config(noreplace) %verify(not md5 size mtime) %{_sysconfdir}/sysconfig/named
 %config(noreplace) %attr(0644,root,named) %{_sysconfdir}/named.iscdlv.key
@@ -978,42 +1157,59 @@ rm -rf ${RPM_BUILD_ROOT}
 %{_sysconfdir}/rwtab.d/named
 %{_unitdir}/named.service
 %{_unitdir}/named-setup-rndc.service
-%{_sbindir}/arpaname
-%{_sbindir}/ddns-confgen
-%{_sbindir}/genrandom
 %{_sbindir}/named-journalprint
-%{_sbindir}/nsec3hash
-%{_sbindir}/dnssec*
-%exclude %{_sbindir}/dnssec*pkcs11
-%{_sbindir}/named-check*
+%{_sbindir}/named-checkconf
+%{_bindir}/arpaname
+%{_bindir}/named-rrchecker
 %{_sbindir}/lwresd
 %{_sbindir}/named
 %{_sbindir}/rndc*
-%{_sbindir}/named-compilezone
+%{_sbindir}/ddns-confgen
+%{_sbindir}/tsig-keygen
+%{_sbindir}/genrandom
+%{_sbindir}/nsec3hash
+%{_sbindir}/dnssec*
+%if %{with PKCS11}
+%exclude %{_sbindir}/dnssec*pkcs11
+%endif
 %{_sbindir}/isc-hmac-fixup
+%{_sbindir}/named-checkzone
+%{_sbindir}/named-compilezone
+%if %{with LMDB}
+%{_sbindir}/named-nzd2nzf
+%endif
 %{_libexecdir}/generate-rndc-key.sh
-%{python_sitelib}/isc/
-%{python_sitelib}/*.egg-info
 %{_mandir}/man1/arpaname.1*
+%{_mandir}/man1/named-rrchecker.1*
 %{_mandir}/man5/named.conf.5*
 %{_mandir}/man5/rndc.conf.5*
 %{_mandir}/man8/rndc.8*
 %{_mandir}/man8/named.8*
 %{_mandir}/man8/lwresd.8*
-%{_mandir}/man8/dnssec*.8*
 %exclude %{_mandir}/man8/dnssec*-pkcs11.8*
 %{_mandir}/man8/named-checkconf.8*
+%{_mandir}/man8/rndc-confgen.8*
+%{_mandir}/man8/named-journalprint.8*
+%{_mandir}/man8/ddns-confgen.8*
+%{_mandir}/man8/tsig-keygen.8*
+%{_mandir}/man8/genrandom.8*
+%{_mandir}/man8/nsec3hash.8*
+%{_mandir}/man8/dnssec*.8*
+%if %{with PKCS11}
+%exclude %{_mandir}/man8/dnssec*-pkcs11.8*
+%endif
+%{_mandir}/man8/isc-hmac-fixup.8*
 %{_mandir}/man8/named-checkzone.8*
 %{_mandir}/man8/named-compilezone.8*
-%{_mandir}/man8/rndc-confgen.8*
-%{_mandir}/man8/ddns-confgen.8*
-%{_mandir}/man8/genrandom.8*
-%{_mandir}/man8/named-journalprint.8*
-%{_mandir}/man8/nsec3hash.8*
-%{_mandir}/man8/isc-hmac-fixup.8*
+%if %{with LMDB}
+%{_mandir}/man8/named-nzd2nzf.8*
+%endif
 %doc CHANGES README named.conf.default
 %doc doc/arm/*html doc/arm/*pdf
 %doc sample/
+
+%{python_sitelib}/*.egg-info
+%{python_sitelib}/isc/
 
 # Hide configuration
 %defattr(0640,root,named,0750)
@@ -1034,9 +1230,6 @@ rm -rf ${RPM_BUILD_ROOT}
 %config %verify(not link) %{_localstatedir}/named/named.empty
 %ghost %config(noreplace) %{_sysconfdir}/rndc.key
 # ^- rndc.key now created on first install only if it does not exist
-# %%verify(not size,not md5) %%config(noreplace) %%attr(0640,root,named) /etc/rndc.conf
-# ^- Let the named internal default rndc.conf be used -
-#    rndc.conf not required unless it differs from default.
 %ghost %config(noreplace) %{_sysconfdir}/rndc.conf
 # ^- The default rndc.conf which uses rndc.key is in named's default internal config -
 #    so rndc.conf is not necessary.
@@ -1044,9 +1237,8 @@ rm -rf ${RPM_BUILD_ROOT}
 %defattr(-,named,named,-)
 %dir /run/named
 
-%if %{SDB}
+%if %{with SDB}
 %files sdb
-%defattr(-,root,root,-)
 %{_unitdir}/named-sdb.service
 %{_mandir}/man1/zone2ldap.1*
 %{_mandir}/man1/ldap2zone.1*
@@ -1064,66 +1256,77 @@ rm -rf ${RPM_BUILD_ROOT}
 %endif
 
 %files libs
-%defattr(-,root,root,-)
-%{_libdir}/*so.*
-%exclude %{_libdir}/*export.so.*
+%{_libdir}/libbind9.so.160*
+%{_libdir}/libisccc.so.160*
+%{_libdir}/liblwres.so.160*
 %exclude %{_libdir}/*pkcs11.so.*
-%exclude %{_libdir}/*pkcs11-export.so.*
 
 %files libs-lite
-%defattr(-,root,root,-)
-%{_libdir}/*export.so.*
-%exclude %{_libdir}/*pkcs11-export.so.*
-
+%{_libdir}/libdns.so.%{sover_dns}*
+%{_libdir}/libirs.so.%{sover_irs}*
+%{_libdir}/libisc.so.%{sover_isc}*
+%{_libdir}/libisccfg.so.%{sover_isccfg}*
 %files license
-%defattr(-,root,root,-)
-%doc COPYRIGHT
+%{!?_licensedir:%global license %%doc}
+%license COPYRIGHT
 
 %files utils
-%defattr(-,root,root,-)
 %{_bindir}/dig
+%{_bindir}/delv
 %{_bindir}/host
 %{_bindir}/nslookup
 %{_bindir}/nsupdate
+%{_bindir}/mdig
 %{_mandir}/man1/host.1*
 %{_mandir}/man1/nsupdate.1*
 %{_mandir}/man1/dig.1*
+%{_mandir}/man1/delv.1*
+%{_mandir}/man1/mdig.1*
 %{_mandir}/man1/nslookup.1*
 %{_sysconfdir}/trusted-key.key
 
-%if %{DEVEL}
+%if %{with DEVEL}
 %files devel
-%defattr(-,root,root,-)
-%{_libdir}/*so
-%exclude %{_libdir}/*export.so
+%{_libdir}/libbind9.so
+%{_libdir}/libisccc.so
+%{_libdir}/liblwres.so
+%{_includedir}/bind9/config.h
+%{_includedir}/bind9/bind9
 %exclude %{_libdir}/*pkcs11.so
-%exclude %{_libdir}/*pkcs11-export.so
-%{_includedir}/bind9
+%{_includedir}/bind9/isccc
+%{_includedir}/bind9/lwres
 %exclude %{_includedir}/bind9/pkcs11
 %exclude %{_includedir}/bind9/pk11
 %{_mandir}/man1/isc-config.sh.1*
+%{_mandir}/man1/bind9-config.1*
 %{_mandir}/man3/lwres*
 %{_bindir}/isc-config.sh
+%{_bindir}/bind9-config
 %endif
 
 %files lite-devel
-%defattr(-,root,root,-)
-%{_libdir}/*export.so
-%exclude %{_libdir}/*pkcs11-export.so
-%{_includedir}/dns
-%{_includedir}/dst
-%{_includedir}/irs
-%{_includedir}/isc
-%{_includedir}/isccfg
+%{_libdir}/libdns.so
+%{_libdir}/libirs.so
+%{_libdir}/libisc.so
+%{_libdir}/libisccfg.so
+%dir %{_includedir}/bind9
+%{_includedir}/bind9/dns
+%{_includedir}/bind9/dst
+%{_includedir}/bind9/irs
+%{_includedir}/bind9/isc
+%dir %{_includedir}/bind9/pk11
+%{_includedir}/bind9/pk11/site.h
+%{_includedir}/bind9/isccfg
 
 %files chroot
-%defattr(-,root,root,-)
+%config(noreplace) %{_sysconfdir}/named-chroot.files
 %{_unitdir}/named-chroot.service
 %{_unitdir}/named-chroot-setup.service
 %{_libexecdir}/setup-named-chroot.sh
-%ghost %{chroot_prefix}/dev/null
-%ghost %{chroot_prefix}/dev/random
-%ghost %{chroot_prefix}/dev/zero
+%defattr(0664,root,named,-)
+%ghost %dev(c,1,3) %verify(not mtime) %{chroot_prefix}/dev/null
+%ghost %dev(c,1,8) %verify(not mtime) %{chroot_prefix}/dev/random
+%ghost %dev(c,1,5) %verify(not mtime) %{chroot_prefix}/dev/zero
 %defattr(0640,root,named,0750)
 %dir %{chroot_prefix}
 %dir %{chroot_prefix}/dev
@@ -1147,15 +1350,16 @@ rm -rf ${RPM_BUILD_ROOT}
 %dir %{chroot_prefix}/run/named
 %{chroot_prefix}/var/run
 
-%if %{SDB}
+%if %{with SDB}
 %files sdb-chroot
-%defattr(-,root,root,-)
+%config(noreplace) %{_sysconfdir}/named-chroot.files
 %{_unitdir}/named-sdb-chroot.service
 %{_unitdir}/named-sdb-chroot-setup.service
 %{_libexecdir}/setup-named-chroot.sh
-%ghost %{chroot_sdb_prefix}/dev/null
-%ghost %{chroot_sdb_prefix}/dev/random
-%ghost %{chroot_sdb_prefix}/dev/zero
+%defattr(0664,root,named,-)
+%ghost %dev(c,1,3) %verify(not mtime) %{chroot_sdb_prefix}/dev/null
+%ghost %dev(c,1,8) %verify(not mtime) %{chroot_sdb_prefix}/dev/random
+%ghost %dev(c,1,5) %verify(not mtime) %{chroot_sdb_prefix}/dev/zero
 %defattr(0640,root,named,0750)
 %dir %{chroot_sdb_prefix}
 %dir %{chroot_sdb_prefix}/dev
@@ -1180,15 +1384,14 @@ rm -rf ${RPM_BUILD_ROOT}
 %{chroot_sdb_prefix}/var/run
 %endif
 
-%if %{PKCS11}
+%if %{with PKCS11}
 %files pkcs11
-%defattr(-,root,root,-)
 %{_sbindir}/named-pkcs11
 %{_unitdir}/named-pkcs11.service
 %{_mandir}/man8/named-pkcs11.8*
+%{_libexecdir}/setup-named-softhsm.sh
 
 %files pkcs11-utils
-%defattr(-,root,root,-)
 %{_sbindir}/dnssec*pkcs11
 %{_sbindir}/pkcs11-destroy
 %{_sbindir}/pkcs11-keygen
@@ -1198,29 +1401,109 @@ rm -rf ${RPM_BUILD_ROOT}
 %{_mandir}/man8/dnssec*-pkcs11.8*
 
 %files pkcs11-libs
-%defattr(-,root,root,-)
-%{_libdir}/*pkcs11.so.*
-%{_libdir}/*pkcs11-export.so.*
+%{_libdir}/libdns-pkcs11.so.%{sover_dns}*
+%{_libdir}/libisc-pkcs11.so.%{sover_isc}*
 
 %files pkcs11-devel
-%defattr(-,root,root,-)
-%{_includedir}/bind9/pk11
+%{_includedir}/bind9/pk11/*.h
+%exclude %{_includedir}/bind9/pk11/site.h
 %{_includedir}/bind9/pkcs11
-%{_libdir}/*pkcs11.so
-%{_libdir}/*pkcs11-export.so
+%{_libdir}/libdns-pkcs11.so
+%{_libdir}/libisc-pkcs11.so
+%endif
+
+%if %{with EXPORT_LIBS}
+%files export-libs
+%dir %{_libdir}/%{_export_dir}
+%{_libdir}/%{_export_dir}/libdns-export.so.%{sover_dns}*
+%{_libdir}/%{_export_dir}/libirs-export.so.%{sover_irs}*
+%{_libdir}/%{_export_dir}/libisc-export.so.%{sover_isc}*
+%{_libdir}/%{_export_dir}/libisccfg-export.so.%{sover_isccfg}*
+%config(noreplace) %{_sysconfdir}/ld.so.conf.d/%{name}-export-%{_arch}.conf
+# This subpackage has to distribute its own license. Do not conflict with
+# other subpackages of different version
+%license COPYRIGHT
+
+%files export-devel
+%{_libdir}/%{_export_dir}/libdns-export.so
+%{_libdir}/%{_export_dir}/libirs-export.so
+%{_libdir}/%{_export_dir}/libisc-export.so
+%{_libdir}/%{_export_dir}/libisccfg-export.so
+%dir %{_includedir}/%{_export_dir}
+%{_includedir}/%{_export_dir}/dns
+%{_includedir}/%{_export_dir}/dst
+%{_includedir}/%{_export_dir}/irs
+%{_includedir}/%{_export_dir}/isc
+%dir %{_includedir}/%{_export_dir}/pk11
+%{_includedir}/%{_export_dir}/pk11/site.h
+%{_includedir}/%{_export_dir}/isccfg
+%{_includedir}/%{_export_dir}/config.h
+%{_mandir}/man1/isc-export-config.sh.1*
+%{_mandir}/man1/bind9-export-config.1*
+%attr(0755,root,root) %{_bindir}/isc-export-config.sh
+%{_bindir}/bind9-export-config
+%endif
+
+%if %{with DLZ}
+%files dlz-bdb
+%{_sbindir}/dlzbdb
+%{_libdir}/bind/dlz_bdbhpt_dynamic.so
+%doc contrib/dlz/modules/bdbhpt/testing/*
+
+%files dlz-filesystem
+%{_libdir}/bind/dlz_filesystem_dynamic.so
+
+%files dlz-mysql
+%{_libdir}/bind/dlz_mysql_dynamic.so
+%doc contrib/dlz/modules/mysql/testing/*
+
+%files dlz-mysqldyn
+%{_libdir}/bind/dlz_mysqldyn_mod.so
+%doc contrib/dlz/modules/mysqldyn/testing/*
+%doc contrib/dlz/modules/mysqldyn/README
+
+%files dlz-ldap
+%{_libdir}/bind/dlz_ldap_dynamic.so
+%doc contrib/dlz/modules/ldap/testing/*
+
+%files dlz-sqlite3
+%{_libdir}/bind/dlz_sqlite3_dynamic.so
+%doc contrib/dlz/modules/sqlite3/testing/*
 
 %endif
 
+
 %changelog
-* Fri Jun 21 2019 Petr Menšík <pemensik@redhat.com> - 32:9.9.4-74.2
-- Fix unstable zone transfers (#1724071)
-- Understand keep-response-order for backward compatibility
+* Wed Jun 19 2019 Petr Menšík <pemensik@redhat.com> - 32:9.11.4-9.P2
+- Fix CVE-2019-6471
 
-* Thu May 23 2019 Petr Menšík <pemensik@redhat.com> - 32:9.9.4-74.1
-- Remove again broken test (CVE-2018-5743)
+* Wed Jun 12 2019 Petr Menšík <pemensik@redhat.com> - 32:9.11.4-8.P2
+- Fix scriptlet errors when selinux-policy is not installed (#1647659)
 
-* Tue May 07 2019 Petr Menšík <pemensik@redhat.com> - 32:9.9.4-74
-- Fix CVE-2018-5743
+* Wed Apr 24 2019 Petr Menšík <pemensik@redhat.com> - 32:9.11.4-7.P2
+- Fix inefective limit of TCP clients (CVE-2018-5743)
+
+* Wed Mar 27 2019 Petr Menšík <pemensik@redhat.com> - 32:9.11.4-6.P2
+- Use /sbin/nologin again (#1676661)
+
+* Mon Mar 18 2019 Petr Menšík <pemensik@redhat.com> - 32:9.11.4-5.P2
+- Make sure selinux-policy is installed soon enough (#1647659)
+
+* Mon Mar 18 2019 Petr Menšík <pemensik@redhat.com> - 32:9.11.4-4.P2
+- Disable custom random generator for export libs (#1685940)
+
+* Tue Mar 12 2019 Petr Menšík <pemensik@redhat.com> - 32:9.11.4-3.P2
+- Fix memory handling in zone2ldap tool
+
+* Thu Feb 28 2019 Petr Menšík <pemensik@redhat.com> - 32:9.11.4-2.P2
+- Move dnssec utilities back to bind package
+- Remove separate python-bind package
+
+* Tue Jan 29 2019 Petr Menšík <pemensik@redhat.com> - 32:9.11.4-1.P2
+- Rebase features patches
+- Disable autodetected eddsa algorithm ED448
+- Add versioned depends to all library subpackages
+- Fix multilib conflict of devel packages
 
 * Fri Nov 23 2018 Petr Menšík <pemensik@redhat.com> - 32:9.9.4-73
 - Fixes debug level comments (#1647539)

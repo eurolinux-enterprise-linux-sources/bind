@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004-2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: nslookup.c,v 1.130 2011/12/16 23:01:16 each Exp $ */
 
 #include <config.h>
 
@@ -29,7 +21,6 @@
 #include <isc/parseint.h>
 #include <isc/print.h>
 #include <isc/string.h>
-#include <isc/timer.h>
 #include <isc/util.h>
 #include <isc/task.h>
 #include <isc/netaddr.h>
@@ -47,17 +38,29 @@
 #include <dig/dig.h>
 
 #if defined(HAVE_READLINE)
+#if defined(HAVE_EDIT_READLINE_READLINE_H)
+#include <edit/readline/readline.h>
+#if defined(HAVE_EDIT_READLINE_HISTORY_H)
+#include <edit/readline/history.h>
+#endif
+#elif defined(HAVE_EDITLINE_READLINE_H)
+#include <editline/readline.h>
+#elif defined(HAVE_READLINE_READLINE_H)
 #include <readline/readline.h>
+#if defined (HAVE_READLINE_HISTORY_H)
 #include <readline/history.h>
+#endif
+#endif
 #endif
 
 static isc_boolean_t short_form = ISC_TRUE,
-	tcpmode = ISC_FALSE,
+	tcpmode = ISC_FALSE, tcpmode_set = ISC_FALSE,
 	identify = ISC_FALSE, stats = ISC_TRUE,
 	comments = ISC_TRUE, section_question = ISC_TRUE,
 	section_answer = ISC_TRUE, section_authority = ISC_TRUE,
 	section_additional = ISC_TRUE, recurse = ISC_TRUE,
-	aaonly = ISC_FALSE, nofail = ISC_TRUE;
+	aaonly = ISC_FALSE, nofail = ISC_TRUE,
+	default_lookups = ISC_TRUE, a_noanswer = ISC_FALSE;
 
 static isc_boolean_t interactive;
 
@@ -156,8 +159,8 @@ rcode_totext(dns_rcode_t rcode)
 	return totext.deconsttext;
 }
 
-void
-dighost_shutdown(void) {
+static void
+query_finished(void) {
 	isc_event_t *event = global_event;
 
 	flush_lookup_list();
@@ -193,9 +196,9 @@ printsoa(dns_rdata_t *rdata) {
 }
 
 static void
-printa(dns_rdata_t *rdata) {
+printaddr(dns_rdata_t *rdata) {
 	isc_result_t result;
-	char text[sizeof("255.255.255.255")];
+	char text[sizeof("ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255")];
 	isc_buffer_t b;
 
 	isc_buffer_init(&b, text, sizeof(text));
@@ -204,9 +207,10 @@ printa(dns_rdata_t *rdata) {
 	printf("Address: %.*s\n", (int)isc_buffer_usedlength(&b),
 	       (char *)isc_buffer_base(&b));
 }
+
 #ifdef DIG_SIGCHASE
 /* Just for compatibility : not use in host program */
-isc_result_t
+static isc_result_t
 printrdataset(dns_name_t *owner_name, dns_rdataset_t *rdataset,
 	      isc_buffer_t *target)
 {
@@ -275,12 +279,13 @@ printsection(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers,
 				dns_rdataset_current(rdataset, &rdata);
 				switch (rdata.type) {
 				case dns_rdatatype_a:
+				case dns_rdatatype_aaaa:
 					if (section != DNS_SECTION_ANSWER)
 						goto def_short_section;
 					dns_name_format(name, namebuf,
 							sizeof(namebuf));
 					printf("Name:\t%s\n", namebuf);
-					printa(&rdata);
+					printaddr(&rdata);
 					break;
 				case dns_rdatatype_soa:
 					dns_name_format(name, namebuf,
@@ -396,22 +401,46 @@ detailsection(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers,
 	return (ISC_R_SUCCESS);
 }
 
-void
-received(int bytes, isc_sockaddr_t *from, dig_query_t *query)
+static void
+received(unsigned int bytes, isc_sockaddr_t *from, dig_query_t *query)
 {
 	UNUSED(bytes);
 	UNUSED(from);
 	UNUSED(query);
 }
 
-void
+static void
 trying(char *frm, dig_lookup_t *lookup) {
 	UNUSED(frm);
 	UNUSED(lookup);
-
 }
 
-isc_result_t
+static void
+chase_cnamechain(dns_message_t *msg, dns_name_t *qname) {
+	isc_result_t result;
+	dns_rdataset_t *rdataset;
+	dns_rdata_cname_t cname;
+	dns_rdata_t rdata = DNS_RDATA_INIT;
+	unsigned int i = msg->counts[DNS_SECTION_ANSWER];
+
+	while (i-- > 0) {
+		rdataset = NULL;
+		result = dns_message_findname(msg, DNS_SECTION_ANSWER, qname,
+				dns_rdatatype_cname, 0, NULL, &rdataset);
+		if (result != ISC_R_SUCCESS)
+			return;
+		result = dns_rdataset_first(rdataset);
+		check_result(result, "dns_rdataset_first");
+		dns_rdata_reset(&rdata);
+		dns_rdataset_current(rdataset, &rdata);
+		result = dns_rdata_tostruct(&rdata, &cname, NULL);
+		check_result(result, "dns_rdata_tostruct");
+		dns_name_copy(&cname.cname, qname, NULL);
+		dns_rdata_freestruct(&cname);
+	}
+}
+
+static isc_result_t
 printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 	char servtext[ISC_SOCKADDR_FORMATSIZE];
 
@@ -420,20 +449,21 @@ printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 
 	debug("printmessage()");
 
-	isc_sockaddr_format(&query->sockaddr, servtext, sizeof(servtext));
-	printf("Server:\t\t%s\n", query->userarg);
-	printf("Address:\t%s\n", servtext);
+	if(!default_lookups || query->lookup->rdtype == dns_rdatatype_a) {
+		isc_sockaddr_format(&query->sockaddr, servtext, sizeof(servtext));
+		printf("Server:\t\t%s\n", query->userarg);
+		printf("Address:\t%s\n", servtext);
 
-	puts("");
+		puts("");
+	}
 
 	if (!short_form) {
-		isc_boolean_t headers = ISC_TRUE;
 		puts("------------");
 		/*		detailheader(query, msg);*/
-		detailsection(query, msg, headers, DNS_SECTION_QUESTION);
-		detailsection(query, msg, headers, DNS_SECTION_ANSWER);
-		detailsection(query, msg, headers, DNS_SECTION_AUTHORITY);
-		detailsection(query, msg, headers, DNS_SECTION_ADDITIONAL);
+		detailsection(query, msg, ISC_TRUE, DNS_SECTION_QUESTION);
+		detailsection(query, msg, ISC_TRUE, DNS_SECTION_ANSWER);
+		detailsection(query, msg, ISC_TRUE, DNS_SECTION_AUTHORITY);
+		detailsection(query, msg, ISC_TRUE, DNS_SECTION_ADDITIONAL);
 		puts("------------");
 	}
 
@@ -442,8 +472,7 @@ printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 		dns_name_format(query->lookup->name,
 				nametext, sizeof(nametext));
 		printf("** server can't find %s: %s\n",
-		       (msg->rcode != dns_rcode_nxdomain) ? nametext :
-		       query->lookup->textname, rcode_totext(msg->rcode));
+		       nametext, rcode_totext(msg->rcode));
 		debug("returning with rcode == 0");
 
 		/* the lookup failed */
@@ -451,16 +480,48 @@ printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 		return (ISC_R_SUCCESS);
 	}
 
-	if ((msg->flags & DNS_MESSAGEFLAG_AA) == 0)
+	if ( default_lookups && query->lookup->rdtype == dns_rdatatype_a) {
+		char namestr[DNS_NAME_FORMATSIZE];
+		dig_lookup_t *lookup;
+		dns_fixedname_t fixed;
+		dns_name_t *name;
+
+		/* Add AAAA lookup. */
+		name = dns_fixedname_initname(&fixed);
+		dns_name_copy(query->lookup->name, name, NULL);
+		chase_cnamechain(msg, name);
+		dns_name_format(name, namestr, sizeof(namestr));
+		lookup = clone_lookup(query->lookup, ISC_FALSE);
+		if (lookup != NULL) {
+			strlcpy(lookup->textname, namestr,
+				sizeof(lookup->textname));
+			lookup->rdtype = dns_rdatatype_aaaa;
+			lookup->rdtypeset = ISC_TRUE;
+			lookup->origin = NULL;
+			lookup->retries = tries;
+			ISC_LIST_APPEND(lookup_list, lookup, link);
+		}
+	}
+
+	if ((msg->flags & DNS_MESSAGEFLAG_AA) == 0 &&
+	    ( !default_lookups || query->lookup->rdtype == dns_rdatatype_a) )
 		puts("Non-authoritative answer:");
 	if (!ISC_LIST_EMPTY(msg->sections[DNS_SECTION_ANSWER]))
 		printsection(query, msg, headers, DNS_SECTION_ANSWER);
-	else
-		printf("*** Can't find %s: No answer\n",
-		       query->lookup->textname);
+	else {
+		if (default_lookups && query->lookup->rdtype == dns_rdatatype_a)
+			a_noanswer = ISC_TRUE;
+
+		else if (!default_lookups ||
+			 (query->lookup->rdtype == dns_rdatatype_aaaa &&
+			 a_noanswer ) )
+			printf("*** Can't find %s: No answer\n",
+				query->lookup->textname);
+	}
 
 	if (((msg->flags & DNS_MESSAGEFLAG_AA) == 0) &&
-	    (query->lookup->rdtype != dns_rdatatype_a)) {
+	    (query->lookup->rdtype != dns_rdatatype_a) &&
+	    (query->lookup->rdtype != dns_rdatatype_aaaa) ) {
 		puts("\nAuthoritative answers can be found from:");
 		printsection(query, msg, headers,
 			     DNS_SECTION_AUTHORITY);
@@ -502,8 +563,8 @@ show_settings(isc_boolean_t full, isc_boolean_t serv_only) {
 	printf("  %s\t\t%s\n",
 	       usesearch ? "search" : "nosearch",
 	       recurse ? "recurse" : "norecurse");
-	printf("  timeout = %d\t\tretry = %d\tport = %d\n",
-	       timeout, tries, port);
+	printf("  timeout = %u\t\tretry = %d\tport = %u\tndots = %d\n",
+	       timeout, tries, port, ndots);
 	printf("  querytype = %-8s\tclass = %s\n", deftype, defclass);
 	printf("  srchlist = ");
 	for (listent = ISC_LIST_HEAD(search_list);
@@ -575,8 +636,26 @@ set_tries(const char *value) {
 }
 
 static void
+set_ndots(const char *value) {
+	isc_uint32_t n;
+	isc_result_t result = parse_uint(&n, value, 128, "ndots");
+	if (result == ISC_R_SUCCESS)
+		ndots = n;
+}
+
+static void
+version(void) {
+	fputs("nslookup " VERSION "\n", stderr);
+}
+
+static void
 setoption(char *opt) {
-	if (strncasecmp(opt, "all", 4) == 0) {
+	size_t l = strlen(opt);
+
+#define CHECKOPT(A, N) \
+	((l >= N) && (l < sizeof(A)) && (strncasecmp(opt, A, l) == 0))
+
+	if (CHECKOPT("all", 3)) {
 		show_settings(ISC_TRUE, ISC_FALSE);
 	} else if (strncasecmp(opt, "class=", 6) == 0) {
 		if (testclass(&opt[6]))
@@ -585,23 +664,35 @@ setoption(char *opt) {
 		if (testclass(&opt[3]))
 			strlcpy(defclass, &opt[3], sizeof(defclass));
 	} else if (strncasecmp(opt, "type=", 5) == 0) {
-		if (testtype(&opt[5]))
+		if (testtype(&opt[5])) {
 			strlcpy(deftype, &opt[5], sizeof(deftype));
+			default_lookups = ISC_FALSE;
+		}
 	} else if (strncasecmp(opt, "ty=", 3) == 0) {
-		if (testtype(&opt[3]))
+		if (testtype(&opt[3])) {
 			strlcpy(deftype, &opt[3], sizeof(deftype));
+			default_lookups = ISC_FALSE;
+		}
 	} else if (strncasecmp(opt, "querytype=", 10) == 0) {
-		if (testtype(&opt[10]))
+		if (testtype(&opt[10])) {
 			strlcpy(deftype, &opt[10], sizeof(deftype));
+			default_lookups = ISC_FALSE;
+		}
 	} else if (strncasecmp(opt, "query=", 6) == 0) {
-		if (testtype(&opt[6]))
+		if (testtype(&opt[6])) {
 			strlcpy(deftype, &opt[6], sizeof(deftype));
+			default_lookups = ISC_FALSE;
+		}
 	} else if (strncasecmp(opt, "qu=", 3) == 0) {
-		if (testtype(&opt[3]))
+		if (testtype(&opt[3])) {
 			strlcpy(deftype, &opt[3], sizeof(deftype));
+			default_lookups = ISC_FALSE;
+		}
 	} else if (strncasecmp(opt, "q=", 2) == 0) {
-		if (testtype(&opt[2]))
+		if (testtype(&opt[2])) {
 			strlcpy(deftype, &opt[2], sizeof(deftype));
+			default_lookups = ISC_FALSE;
+		}
 	} else if (strncasecmp(opt, "domain=", 7) == 0) {
 		strlcpy(domainopt, &opt[7], sizeof(domainopt));
 		set_search_domain(domainopt);
@@ -618,42 +709,46 @@ setoption(char *opt) {
 		set_timeout(&opt[8]);
 	} else if (strncasecmp(opt, "t=", 2) == 0) {
 		set_timeout(&opt[2]);
-	} else if (strncasecmp(opt, "rec", 3) == 0) {
+	} else if (CHECKOPT("recurse", 3)) {
 		recurse = ISC_TRUE;
-	} else if (strncasecmp(opt, "norec", 5) == 0) {
+	} else if (CHECKOPT("norecurse", 5)) {
 		recurse = ISC_FALSE;
 	} else if (strncasecmp(opt, "retry=", 6) == 0) {
 		set_tries(&opt[6]);
 	} else if (strncasecmp(opt, "ret=", 4) == 0) {
 		set_tries(&opt[4]);
-	} else if (strncasecmp(opt, "def", 3) == 0) {
+	} else if (CHECKOPT("defname", 3)) {
 		usesearch = ISC_TRUE;
-	} else if (strncasecmp(opt, "nodef", 5) == 0) {
+	} else if (CHECKOPT("nodefname", 5)) {
 		usesearch = ISC_FALSE;
-	} else if (strncasecmp(opt, "vc", 3) == 0) {
+	} else if (CHECKOPT("vc", 2)) {
 		tcpmode = ISC_TRUE;
-	} else if (strncasecmp(opt, "novc", 5) == 0) {
+		tcpmode_set = ISC_TRUE;
+	} else if (CHECKOPT("novc", 4)) {
 		tcpmode = ISC_FALSE;
-	} else if (strncasecmp(opt, "deb", 3) == 0) {
+		tcpmode_set = ISC_TRUE;
+	} else if (CHECKOPT("debug", 3)) {
 		short_form = ISC_FALSE;
 		showsearch = ISC_TRUE;
-	} else if (strncasecmp(opt, "nodeb", 5) == 0) {
+	} else if (CHECKOPT("nodebug", 5)) {
 		short_form = ISC_TRUE;
 		showsearch = ISC_FALSE;
-	} else if (strncasecmp(opt, "d2", 2) == 0) {
+	} else if (CHECKOPT("d2", 2)) {
 		debugging = ISC_TRUE;
-	} else if (strncasecmp(opt, "nod2", 4) == 0) {
+	} else if (CHECKOPT("nod2", 4)) {
 		debugging = ISC_FALSE;
-	} else if (strncasecmp(opt, "search", 3) == 0) {
+	} else if (CHECKOPT("search", 3)) {
 		usesearch = ISC_TRUE;
-	} else if (strncasecmp(opt, "nosearch", 5) == 0) {
+	} else if (CHECKOPT("nosearch", 5)) {
 		usesearch = ISC_FALSE;
-	} else if (strncasecmp(opt, "sil", 3) == 0) {
+	} else if (CHECKOPT("sil", 3)) {
 		/* deprecation_msg = ISC_FALSE; */
-	} else if (strncasecmp(opt, "fail", 3) == 0) {
+	} else if (CHECKOPT("fail", 3)) {
 		nofail=ISC_FALSE;
-	} else if (strncasecmp(opt, "nofail", 3) == 0) {
+	} else if (CHECKOPT("nofail", 5)) {
 		nofail=ISC_TRUE;
+	} else if (strncasecmp(opt, "ndots=", 6) == 0) {
+		set_ndots(&opt[6]);
 	} else {
 		printf("*** Invalid option: %s\n", opt);
 	}
@@ -669,6 +764,9 @@ addlookup(char *opt) {
 	char store[MXNAME];
 
 	debug("addlookup()");
+
+	a_noanswer = ISC_FALSE;
+
 	tr.base = deftype;
 	tr.length = strlen(deftype);
 	result = dns_rdatatype_fromtext(&rdtype, &tr);
@@ -705,7 +803,10 @@ addlookup(char *opt) {
 	lookup->retries = tries;
 	lookup->udpsize = 0;
 	lookup->comments = comments;
-	lookup->tcp_mode = tcpmode;
+	if (lookup->rdtype == dns_rdatatype_any && !tcpmode_set)
+		lookup->tcp_mode = ISC_TRUE;
+	else
+		lookup->tcp_mode = tcpmode;
 	lookup->stats = stats;
 	lookup->section_question = section_question;
 	lookup->section_answer = section_answer;
@@ -767,7 +868,8 @@ get_next_command(void) {
 	if (interactive) {
 #ifdef HAVE_READLINE
 		ptr = readline("> ");
-		add_history(ptr);
+		if (ptr != NULL)
+			add_history(ptr);
 #else
 		fputs("> ", stderr);
 		fflush(stderr);
@@ -795,9 +897,12 @@ parse_args(int argc, char **argv) {
 	for (argc--, argv++; argc > 0; argc--, argv++) {
 		debug("main parsing %s", argv[0]);
 		if (argv[0][0] == '-') {
-			if (argv[0][1] != 0)
+			if (strncasecmp(argv[0], "-ver", 4) == 0) {
+				version();
+				exit(0);
+			} else if (argv[0][1] != 0) {
 				setoption(&argv[0][1]);
-			else
+			} else
 				have_lookup = ISC_TRUE;
 		} else {
 			if (!have_lookup) {
@@ -851,8 +956,6 @@ flush_lookup_list(void) {
 		}
 		if (l->sendmsg != NULL)
 			dns_message_destroy(&l->sendmsg);
-		if (l->timer != NULL)
-			isc_timer_detach(&l->timer);
 		lp = l;
 		l = ISC_LIST_NEXT(l, link);
 		ISC_LIST_DEQUEUE(lookup_list, lp, link);
@@ -887,15 +990,27 @@ main(int argc, char **argv) {
 
 	check_ra = ISC_TRUE;
 
+	/* setup dighost callbacks */
+#ifdef DIG_SIGCHASE
+	dighost_printrdataset = printrdataset;
+#endif
+	dighost_printmessage = printmessage;
+	dighost_received = received;
+	dighost_trying = trying;
+	dighost_shutdown = query_finished;
+
 	result = isc_app_start();
 	check_result(result, "isc_app_start");
 
 	setup_libs();
 	progname = argv[0];
 
+	setup_system(ISC_FALSE, ISC_FALSE);
 	parse_args(argc, argv);
-
-	setup_system();
+	if (keyfile[0] != 0)
+		setup_file_key();
+	else if (keysecret[0] != 0)
+		setup_text_key();
 	if (domainopt[0] != '\0')
 		set_search_domain(domainopt);
 	if (in_use)

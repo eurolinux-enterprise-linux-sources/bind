@@ -1,7 +1,4 @@
-#
-# Automated Testing Framework (atf)
-#
-# Copyright (c) 2007, 2008, 2010 The NetBSD Foundation, Inc.
+# Copyright (c) 2007 The NetBSD Foundation, Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -25,7 +22,6 @@
 # IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
 
 atf_test_case has
 has_head()
@@ -36,14 +32,14 @@ has_body()
 {
     h="$(atf_get_srcdir)/misc_helpers -s $(atf_get_srcdir)"
 
-    atf_check -s eq:0 -o match:'foo not found' -e empty -x \
+    atf_check -s eq:0 -o match:'foo not found' -e ignore -x \
               "TEST_VARIABLE=foo ${h} config_has"
 
-    atf_check -s eq:0 -o match:'foo found' -e empty -x \
+    atf_check -s eq:0 -o match:'foo found' -e ignore -x \
               "TEST_VARIABLE=foo ${h} -v foo=bar config_has"
 
     echo "Checking for deprecated variables"
-    atf_check -s eq:0 -o match:'workdir not found' -e empty -x \
+    atf_check -s eq:0 -o match:'workdir not found' -e ignore -x \
               "TEST_VARIABLE=workdir ${h} config_has"
 }
 
@@ -67,10 +63,10 @@ get_body()
     [ "${v}" = "the default value" ] || \
         atf_fail "Default value does not work"
 
-    atf_check -s eq:0 -o match:'foo = bar' -e empty -x \
+    atf_check -s eq:0 -o match:'foo = bar' -e ignore -x \
               "TEST_VARIABLE=foo ${h} -v foo=bar config_get"
 
-    atf_check -s eq:0 -o match:'foo = baz' -e empty -x \
+    atf_check -s eq:0 -o match:'foo = baz' -e ignore -x \
               "TEST_VARIABLE=foo ${h} -v foo=baz config_get"
 }
 

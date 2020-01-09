@@ -1,0 +1,100 @@
+From 145fac914bf47128307aea702fed7eb74b65cadd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20Men=C5=A1=C3=ADk?= <pemensik@redhat.com>
+Date: Tue, 25 Sep 2018 18:08:46 +0200
+Subject: [PATCH] Disable IDN from environment as documented
+
+Manual page of host contained instructions to disable IDN processing
+when it was built with libidn2. When refactoring IDN support however,
+support for disabling IDN in host and nslookup was lost. Use also
+environment variable and document it for nslookup, host and dig.
+
+Support variable CHARSET=ASCII to disable IDN, supported in downstream
+RH patch since RHEL 5.
+---
+ bin/dig/dig.docbook      |  4 +++-
+ bin/dig/dighost.c        |  9 +++++++--
+ bin/dig/host.docbook     |  2 +-
+ bin/dig/nslookup.docbook | 15 +++++++++++++++
+ 4 files changed, 26 insertions(+), 4 deletions(-)
+
+diff --git a/bin/dig/dig.docbook b/bin/dig/dig.docbook
+index fedd288..d5dba72 100644
+--- a/bin/dig/dig.docbook
++++ b/bin/dig/dig.docbook
+@@ -1288,7 +1288,9 @@ dig +qr www.isc.org any -x 127.0.0.1 isc.org ns +noqr
+       reply from the server.
+       If you'd like to turn off the IDN support for some reason, use
+       parameters <parameter>+noidnin</parameter> and
+-      <parameter>+noidnout</parameter>.
++      <parameter>+noidnout</parameter> or define
++      the <envar>IDN_DISABLE</envar> environment variable.
++
+     </para>
+   </refsection>
+ 
+diff --git a/bin/dig/dighost.c b/bin/dig/dighost.c
+index 7408193..d46379d 100644
+--- a/bin/dig/dighost.c
++++ b/bin/dig/dighost.c
+@@ -822,12 +822,17 @@ make_empty_lookup(void) {
+ 	looknew->seenbadcookie = ISC_FALSE;
+ 	looknew->badcookie = ISC_TRUE;
+ #ifdef WITH_IDN_SUPPORT
+-	looknew->idnin = ISC_TRUE;
++	looknew->idnin = (getenv("IDN_DISABLE") == NULL);
++	if (looknew->idnin) {
++		const char *charset = getenv("CHARSET");
++		if (charset && !strcmp(charset, "ASCII"))
++			looknew->idnin = ISC_FALSE;
++	}
+ #else
+ 	looknew->idnin = ISC_FALSE;
+ #endif
+ #ifdef WITH_IDN_OUT_SUPPORT
+-	looknew->idnout = ISC_TRUE;
++	looknew->idnout = looknew->idnin;
+ #else
+ 	looknew->idnout = ISC_FALSE;
+ #endif
+diff --git a/bin/dig/host.docbook b/bin/dig/host.docbook
+index 9c3aeaa..42cbbf9 100644
+--- a/bin/dig/host.docbook
++++ b/bin/dig/host.docbook
+@@ -378,7 +378,7 @@
+       <command>host</command> appropriately converts character encoding of
+       domain name before sending a request to DNS server or displaying a
+       reply from the server.
+-      If you'd like to turn off the IDN support for some reason, defines
++      If you'd like to turn off the IDN support for some reason, define
+       the <envar>IDN_DISABLE</envar> environment variable.
+       The IDN support is disabled if the variable is set when
+       <command>host</command> runs.
+diff --git a/bin/dig/nslookup.docbook b/bin/dig/nslookup.docbook
+index 3aff4e9..86a09c6 100644
+--- a/bin/dig/nslookup.docbook
++++ b/bin/dig/nslookup.docbook
+@@ -478,6 +478,21 @@ nslookup -query=hinfo  -timeout=10
+     </para>
+   </refsection>
+ 
++  <refsection><info><title>IDN SUPPORT</title></info>
++
++    <para>
++      If <command>nslookup</command> has been built with IDN (internationalized
++      domain name) support, it can accept and display non-ASCII domain names.
++      <command>nslookup</command> appropriately converts character encoding of
++      domain name before sending a request to DNS server or displaying a
++      reply from the server.
++      If you'd like to turn off the IDN support for some reason, define
++      the <envar>IDN_DISABLE</envar> environment variable.
++      The IDN support is disabled if the variable is set when
++      <command>nslookup</command> runs.
++    </para>
++  </refsection>
++
+   <refsection><info><title>FILES</title></info>
+ 
+     <para><filename>/etc/resolv.conf</filename>
+-- 
+2.14.4
+

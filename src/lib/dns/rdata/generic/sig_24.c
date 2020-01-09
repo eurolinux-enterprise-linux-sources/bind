@@ -1,23 +1,13 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
-
-/* Reviewed: Fri Mar 17 09:05:02 PST 2000 by gson */
 
 /* RFC2535 */
 
@@ -38,7 +28,7 @@ fromtext_sig(ARGS_FROMTEXT) {
 	isc_buffer_t buffer;
 	isc_uint32_t time_signed, time_expire;
 
-	REQUIRE(type == 24);
+	REQUIRE(type == dns_rdatatype_sig);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -115,7 +105,8 @@ fromtext_sig(ARGS_FROMTEXT) {
 				      ISC_FALSE));
 	dns_name_init(&name, NULL);
 	buffer_fromregion(&buffer, &token.value.as_region);
-	origin = (origin != NULL) ? origin : dns_rootname;
+	if (origin == NULL)
+		origin = dns_rootname;
 	RETTOK(dns_name_fromtext(&name, &buffer, origin, options, target));
 
 	/*
@@ -137,7 +128,7 @@ totext_sig(ARGS_TOTEXT) {
 	dns_name_t prefix;
 	isc_boolean_t sub;
 
-	REQUIRE(rdata->type == 24);
+	REQUIRE(rdata->type == dns_rdatatype_sig);
 	REQUIRE(rdata->length != 0);
 
 	dns_rdata_toregion(rdata, &sr);
@@ -154,8 +145,7 @@ totext_sig(ARGS_TOTEXT) {
 	if (dns_rdatatype_isknown(covered) && covered != 0) {
 		RETERR(dns_rdatatype_totext(covered, target));
 	} else {
-		char buf[sizeof("65535")];
-		sprintf(buf, "%u", covered);
+		snprintf(buf, sizeof(buf), "%u", covered);
 		RETERR(str_totext(buf, target));
 	}
 	RETERR(str_totext(" ", target));
@@ -163,7 +153,7 @@ totext_sig(ARGS_TOTEXT) {
 	/*
 	 * Algorithm.
 	 */
-	sprintf(buf, "%u", sr.base[0]);
+	snprintf(buf, sizeof(buf), "%u", sr.base[0]);
 	isc_region_consume(&sr, 1);
 	RETERR(str_totext(buf, target));
 	RETERR(str_totext(" ", target));
@@ -171,7 +161,7 @@ totext_sig(ARGS_TOTEXT) {
 	/*
 	 * Labels.
 	 */
-	sprintf(buf, "%u", sr.base[0]);
+	snprintf(buf, sizeof(buf), "%u", sr.base[0]);
 	isc_region_consume(&sr, 1);
 	RETERR(str_totext(buf, target));
 	RETERR(str_totext(" ", target));
@@ -181,7 +171,7 @@ totext_sig(ARGS_TOTEXT) {
 	 */
 	ttl = uint32_fromregion(&sr);
 	isc_region_consume(&sr, 4);
-	sprintf(buf, "%lu", ttl);
+	snprintf(buf, sizeof(buf), "%lu", ttl);
 	RETERR(str_totext(buf, target));
 	RETERR(str_totext(" ", target));
 
@@ -209,7 +199,7 @@ totext_sig(ARGS_TOTEXT) {
 	 */
 	foot = uint16_fromregion(&sr);
 	isc_region_consume(&sr, 2);
-	sprintf(buf, "%lu", foot);
+	snprintf(buf, sizeof(buf), "%lu", foot);
 	RETERR(str_totext(buf, target));
 	RETERR(str_totext(" ", target));
 
@@ -243,7 +233,7 @@ fromwire_sig(ARGS_FROMWIRE) {
 	isc_region_t sr;
 	dns_name_t name;
 
-	REQUIRE(type == 24);
+	REQUIRE(type == dns_rdatatype_sig);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -286,7 +276,7 @@ towire_sig(ARGS_TOWIRE) {
 	dns_name_t name;
 	dns_offsets_t offsets;
 
-	REQUIRE(rdata->type == 24);
+	REQUIRE(rdata->type == dns_rdatatype_sig);
 	REQUIRE(rdata->length != 0);
 
 	dns_compress_setmethods(cctx, DNS_COMPRESS_NONE);
@@ -327,7 +317,7 @@ compare_sig(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 24);
+	REQUIRE(rdata1->type == dns_rdatatype_sig);
 	REQUIRE(rdata1->length != 0);
 	REQUIRE(rdata2->length != 0);
 
@@ -364,7 +354,7 @@ static inline isc_result_t
 fromstruct_sig(ARGS_FROMSTRUCT) {
 	dns_rdata_sig_t *sig = source;
 
-	REQUIRE(type == 24);
+	REQUIRE(type == dns_rdatatype_sig);
 	REQUIRE(source != NULL);
 	REQUIRE(sig->common.rdtype == type);
 	REQUIRE(sig->common.rdclass == rdclass);
@@ -425,7 +415,7 @@ tostruct_sig(ARGS_TOSTRUCT) {
 	dns_rdata_sig_t *sig = target;
 	dns_name_t signer;
 
-	REQUIRE(rdata->type == 24);
+	REQUIRE(rdata->type == dns_rdatatype_sig);
 	REQUIRE(target != NULL);
 	REQUIRE(rdata->length != 0);
 
@@ -506,7 +496,7 @@ freestruct_sig(ARGS_FREESTRUCT) {
 	dns_rdata_sig_t *sig = (dns_rdata_sig_t *) source;
 
 	REQUIRE(source != NULL);
-	REQUIRE(sig->common.rdtype == 24);
+	REQUIRE(sig->common.rdtype == dns_rdatatype_sig);
 
 	if (sig->mctx == NULL)
 		return;
@@ -519,7 +509,7 @@ freestruct_sig(ARGS_FREESTRUCT) {
 
 static inline isc_result_t
 additionaldata_sig(ARGS_ADDLDATA) {
-	REQUIRE(rdata->type == 24);
+	REQUIRE(rdata->type == dns_rdatatype_sig);
 
 	UNUSED(rdata);
 	UNUSED(add);
@@ -531,7 +521,7 @@ additionaldata_sig(ARGS_ADDLDATA) {
 static inline isc_result_t
 digest_sig(ARGS_DIGEST) {
 
-	REQUIRE(rdata->type == 24);
+	REQUIRE(rdata->type == dns_rdatatype_sig);
 
 	UNUSED(rdata);
 	UNUSED(digest);
@@ -545,7 +535,7 @@ covers_sig(dns_rdata_t *rdata) {
 	dns_rdatatype_t type;
 	isc_region_t r;
 
-	REQUIRE(rdata->type == 24);
+	REQUIRE(rdata->type == dns_rdatatype_sig);
 
 	dns_rdata_toregion(rdata, &r);
 	type = uint16_fromregion(&r);
@@ -556,7 +546,7 @@ covers_sig(dns_rdata_t *rdata) {
 static inline isc_boolean_t
 checkowner_sig(ARGS_CHECKOWNER) {
 
-	REQUIRE(type == 24);
+	REQUIRE(type == dns_rdatatype_sig);
 
 	UNUSED(name);
 	UNUSED(type);
@@ -569,7 +559,7 @@ checkowner_sig(ARGS_CHECKOWNER) {
 static inline isc_boolean_t
 checknames_sig(ARGS_CHECKNAMES) {
 
-	REQUIRE(rdata->type == 24);
+	REQUIRE(rdata->type == dns_rdatatype_sig);
 
 	UNUSED(rdata);
 	UNUSED(owner);

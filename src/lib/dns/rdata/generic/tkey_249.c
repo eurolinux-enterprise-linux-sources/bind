@@ -1,24 +1,12 @@
 /*
- * Copyright (C) 2004, 2007, 2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/* $Id$ */
-
-/*
- * Reviewed: Thu Mar 16 17:35:30 PST 2000 by halley.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /* draft-ietf-dnsext-tkey-01.txt */
@@ -37,7 +25,7 @@ fromtext_tkey(ARGS_FROMTEXT) {
 	long i;
 	char *e;
 
-	REQUIRE(type == 249);
+	REQUIRE(type == dns_rdatatype_tkey);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -50,7 +38,8 @@ fromtext_tkey(ARGS_FROMTEXT) {
 				      ISC_FALSE));
 	dns_name_init(&name, NULL);
 	buffer_fromregion(&buffer, &token.value.as_region);
-	origin = (origin != NULL) ? origin : dns_rootname;
+	if (origin == NULL)
+		origin = dns_rootname;
 	RETTOK(dns_name_fromtext(&name, &buffer, origin, options, target));
 
 
@@ -132,7 +121,7 @@ totext_tkey(ARGS_TOTEXT) {
 	dns_name_t prefix;
 	isc_boolean_t sub;
 
-	REQUIRE(rdata->type == 249);
+	REQUIRE(rdata->type == dns_rdatatype_tkey);
 	REQUIRE(rdata->length != 0);
 
 	dns_rdata_toregion(rdata, &sr);
@@ -153,7 +142,7 @@ totext_tkey(ARGS_TOTEXT) {
 	 */
 	n = uint32_fromregion(&sr);
 	isc_region_consume(&sr, 4);
-	sprintf(buf, "%lu ", n);
+	snprintf(buf, sizeof(buf), "%lu ", n);
 	RETERR(str_totext(buf, target));
 
 	/*
@@ -161,7 +150,7 @@ totext_tkey(ARGS_TOTEXT) {
 	 */
 	n = uint32_fromregion(&sr);
 	isc_region_consume(&sr, 4);
-	sprintf(buf, "%lu ", n);
+	snprintf(buf, sizeof(buf), "%lu ", n);
 	RETERR(str_totext(buf, target));
 
 	/*
@@ -169,7 +158,7 @@ totext_tkey(ARGS_TOTEXT) {
 	 */
 	n = uint16_fromregion(&sr);
 	isc_region_consume(&sr, 2);
-	sprintf(buf, "%lu ", n);
+	snprintf(buf, sizeof(buf), "%lu ", n);
 	RETERR(str_totext(buf, target));
 
 	/*
@@ -180,7 +169,7 @@ totext_tkey(ARGS_TOTEXT) {
 	if (dns_tsigrcode_totext((dns_rcode_t)n, target) == ISC_R_SUCCESS)
 		RETERR(str_totext(" ", target));
 	else {
-		sprintf(buf, "%lu ", n);
+		snprintf(buf, sizeof(buf), "%lu ", n);
 		RETERR(str_totext(buf, target));
 	}
 
@@ -189,7 +178,7 @@ totext_tkey(ARGS_TOTEXT) {
 	 */
 	n = uint16_fromregion(&sr);
 	isc_region_consume(&sr, 2);
-	sprintf(buf, "%lu", n);
+	snprintf(buf, sizeof(buf), "%lu", n);
 	RETERR(str_totext(buf, target));
 
 	/*
@@ -217,7 +206,7 @@ totext_tkey(ARGS_TOTEXT) {
 	 */
 	n = uint16_fromregion(&sr);
 	isc_region_consume(&sr, 2);
-	sprintf(buf, "%lu", n);
+	snprintf(buf, sizeof(buf), "%lu", n);
 	RETERR(str_totext(buf, target));
 
 	/*
@@ -247,7 +236,7 @@ fromwire_tkey(ARGS_FROMWIRE) {
 	unsigned long n;
 	dns_name_t name;
 
-	REQUIRE(type == 249);
+	REQUIRE(type == dns_rdatatype_tkey);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -303,7 +292,7 @@ towire_tkey(ARGS_TOWIRE) {
 	dns_name_t name;
 	dns_offsets_t offsets;
 
-	REQUIRE(rdata->type == 249);
+	REQUIRE(rdata->type == dns_rdatatype_tkey);
 	REQUIRE(rdata->length != 0);
 
 	dns_compress_setmethods(cctx, DNS_COMPRESS_NONE);
@@ -329,7 +318,7 @@ compare_tkey(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 249);
+	REQUIRE(rdata1->type == dns_rdatatype_tkey);
 	REQUIRE(rdata1->length != 0);
 	REQUIRE(rdata2->length != 0);
 
@@ -353,7 +342,7 @@ static inline isc_result_t
 fromstruct_tkey(ARGS_FROMSTRUCT) {
 	dns_rdata_tkey_t *tkey = source;
 
-	REQUIRE(type == 249);
+	REQUIRE(type == dns_rdatatype_tkey);
 	REQUIRE(source != NULL);
 	REQUIRE(tkey->common.rdtype == type);
 	REQUIRE(tkey->common.rdclass == rdclass);
@@ -413,7 +402,7 @@ tostruct_tkey(ARGS_TOSTRUCT) {
 	dns_name_t alg;
 	isc_region_t sr;
 
-	REQUIRE(rdata->type == 249);
+	REQUIRE(rdata->type == dns_rdatatype_tkey);
 	REQUIRE(target != NULL);
 	REQUIRE(rdata->length != 0);
 
@@ -465,6 +454,7 @@ tostruct_tkey(ARGS_TOSTRUCT) {
 	/*
 	 * Key.
 	 */
+	INSIST(tkey->keylen + 2U <= sr.length);
 	tkey->key = mem_maybedup(mctx, sr.base, tkey->keylen);
 	if (tkey->key == NULL)
 		goto cleanup;
@@ -479,6 +469,7 @@ tostruct_tkey(ARGS_TOSTRUCT) {
 	/*
 	 * Other.
 	 */
+	INSIST(tkey->otherlen <= sr.length);
 	tkey->other = mem_maybedup(mctx, sr.base, tkey->otherlen);
 	if (tkey->other == NULL)
 		goto cleanup;
@@ -517,7 +508,7 @@ additionaldata_tkey(ARGS_ADDLDATA) {
 	UNUSED(add);
 	UNUSED(arg);
 
-	REQUIRE(rdata->type == 249);
+	REQUIRE(rdata->type == dns_rdatatype_tkey);
 
 	return (ISC_R_SUCCESS);
 }
@@ -528,7 +519,7 @@ digest_tkey(ARGS_DIGEST) {
 	UNUSED(digest);
 	UNUSED(arg);
 
-	REQUIRE(rdata->type == 249);
+	REQUIRE(rdata->type == dns_rdatatype_tkey);
 
 	return (ISC_R_NOTIMPLEMENTED);
 }
@@ -536,7 +527,7 @@ digest_tkey(ARGS_DIGEST) {
 static inline isc_boolean_t
 checkowner_tkey(ARGS_CHECKOWNER) {
 
-	REQUIRE(type == 249);
+	REQUIRE(type == dns_rdatatype_tkey);
 
 	UNUSED(name);
 	UNUSED(type);
@@ -549,7 +540,7 @@ checkowner_tkey(ARGS_CHECKOWNER) {
 static inline isc_boolean_t
 checknames_tkey(ARGS_CHECKNAMES) {
 
-	REQUIRE(rdata->type == 249);
+	REQUIRE(rdata->type == dns_rdatatype_tkey);
 
 	UNUSED(rdata);
 	UNUSED(owner);
@@ -558,7 +549,7 @@ checknames_tkey(ARGS_CHECKNAMES) {
 	return (ISC_TRUE);
 }
 
-static inline isc_result_t
+static inline int
 casecompare_tkey(ARGS_COMPARE) {
 	return (compare_tkey(rdata1, rdata2));
 }

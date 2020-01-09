@@ -1,27 +1,23 @@
 #!/usr/bin/perl
 #
-# Copyright (C) 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
-# Permission to use, copy, modify, and/or distribute this software for any
-# purpose with or without fee is hereby granted, provided that the above
-# copyright notice and this permission notice appear in all copies.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
-# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-# AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
-# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
-# OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-# PERFORMANCE OF THIS SOFTWARE.
-
-# $Id$
+# See the COPYRIGHT file distributed with this work for additional
+# information regarding copyright ownership.
 
 #
 # This is the name server from hell.  It provides canned
 # responses based on pattern matching the queries, and
 # can be reprogrammed on-the-fly over a TCP connection.
 #
-# The server listens for control connections on port 5301.
+# The server listens for queries on port 5300 (or PORT).
+#
+# The server listens for control connections on port 5301 (or EXTRAPORT1).
+#
 # A control connection is a TCP stream of lines like
 #
 #  /pattern/
@@ -35,7 +31,12 @@
 #
 # There can be any number of patterns, each associated
 # with any number of response RRs.  Each pattern is a
-# Perl regular expression.
+# Perl regular expression.  If an empty pattern ("//") is
+# received, the server will ignore all incoming queries (TCP
+# connections will still be accepted, but both UDP queries
+# and TCP queries will not be responded to).  If a non-empty
+# pattern is then received over the same control connection,
+# default behavior is restored.
 #
 # Each incoming query is converted into a string of the form
 # "qname qtype" (the printable query domain name, space,
@@ -83,17 +84,23 @@ if (@ARGV > 0) {
 	$server_addr = @ARGV[0];
 }
 
+my $mainport = int($ENV{'PORT'});
+if (!$mainport) { $mainport = 5300; }
+my $ctrlport = int($ENV{'EXTRAPORT1'});
+if (!$ctrlport) { $ctrlport = 5301; }
+
 # XXX: we should also be able to set the port numbers to listen on.
 my $ctlsock = IO::Socket::INET->new(LocalAddr => "$server_addr",
-   LocalPort => 5301, Proto => "tcp", Listen => 5, Reuse => 1) or die "$!";
+   LocalPort => $ctrlport, Proto => "tcp", Listen => 5, Reuse => 1) or die "$!";
 
 my $udpsock = IO::Socket::INET->new(LocalAddr => "$server_addr",
-   LocalPort => 5300, Proto => "udp", Reuse => 1) or die "$!";
+   LocalPort => $mainport, Proto => "udp", Reuse => 1) or die "$!";
 
 my $tcpsock = IO::Socket::INET->new(LocalAddr => "$server_addr",
-   LocalPort => 5300, Proto => "tcp", Listen => 5, Reuse => 1) or die "$!";
+   LocalPort => $mainport, Proto => "tcp", Listen => 5, Reuse => 1) or die "$!";
 
-print "listening on $server_addr:5300,5301.\n";
+print "listening on $server_addr:$mainport,$ctrlport.\n";
+print "Using Net::DNS $Net::DNS::VERSION\n";
 
 my $pidf = new IO::File "ans.pid", "w" or die "cannot open pid file: $!";
 print $pidf "$$\n" or die "cannot write pid file: $!";
@@ -105,6 +112,9 @@ $SIG{TERM} = \&rmpid;
 
 #my @answers = ();
 my @rules;
+my $udphandler;
+my $tcphandler;
+
 sub handleUDP {
 	my ($buf) = @_;
 	my $request;
@@ -132,9 +142,7 @@ sub handleUDP {
 	# get the existing signature if any, and clear the additional section
 	my $prev_tsig;
 	while (my $rr = $request->pop("additional")) {
-		if ($rr->type eq "TSIG") {
-			$prev_tsig = $rr;
-		}
+		$prev_tsig = $rr if ($rr->type eq "TSIG");
 	}
 
 	my $r;
@@ -148,11 +156,20 @@ sub handleUDP {
 				$packet->push("answer", $a);
 			}
 			if(defined($key_name) && defined($key_data)) {
+				my $tsig;
 				# Sign the packet
 				print "  Signing the response with " .
 				      "$key_name/$key_data\n";
-				my $tsig = Net::DNS::RR->
-					new("$key_name TSIG $key_data");
+
+				if ($Net::DNS::VERSION < 0.69) {
+					$tsig = Net::DNS::RR->new(
+						   "$key_name TSIG $key_data");
+				} else {
+					$tsig = Net::DNS::RR->new(
+							name => $key_name,
+							type => 'TSIG',
+							key  => $key_data);
+				}
 
 				# These kluges are necessary because Net::DNS
 				# doesn't know how to sign responses.  We
@@ -167,11 +184,16 @@ sub handleUDP {
 				$packet->{"header"}{"arcount"} += 1
 					if ($Net::DNS::VERSION < 0.70);
 				if (defined($prev_tsig)) {
-					my $rmac = pack('n H*',
-						length($prev_tsig->mac)/2,
-						$prev_tsig->mac);
-					$tsig->{"request_mac"} =
-						unpack("H*", $rmac);
+					if ($Net::DNS::VERSION < 0.73) {
+						my $rmac = pack('n H*',
+							length($prev_tsig->mac)/2,
+							$prev_tsig->mac);
+						$tsig->{"request_mac"} =
+							unpack("H*", $rmac);
+					} else {
+						$tsig->request_mac(
+							 $prev_tsig->mac);
+					}
 				}
 				
 				$packet->sign_tsig($tsig);
@@ -314,6 +336,8 @@ sub handleTCP {
 	my $qclass = $questions[0]->qclass;
 	my $id = $request->header->id;
 
+	my $opaque;
+
 	my $packet = new Net::DNS::Packet($qname, $qtype, $qclass);
 	$packet->header->qr(1);
 	$packet->header->aa(1);
@@ -323,9 +347,11 @@ sub handleTCP {
 	my $prev_tsig;
 	my $signer;
 	my $continuation = 0;
-	while (my $rr = $request->pop("additional")) {
-		if ($rr->type eq "TSIG") {
-			$prev_tsig = $rr;
+	if ($Net::DNS::VERSION < 0.81) {
+		while (my $rr = $request->pop("additional")) {
+			if ($rr->type eq "TSIG") {
+				$prev_tsig = $rr;
+			}
 		}
 	}
 
@@ -343,13 +369,26 @@ sub handleTCP {
 			foreach $a (@{$r->{answer}}) {
 				$packet->push("answer", $a);
 			}
-			if(defined($key_name) && defined($key_data)) {
+			if (defined($key_name) && defined($key_data)) {
+				my $tsig;
 				# sign the packet
 				print "  Signing the data with " . 
 				      "$key_name/$key_data\n";
 
-				my $tsig = Net::DNS::RR->
-					new("$key_name TSIG $key_data");
+				if ($Net::DNS::VERSION < 0.69) {
+					$tsig = Net::DNS::RR->new(
+						   "$key_name TSIG $key_data");
+				} elsif ($Net::DNS::VERSION >= 0.81 &&
+					 $continuation) {
+				} elsif ($Net::DNS::VERSION >= 0.75 &&
+					 $continuation) {
+					$tsig = $prev_tsig;
+				} else {
+					$tsig = Net::DNS::RR->new(
+							name => $key_name,
+							type => 'TSIG',
+							key  => $key_data);
+				}
 
 				# These kluges are necessary because Net::DNS
 				# doesn't know how to sign responses.  We
@@ -364,17 +403,29 @@ sub handleTCP {
 				$packet->{"header"}{"arcount"} += 1
 					if ($Net::DNS::VERSION < 0.70);
 				if (defined($prev_tsig)) {
-					my $rmac = pack('n H*',
-						length($prev_tsig->mac)/2,
-						$prev_tsig->mac);
-					$tsig->{"request_mac"} =
-						unpack("H*", $rmac);
+					if ($Net::DNS::VERSION < 0.73) {
+						my $rmac = pack('n H*',
+							length($prev_tsig->mac)/2,
+							$prev_tsig->mac);
+						$tsig->{"request_mac"} =
+							unpack("H*", $rmac);
+					} elsif ($Net::DNS::VERSION < 0.81) {
+						$tsig->request_mac(
+							 $prev_tsig->mac);
+					}
 				}
 				
 				$tsig->sign_func($signer) if defined($signer);
-				$tsig->continuation($continuation)
-					if ($Net::DNS::VERSION >= 0.71);
-				$packet->sign_tsig($tsig);
+				$tsig->continuation($continuation) if
+					 ($Net::DNS::VERSION >= 0.71 &&
+					  $Net::DNS::VERSION <= 0.74 );
+				if ($Net::DNS::VERSION < 0.81) {
+					$packet->sign_tsig($tsig);
+				} elsif ($continuation) {
+					$opaque = $packet->sign_tsig($opaque);
+				} else {
+					$opaque = $packet->sign_tsig($request);
+				}
 				$signer = \&sign_tcp_continuation
 					if ($Net::DNS::VERSION < 0.70);
 				$continuation = 1;
@@ -414,8 +465,15 @@ for (;;) {
 		while (my $line = $conn->getline) {
 			chomp $line;
 			if ($line =~ m!^/(.*)/$!) {
-				$rule = { pattern => $1, answer => [] };
-				push(@rules, $rule);
+				if (length($1) == 0) {
+					$udphandler = sub { return; };
+					$tcphandler = sub { return; };
+				} else {
+					$udphandler = \&handleUDP;
+					$tcphandler = \&handleTCP;
+					$rule = { pattern => $1, answer => [] };
+					push(@rules, $rule);
+				}
 			} else {
 				push(@{$rule->{answer}},
 				     new Net::DNS::RR($line));
@@ -430,9 +488,11 @@ for (;;) {
 		printf "UDP request\n";
 		my $buf;
 		$udpsock->recv($buf, 512);
-		my $result = handleUDP($buf);
-		my $num_chars = $udpsock->send($result);
-		print "  Sent $num_chars bytes via UDP\n";	
+		my $result = &$udphandler($buf);
+		if (defined($result)) {
+			my $num_chars = $udpsock->send($result);
+			print "  Sent $num_chars bytes via UDP\n";
+		}
 	} elsif (vec($rout, fileno($tcpsock), 1)) {
 		my $conn = $tcpsock->accept;
 		my $buf;
@@ -444,12 +504,14 @@ for (;;) {
 			$n = $conn->sysread($buf, $len);
 			last unless $n == $len;
 			print "TCP request\n";
-			my $result = handleTCP($buf);
-			foreach my $response (@$result) {
-				$len = length($response);
-				$n = $conn->syswrite(pack("n", $len), 2);
-				$n = $conn->syswrite($response, $len);
-				print "    Sent: $n chars via TCP\n";
+			my $result = &$tcphandler($buf);
+			if (defined($result)) {
+				foreach my $response (@$result) {
+					$len = length($response);
+					$n = $conn->syswrite(pack("n", $len), 2);
+					$n = $conn->syswrite($response, $len);
+					print "    Sent: $n chars via TCP\n";
+				}
 			}
 		}
 		$conn->close;

@@ -1,18 +1,12 @@
 /*
- * Portions Copyright (C) 2005-2012  Internet Systems Consortium, Inc. ("ISC")
- * Portions Copyright (C) 1999-2001  Internet Software Consortium.
+ * Portions Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /*
@@ -49,8 +43,6 @@
  * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE
  * USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-
-/* $Id$ */
 
 /*! \file */
 
@@ -158,10 +150,10 @@ typedef struct sdlz_rdatasetiter {
 #define VALID_SDLZNODE(sdlzn)	VALID_SDLZLOOKUP(sdlzn)
 
 /* These values are taken from RFC 1537 */
-#define SDLZ_DEFAULT_REFRESH	(60 * 60 * 8)
-#define SDLZ_DEFAULT_RETRY	(60 * 60 * 2)
-#define SDLZ_DEFAULT_EXPIRE	(60 * 60 * 24 * 7)
-#define SDLZ_DEFAULT_MINIMUM	(60 * 60 * 24)
+#define SDLZ_DEFAULT_REFRESH	28800U		/* 8 hours */
+#define SDLZ_DEFAULT_RETRY	7200U		/* 2 hours */
+#define SDLZ_DEFAULT_EXPIRE	604800U		/* 7 days */
+#define SDLZ_DEFAULT_MINIMUM	86400U		/* 1 day */
 
 /* This is a reasonable value */
 #define SDLZ_DEFAULT_TTL	(60 * 60 * 24)
@@ -186,8 +178,13 @@ typedef struct sdlz_rdatasetiter {
 #endif
 
 /*
- * Forward references.  Try to keep these to a minimum.
+ * Forward references.
  */
+static isc_result_t getnodedata(dns_db_t *db, dns_name_t *name,
+				isc_boolean_t create, unsigned int options,
+				dns_clientinfomethods_t *methods,
+				dns_clientinfo_t *clientinfo,
+				dns_dbnode_t **nodep);
 
 static void list_tordataset(dns_rdatalist_t *rdatalist,
 			    dns_db_t *db, dns_dbnode_t *node,
@@ -364,17 +361,16 @@ detach(dns_db_t **dbp) {
 }
 
 static isc_result_t
-beginload(dns_db_t *db, dns_addrdatasetfunc_t *addp, dns_dbload_t **dbloadp) {
+beginload(dns_db_t *db, dns_rdatacallbacks_t *callbacks) {
 	UNUSED(db);
-	UNUSED(addp);
-	UNUSED(dbloadp);
+	UNUSED(callbacks);
 	return (ISC_R_NOTIMPLEMENTED);
 }
 
 static isc_result_t
-endload(dns_db_t *db, dns_dbload_t **dbloadp) {
+endload(dns_db_t *db, dns_rdatacallbacks_t *callbacks) {
 	UNUSED(db);
-	UNUSED(dbloadp);
+	UNUSED(callbacks);
 	return (ISC_R_NOTIMPLEMENTED);
 }
 
@@ -427,8 +423,7 @@ newversion(dns_db_t *db, dns_dbversion_t **versionp) {
 }
 
 static void
-attachversion(dns_db_t *db, dns_dbversion_t *source,
-	      dns_dbversion_t **targetp)
+attachversion(dns_db_t *db, dns_dbversion_t *source, dns_dbversion_t **targetp)
 {
 	dns_sdlz_db_t *sdlz = (dns_sdlz_db_t *)db;
 
@@ -538,9 +533,9 @@ destroynode(dns_sdlznode_t *node) {
 }
 
 static isc_result_t
-findnodeext(dns_db_t *db, dns_name_t *name, isc_boolean_t create,
-	    dns_clientinfomethods_t *methods, dns_clientinfo_t *clientinfo,
-	    dns_dbnode_t **nodep)
+getnodedata(dns_db_t *db, dns_name_t *name, isc_boolean_t create,
+	    unsigned int options, dns_clientinfomethods_t *methods,
+	    dns_clientinfo_t *clientinfo, dns_dbnode_t **nodep)
 {
 	dns_sdlz_db_t *sdlz = (dns_sdlz_db_t *)db;
 	dns_sdlznode_t *node = NULL;
@@ -565,7 +560,7 @@ findnodeext(dns_db_t *db, dns_name_t *name, isc_boolean_t create,
 		unsigned int labels;
 
 		labels = dns_name_countlabels(name) -
-			 dns_name_countlabels(&db->origin);
+			 dns_name_countlabels(&sdlz->common.origin);
 		dns_name_init(&relname, NULL);
 		dns_name_getlabelsequence(name, 0, labels, &relname);
 		result = dns_name_totext(&relname, ISC_TRUE, &b);
@@ -603,18 +598,60 @@ findnodeext(dns_db_t *db, dns_name_t *name, isc_boolean_t create,
 					       methods, clientinfo);
 
 	/*
-	 * if the host (namestr) was not found, try to lookup a
-	 * "wildcard" host.
+	 * If the name was not found and DNS_DBFIND_NOWILD is not
+	 * set, then we try to find a wildcard entry.
+	 *
+	 * If DNS_DBFIND_NOZONECUT is set and there are multiple
+	 * levels between the host and the zone origin, we also look
+	 * for wildcards at each level.
 	 */
-	if (result != ISC_R_SUCCESS && !create)
-		result = sdlz->dlzimp->methods->lookup(zonestr, "*",
+	if (result == ISC_R_NOTFOUND && !create &&
+	    (options & DNS_DBFIND_NOWILD) == 0)
+	{
+		unsigned int i, dlabels, nlabels;
+
+		nlabels = dns_name_countlabels(name);
+		dlabels = nlabels - dns_name_countlabels(&sdlz->common.origin);
+		for (i = 0; i < dlabels; i++) {
+			char wildstr[DNS_NAME_MAXTEXT + 1];
+			dns_fixedname_t fixed;
+			dns_name_t *wild;
+
+			dns_fixedname_init(&fixed);
+			if (i == dlabels)
+				wild = dns_wildcardname;
+			else {
+				wild = dns_fixedname_name(&fixed);
+				dns_name_getlabelsequence(name, i + 1,
+							  dlabels - i - 1,
+							  wild);
+				result = dns_name_concatenate(dns_wildcardname,
+							      wild, wild, NULL);
+				if (result != ISC_R_SUCCESS)
+					return (result);
+			}
+
+			isc_buffer_init(&b, wildstr, sizeof(wildstr));
+			result = dns_name_totext(wild, ISC_TRUE, &b);
+			if (result != ISC_R_SUCCESS)
+				return (result);
+			isc_buffer_putuint8(&b, 0);
+
+			result = sdlz->dlzimp->methods->lookup(zonestr, wildstr,
 						       sdlz->dlzimp->driverarg,
 						       sdlz->dbdata, node,
 						       methods, clientinfo);
+			if (result == ISC_R_SUCCESS)
+				break;
+		}
+	}
 
 	MAYBE_UNLOCK(sdlz->dlzimp);
 
-	if (result != ISC_R_SUCCESS && !isorigin && !create) {
+	if (result == ISC_R_NOTFOUND && (isorigin || create))
+		result = ISC_R_SUCCESS;
+
+	if (result != ISC_R_SUCCESS) {
 		destroynode(node);
 		return (result);
 	}
@@ -626,7 +663,8 @@ findnodeext(dns_db_t *db, dns_name_t *name, isc_boolean_t create,
 				      sdlz->dbdata, node);
 		MAYBE_UNLOCK(sdlz->dlzimp);
 		if (result != ISC_R_SUCCESS &&
-		    result != ISC_R_NOTIMPLEMENTED) {
+		    result != ISC_R_NOTIMPLEMENTED)
+		{
 			destroynode(node);
 			return (result);
 		}
@@ -654,10 +692,18 @@ findnodeext(dns_db_t *db, dns_name_t *name, isc_boolean_t create,
 }
 
 static isc_result_t
+findnodeext(dns_db_t *db, dns_name_t *name, isc_boolean_t create,
+	    dns_clientinfomethods_t *methods, dns_clientinfo_t *clientinfo,
+	    dns_dbnode_t **nodep)
+{
+	return (getnodedata(db, name, create, 0, methods, clientinfo, nodep));
+}
+
+static isc_result_t
 findnode(dns_db_t *db, dns_name_t *name, isc_boolean_t create,
 	 dns_dbnode_t **nodep)
 {
-	return (findnodeext(db, name, create, NULL, NULL, nodep));
+	return (getnodedata(db, name, create, 0, NULL, NULL, nodep));
 }
 
 static isc_result_t
@@ -851,9 +897,10 @@ findext(dns_db_t *db, dns_name_t *name, dns_dbversion_t *version,
 
 	REQUIRE(VALID_SDLZDB(sdlz));
 	REQUIRE(nodep == NULL || *nodep == NULL);
-	REQUIRE(version == NULL || version == (void*)&sdlz->dummy_version);
+	REQUIRE(version == NULL ||
+		version == (void*)&sdlz->dummy_version ||
+		version == sdlz->future_version);
 
-	UNUSED(options);
 	UNUSED(sdlz);
 
 	if (!dns_name_issubdomain(name, &db->origin))
@@ -862,8 +909,7 @@ findext(dns_db_t *db, dns_name_t *name, dns_dbversion_t *version,
 	olabels = dns_name_countlabels(&db->origin);
 	nlabels = dns_name_countlabels(name);
 
-	dns_fixedname_init(&fname);
-	xname = dns_fixedname_name(&fname);
+	xname = dns_fixedname_initname(&fname);
 
 	if (rdataset == NULL) {
 		dns_rdataset_init(&xrdataset);
@@ -872,17 +918,28 @@ findext(dns_db_t *db, dns_name_t *name, dns_dbversion_t *version,
 
 	result = DNS_R_NXDOMAIN;
 
+	/*
+	 * If we're not walking down searching for zone
+	 * cuts, we can cut straight to the chase
+	 */
+	if ((options & DNS_DBFIND_NOZONECUT) != 0) {
+		i = nlabels;
+		goto search;
+	}
+
 	for (i = olabels; i <= nlabels; i++) {
+ search:
 		/*
 		 * Look up the next label.
 		 */
 		dns_name_getlabelsequence(name, nlabels - i, i, xname);
-		result = findnodeext(db, xname, ISC_FALSE,
+		result = getnodedata(db, xname, ISC_FALSE, options,
 				     methods, clientinfo, &node);
-		if (result != ISC_R_SUCCESS) {
+		if (result == ISC_R_NOTFOUND) {
 			result = DNS_R_NXDOMAIN;
 			continue;
-		}
+		} else if (result != ISC_R_SUCCESS)
+			break;
 
 		/*
 		 * Look for a DNAME at the current label, unless this is
@@ -900,25 +957,26 @@ findext(dns_db_t *db, dns_name_t *name, dns_dbversion_t *version,
 
 		/*
 		 * Look for an NS at the current label, unless this is the
-		 * origin or glue is ok.
+		 * origin, glue is ok, or there are known to be no zone cuts.
 		 */
-		if (i != olabels && (options & DNS_DBFIND_GLUEOK) == 0) {
+		if (i != olabels && (options & DNS_DBFIND_GLUEOK) == 0 &&
+		    (options & DNS_DBFIND_NOZONECUT) == 0)
+		{
 			result = findrdataset(db, node, version,
 					      dns_rdatatype_ns, 0, now,
 					      rdataset, sigrdataset);
-			if (result == ISC_R_SUCCESS) {
-				if (i == nlabels && type == dns_rdatatype_any)
-				{
-					result = DNS_R_ZONECUT;
-					dns_rdataset_disassociate(rdataset);
-					if (sigrdataset != NULL &&
-					    dns_rdataset_isassociated
-							(sigrdataset)) {
-						dns_rdataset_disassociate
-							(sigrdataset);
-					}
-				} else
-					result = DNS_R_DELEGATION;
+
+			if (result == ISC_R_SUCCESS &&
+			    i == nlabels && type == dns_rdatatype_any)
+			{
+				result = DNS_R_ZONECUT;
+				dns_rdataset_disassociate(rdataset);
+				if (sigrdataset != NULL &&
+				    dns_rdataset_isassociated(sigrdataset))
+					dns_rdataset_disassociate(sigrdataset);
+				break;
+			} else if (result == ISC_R_SUCCESS) {
+				result = DNS_R_DELEGATION;
 				break;
 			}
 		}
@@ -1190,9 +1248,9 @@ ispersistent(dns_db_t *db) {
 }
 
 static void
-overmem(dns_db_t *db, isc_boolean_t overmem) {
+overmem(dns_db_t *db, isc_boolean_t over) {
 	UNUSED(db);
-	UNUSED(overmem);
+	UNUSED(over);
 }
 
 static void
@@ -1200,7 +1258,6 @@ settask(dns_db_t *db, isc_task_t *task) {
 	UNUSED(db);
 	UNUSED(task);
 }
-
 
 /*
  * getoriginnode() is used by the update code to find the
@@ -1215,10 +1272,10 @@ getoriginnode(dns_db_t *db, dns_dbnode_t **nodep) {
 	if (sdlz->dlzimp->methods->newversion == NULL)
 		return (ISC_R_NOTIMPLEMENTED);
 
-	result = findnodeext(db, &sdlz->common.origin, ISC_FALSE,
-			     NULL, NULL, nodep);
+	result = getnodedata(db, &sdlz->common.origin, ISC_FALSE,
+			     0, NULL, NULL, nodep);
 	if (result != ISC_R_SUCCESS)
-		sdlz_log(ISC_LOG_ERROR, "sdlz getoriginnode failed : %s",
+		sdlz_log(ISC_LOG_ERROR, "sdlz getoriginnode failed: %s",
 			 isc_result_totext(result));
 	return (result);
 }
@@ -1228,6 +1285,7 @@ static dns_dbmethods_t sdlzdb_methods = {
 	detach,
 	beginload,
 	endload,
+	NULL,
 	dump,
 	currentversion,
 	newversion,
@@ -1260,10 +1318,14 @@ static dns_dbmethods_t sdlzdb_methods = {
 	NULL,			/* resigned */
 	NULL,			/* isdnssec */
 	NULL,			/* getrrsetstats */
-	NULL,			/* rpz_enabled */
-	NULL,			/* rpz_findips */
+	NULL,			/* rpz_attach */
+	NULL,			/* rpz_ready */
 	findnodeext,
-	findext
+	findext,
+	NULL,			/* setcachestats */
+	NULL,			/* hashsize */
+	NULL,			/* nodefullname */
+	NULL			/* getsize */
 };
 
 /*
@@ -1406,6 +1468,9 @@ static dns_rdatasetmethods_t rdataset_methods = {
 	isc__rdatalist_count,
 	isc__rdatalist_addnoqname,
 	isc__rdatalist_getnoqname,
+	NULL,
+	NULL,
+	NULL,
 	NULL,
 	NULL,
 	NULL,
@@ -1608,9 +1673,7 @@ dns_sdlzcreate(isc_mem_t *mctx, const char *dlzname, unsigned int argc,
 }
 
 static void
-dns_sdlzdestroy(void *driverdata, void **dbdata)
-{
-
+dns_sdlzdestroy(void *driverdata, void **dbdata) {
 	dns_sdlzimplementation_t *imp;
 
 	/* Write debugging message to log */
@@ -1628,7 +1691,10 @@ dns_sdlzdestroy(void *driverdata, void **dbdata)
 
 static isc_result_t
 dns_sdlzfindzone(void *driverarg, void *dbdata, isc_mem_t *mctx,
-		 dns_rdataclass_t rdclass, dns_name_t *name, dns_db_t **dbp)
+		 dns_rdataclass_t rdclass, dns_name_t *name,
+		 dns_clientinfomethods_t *methods,
+		 dns_clientinfo_t *clientinfo,
+		 dns_db_t **dbp)
 {
 	isc_buffer_t b;
 	char namestr[DNS_NAME_MAXTEXT + 1];
@@ -1656,7 +1722,8 @@ dns_sdlzfindzone(void *driverarg, void *dbdata, isc_mem_t *mctx,
 
 	/* Call SDLZ driver's find zone method */
 	MAYBE_LOCK(imp);
-	result = imp->methods->findzone(imp->driverarg, dbdata, namestr);
+	result = imp->methods->findzone(imp->driverarg, dbdata, namestr,
+					methods, clientinfo);
 	MAYBE_UNLOCK(imp);
 
 	/*
@@ -1672,7 +1739,8 @@ dns_sdlzfindzone(void *driverarg, void *dbdata, isc_mem_t *mctx,
 
 
 static isc_result_t
-dns_sdlzconfigure(void *driverarg, void *dbdata, dns_view_t *view)
+dns_sdlzconfigure(void *driverarg, void *dbdata,
+		  dns_view_t *view, dns_dlzdb_t *dlzdb)
 {
 	isc_result_t result;
 	dns_sdlzimplementation_t *imp;
@@ -1684,7 +1752,8 @@ dns_sdlzconfigure(void *driverarg, void *dbdata, dns_view_t *view)
 	/* Call SDLZ driver's configure method */
 	if (imp->methods->configure != NULL) {
 		MAYBE_LOCK(imp);
-		result = imp->methods->configure(view, imp->driverarg, dbdata);
+		result = imp->methods->configure(view, dlzdb,
+						 imp->driverarg, dbdata);
 		MAYBE_UNLOCK(imp);
 	} else {
 		result = ISC_R_SUCCESS;
@@ -1705,7 +1774,7 @@ dns_sdlzssumatch(dns_name_t *signer, dns_name_t *name, isc_netaddr_t *tcpaddr,
 	char b_type[DNS_RDATATYPE_FORMATSIZE];
 	char b_key[DST_KEY_FORMATSIZE];
 	isc_buffer_t *tkey_token = NULL;
-	isc_region_t token_region;
+	isc_region_t token_region = { NULL, 0 };
 	isc_uint32_t token_len = 0;
 	isc_boolean_t ret;
 
@@ -1805,12 +1874,10 @@ dns_sdlz_putrr(dns_sdlzlookup_t *lookup, const char *type, dns_ttl_t ttl,
 		rdatalist = isc_mem_get(mctx, sizeof(dns_rdatalist_t));
 		if (rdatalist == NULL)
 			return (ISC_R_NOMEMORY);
+		dns_rdatalist_init(rdatalist);
 		rdatalist->rdclass = lookup->sdlz->common.rdclass;
 		rdatalist->type = typeval;
-		rdatalist->covers = 0;
 		rdatalist->ttl = ttl;
-		ISC_LIST_INIT(rdatalist->rdata);
-		ISC_LINK_INIT(rdatalist, link);
 		ISC_LIST_APPEND(lookup->lists, rdatalist, link);
 	} else
 		if (rdatalist->ttl > ttl) {
@@ -1900,8 +1967,7 @@ dns_sdlz_putnamedrr(dns_sdlzallnodes_t *allnodes, const char *name,
 	isc_buffer_t b;
 	isc_result_t result;
 
-	dns_fixedname_init(&fnewname);
-	newname = dns_fixedname_name(&fnewname);
+	newname = dns_fixedname_initname(&fnewname);
 
 	if ((sdlz->dlzimp->flags & DNS_SDLZFLAG_RELATIVERDATA) != 0)
 		origin = &sdlz->common.origin;

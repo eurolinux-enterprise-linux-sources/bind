@@ -1,23 +1,13 @@
 /*
- * Copyright (C) 2004, 2007, 2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
-
-/* Reviewed: Thu Mar 16 13:57:50 PST 2000 by explorer */
 
 #ifndef RDATA_GENERIC_NULL_10_C
 #define RDATA_GENERIC_NULL_10_C
@@ -26,7 +16,7 @@
 
 static inline isc_result_t
 fromtext_null(ARGS_FROMTEXT) {
-	REQUIRE(type == 10);
+	REQUIRE(type == dns_rdatatype_null);
 
 	UNUSED(rdclass);
 	UNUSED(type);
@@ -41,7 +31,7 @@ fromtext_null(ARGS_FROMTEXT) {
 
 static inline isc_result_t
 totext_null(ARGS_TOTEXT) {
-	REQUIRE(rdata->type == 10);
+	REQUIRE(rdata->type == dns_rdatatype_null);
 
 	return (unknown_totext(rdata, tctx, target));
 }
@@ -50,7 +40,7 @@ static inline isc_result_t
 fromwire_null(ARGS_FROMWIRE) {
 	isc_region_t sr;
 
-	REQUIRE(type == 10);
+	REQUIRE(type == dns_rdatatype_null);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -64,7 +54,7 @@ fromwire_null(ARGS_FROMWIRE) {
 
 static inline isc_result_t
 towire_null(ARGS_TOWIRE) {
-	REQUIRE(rdata->type == 10);
+	REQUIRE(rdata->type == dns_rdatatype_null);
 
 	UNUSED(cctx);
 
@@ -78,7 +68,7 @@ compare_null(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 10);
+	REQUIRE(rdata1->type == dns_rdatatype_null);
 
 	dns_rdata_toregion(rdata1, &r1);
 	dns_rdata_toregion(rdata2, &r2);
@@ -89,7 +79,7 @@ static inline isc_result_t
 fromstruct_null(ARGS_FROMSTRUCT) {
 	dns_rdata_null_t *null = source;
 
-	REQUIRE(type == 10);
+	REQUIRE(type == dns_rdatatype_null);
 	REQUIRE(source != NULL);
 	REQUIRE(null->common.rdtype == type);
 	REQUIRE(null->common.rdclass == rdclass);
@@ -106,7 +96,7 @@ tostruct_null(ARGS_TOSTRUCT) {
 	dns_rdata_null_t *null = target;
 	isc_region_t r;
 
-	REQUIRE(rdata->type == 10);
+	REQUIRE(rdata->type == dns_rdatatype_null);
 	REQUIRE(target != NULL);
 
 	null->common.rdclass = rdata->rdclass;
@@ -128,7 +118,7 @@ freestruct_null(ARGS_FREESTRUCT) {
 	dns_rdata_null_t *null = source;
 
 	REQUIRE(source != NULL);
-	REQUIRE(null->common.rdtype == 10);
+	REQUIRE(null->common.rdtype == dns_rdatatype_null);
 
 	if (null->mctx == NULL)
 		return;
@@ -144,7 +134,7 @@ additionaldata_null(ARGS_ADDLDATA) {
 	UNUSED(add);
 	UNUSED(arg);
 
-	REQUIRE(rdata->type == 10);
+	REQUIRE(rdata->type == dns_rdatatype_null);
 
 	return (ISC_R_SUCCESS);
 }
@@ -153,7 +143,7 @@ static inline isc_result_t
 digest_null(ARGS_DIGEST) {
 	isc_region_t r;
 
-	REQUIRE(rdata->type == 10);
+	REQUIRE(rdata->type == dns_rdatatype_null);
 
 	dns_rdata_toregion(rdata, &r);
 
@@ -163,7 +153,7 @@ digest_null(ARGS_DIGEST) {
 static inline isc_boolean_t
 checkowner_null(ARGS_CHECKOWNER) {
 
-	REQUIRE(type == 10);
+	REQUIRE(type == dns_rdatatype_null);
 
 	UNUSED(name);
 	UNUSED(type);
@@ -176,7 +166,7 @@ checkowner_null(ARGS_CHECKOWNER) {
 static inline isc_boolean_t
 checknames_null(ARGS_CHECKNAMES) {
 
-	REQUIRE(rdata->type == 10);
+	REQUIRE(rdata->type == dns_rdatatype_null);
 
 	UNUSED(rdata);
 	UNUSED(owner);

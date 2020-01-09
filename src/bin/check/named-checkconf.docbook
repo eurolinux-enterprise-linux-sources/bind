@@ -1,27 +1,24 @@
-<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
-               "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"
-	       [<!ENTITY mdash "&#8212;">]>
+<!DOCTYPE book [
+<!ENTITY mdash "&#8212;">]>
 <!--
- - Copyright (C) 2004, 2005, 2007, 2009  Internet Systems Consortium, Inc. ("ISC")
- - Copyright (C) 2000-2002  Internet Software Consortium.
+ - Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  -
- - Permission to use, copy, modify, and/or distribute this software for any
- - purpose with or without fee is hereby granted, provided that the above
- - copyright notice and this permission notice appear in all copies.
+ - This Source Code Form is subject to the terms of the Mozilla Public
+ - License, v. 2.0. If a copy of the MPL was not distributed with this
+ - file, You can obtain one at http://mozilla.org/MPL/2.0/.
  -
- - THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- - REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- - AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- - INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- - LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- - OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- - PERFORMANCE OF THIS SOFTWARE.
+ - See the COPYRIGHT file distributed with this work for additional
+ - information regarding copyright ownership.
 -->
 
-<!-- $Id: named-checkconf.docbook,v 1.22 2009/12/28 23:21:16 each Exp $ -->
-<refentry id="man.named-checkconf">
+<!-- Converted by db4-upgrade version 1.0 -->
+<refentry xmlns:db="http://docbook.org/ns/docbook" version="5.0" xml:id="man.named-checkconf">
+  <info>
+    <date>2014-01-10</date>
+  </info>
   <refentryinfo>
-    <date>June 14, 2000</date>
+    <corpname>ISC</corpname>
+    <corpauthor>Internet Systems Consortium, Inc.</corpauthor>
   </refentryinfo>
 
   <refmeta>
@@ -32,17 +29,18 @@
 
   <docinfo>
     <copyright>
+      <year>2000</year>
+      <year>2001</year>
+      <year>2002</year>
       <year>2004</year>
       <year>2005</year>
       <year>2007</year>
       <year>2009</year>
+      <year>2014</year>
+      <year>2015</year>
+      <year>2016</year>
+      <year>2018</year>
       <holder>Internet Systems Consortium, Inc. ("ISC")</holder>
-    </copyright>
-    <copyright>
-      <year>2000</year>
-      <year>2001</year>
-      <year>2002</year>
-      <holder>Internet Software Consortium.</holder>
     </copyright>
   </docinfo>
 
@@ -52,20 +50,19 @@
   </refnamediv>
 
   <refsynopsisdiv>
-    <cmdsynopsis>
+    <cmdsynopsis sepchar=" ">
       <command>named-checkconf</command>
-      <arg><option>-h</option></arg>
-      <arg><option>-v</option></arg>
-      <arg><option>-j</option></arg>
-      <arg><option>-t <replaceable class="parameter">directory</replaceable></option></arg>
-      <arg choice="req">filename</arg>
-      <arg><option>-p</option></arg>
-      <arg><option>-z</option></arg>
+      <arg choice="opt" rep="norepeat"><option>-hjvz</option></arg>
+      <arg choice="opt" rep="norepeat"><option>-p</option>
+	<arg choice="opt" rep="norepeat"><option>-x</option>
+      </arg></arg>
+      <arg choice="opt" rep="norepeat"><option>-t <replaceable class="parameter">directory</replaceable></option></arg>
+      <arg choice="req" rep="norepeat">filename</arg>
     </cmdsynopsis>
   </refsynopsisdiv>
 
-  <refsect1>
-    <title>DESCRIPTION</title>
+  <refsection><info><title>DESCRIPTION</title></info>
+
     <para><command>named-checkconf</command>
       checks the syntax, but not the semantics, of a
       <command>named</command> configuration file.  The file is parsed
@@ -83,10 +80,9 @@
       successful.  <command>named-checkconf</command> can be run
       on these files explicitly, however.
     </para>
-  </refsect1>
+  </refsection>
 
-  <refsect1>
-    <title>OPTIONS</title>
+  <refsection><info><title>OPTIONS</title></info>
 
     <variablelist>
       <varlistentry>
@@ -99,12 +95,32 @@
       </varlistentry>
 
       <varlistentry>
+        <term>-j</term>
+        <listitem>
+          <para>
+            When loading a zonefile read the journal if it exists.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term>-p</term>
+        <listitem>
+          <para>
+	    Print out the <filename>named.conf</filename> and included files
+	    in canonical form if no errors were detected.
+            See also the <option>-x</option> option.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term>-t <replaceable class="parameter">directory</replaceable></term>
         <listitem>
           <para>
             Chroot to <filename>directory</filename> so that include
             directives in the configuration file are processed as if
-            run by a similarly chrooted named.
+            run by a similarly chrooted <command>named</command>.
           </para>
         </listitem>
       </varlistentry>
@@ -120,11 +136,16 @@
       </varlistentry>
 
       <varlistentry>
-        <term>-p</term>
+        <term>-x</term>
         <listitem>
           <para>
-	    Print out the <filename>named.conf</filename> and included files
-	    in canonical form if no errors were detected.
+	    When printing the configuration files in canonical
+            form, obscure shared secrets by replacing them with
+            strings of question marks ('?'). This allows the
+            contents of <filename>named.conf</filename> and related
+            files to be shared &mdash; for example, when submitting
+            bug reports &mdash; without compromising private data.
+            This option cannot be used without <option>-p</option>.
           </para>
         </listitem>
       </varlistentry>
@@ -135,15 +156,6 @@
           <para>
 	    Perform a test load of all master zones found in
 	    <filename>named.conf</filename>.
-          </para>
-        </listitem>
-      </varlistentry>
-
-      <varlistentry>
-        <term>-j</term>
-        <listitem>
-          <para>
-            When loading a zonefile read the journal if it exists.
           </para>
         </listitem>
       </varlistentry>
@@ -160,18 +172,18 @@
 
     </variablelist>
 
-  </refsect1>
+  </refsection>
 
-  <refsect1>
-    <title>RETURN VALUES</title>
+  <refsection><info><title>RETURN VALUES</title></info>
+
     <para><command>named-checkconf</command>
       returns an exit status of 1 if
       errors were detected and 0 otherwise.
     </para>
-  </refsect1>
+  </refsection>
 
-  <refsect1>
-    <title>SEE ALSO</title>
+  <refsection><info><title>SEE ALSO</title></info>
+
     <para><citerefentry>
         <refentrytitle>named</refentrytitle><manvolnum>8</manvolnum>
       </citerefentry>,
@@ -180,16 +192,5 @@
       </citerefentry>,
       <citetitle>BIND 9 Administrator Reference Manual</citetitle>.
     </para>
-  </refsect1>
-
-  <refsect1>
-    <title>AUTHOR</title>
-    <para><corpauthor>Internet Systems Consortium</corpauthor>
-    </para>
-  </refsect1>
-
-</refentry><!--
- - Local variables:
- - mode: sgml
- - End:
--->
+  </refsection>
+</refentry>

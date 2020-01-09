@@ -1,20 +1,14 @@
 /*
- * Copyright (C) 2008-2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: nsec3.h,v 1.14 2011/10/28 12:20:31 tbox Exp $ */
 
 #ifndef DNS_NSEC3_H
 #define DNS_NSEC3_H 1
@@ -43,7 +37,7 @@
 /*
  * Test "unknown" algorithm.  Is mapped to dns_hash_sha1.
  */
-#define DNS_NSEC3_UNKNOWNALG 245U
+#define DNS_NSEC3_UNKNOWNALG ((dns_hash_t)245U)
 
 ISC_LANG_BEGINDECLS
 
@@ -237,6 +231,19 @@ dns_nsec3param_toprivate(dns_rdata_t *src, dns_rdata_t *target,
  * Convert a nsec3param rdata to a private rdata.
  *
  * 'buf' should be at least src->length + 1 in size.
+ */
+
+isc_result_t
+dns_nsec3param_salttotext(dns_rdata_nsec3param_t *nsec3param, char *dst,
+			  size_t dstlen);
+/*%<
+ * Convert the salt of given NSEC3PARAM RDATA into hex-encoded, NULL-terminated
+ * text stored at "dst".
+ *
+ * Requires:
+ *
+ *\li 	"dst" to have enough space (as indicated by "dstlen") to hold the
+ * 	resulting text and its NULL-terminating byte.
  */
 
 isc_result_t

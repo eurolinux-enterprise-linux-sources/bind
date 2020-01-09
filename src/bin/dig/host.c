@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004-2007, 2009-2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: host.c,v 1.127 2011/03/11 06:11:20 marka Exp $ */
 
 /*! \file */
 
@@ -27,7 +19,7 @@
 #include <locale.h>
 #endif
 
-#ifdef WITH_IDN
+#ifdef WITH_IDNKIT
 #include <idn/result.h>
 #include <idn/log.h>
 #include <idn/resconf.h>
@@ -61,6 +53,7 @@ static int seen_error = -1;
 static isc_boolean_t list_addresses = ISC_TRUE;
 static dns_rdatatype_t list_type = dns_rdatatype_a;
 static isc_boolean_t printed_server = ISC_FALSE;
+static isc_boolean_t ipv4only = ISC_FALSE, ipv6only = ISC_FALSE;
 
 static const char *opcodetext[] = {
 	"QUERY",
@@ -147,14 +140,15 @@ show_usage(void) ISC_PLATFORM_NORETURN_POST;
 static void
 show_usage(void) {
 	fputs(
-"Usage: host [-aCdlriTwv] [-c class] [-N ndots] [-t type] [-W time]\n"
+"Usage: host [-aCdilrTvVw] [-c class] [-N ndots] [-t type] [-W time]\n"
 "            [-R number] [-m flag] hostname [server]\n"
 "       -a is equivalent to -v -t ANY\n"
 "       -c specifies query class for non-IN data\n"
 "       -C compares SOA records on authoritative nameservers\n"
 "       -d is equivalent to -v\n"
-"       -l lists all hosts in a domain, using AXFR\n"
 "       -i IP6.INT reverse lookups\n"
+"       -l lists all hosts in a domain, using AXFR\n"
+"       -m set memory debugging flag (trace|record|usage)\n"
 "       -N changes the number of dots allowed before root lookup is done\n"
 "       -r disables recursive processing\n"
 "       -R specifies number of retries for UDP packets\n"
@@ -162,21 +156,21 @@ show_usage(void) {
 "       -t specifies the query type\n"
 "       -T enables TCP/IP mode\n"
 "       -v enables verbose output\n"
+"       -V print version number and exit\n"
 "       -w specifies to wait forever for a reply\n"
 "       -W specifies how long to wait for a reply\n"
 "       -4 use IPv4 query transport only\n"
-"       -6 use IPv6 query transport only\n"
-"       -m set memory debugging flag (trace|record|usage)\n", stderr);
+"       -6 use IPv6 query transport only\n", stderr);
 	exit(1);
 }
 
-void
-dighost_shutdown(void) {
-	isc_app_shutdown();
+static void
+host_shutdown(void) {
+	(void) isc_app_shutdown();
 }
 
-void
-received(int bytes, isc_sockaddr_t *from, dig_query_t *query) {
+static void
+received(unsigned int bytes, isc_sockaddr_t *from, dig_query_t *query) {
 	isc_time_t now;
 	int diff;
 
@@ -190,7 +184,7 @@ received(int bytes, isc_sockaddr_t *from, dig_query_t *query) {
 	}
 }
 
-void
+static void
 trying(char *frm, dig_lookup_t *lookup) {
 	UNUSED(lookup);
 
@@ -234,7 +228,7 @@ say_message(dns_name_t *name, const char *msg, dns_rdata_t *rdata,
 }
 #ifdef DIG_SIGCHASE
 /* Just for compatibility : not use in host program */
-isc_result_t
+static isc_result_t
 printrdataset(dns_name_t *owner_name, dns_rdataset_t *rdataset,
 	      isc_buffer_t *target)
 {
@@ -256,7 +250,7 @@ printsection(dns_message_t *msg, dns_section_t sectionid,
 	isc_result_t result, loopresult;
 	isc_region_t r;
 	dns_name_t empty_name;
-	char t[4096];
+	char tbuf[4096];
 	isc_boolean_t first;
 	isc_boolean_t no_rdata;
 
@@ -280,7 +274,7 @@ printsection(dns_message_t *msg, dns_section_t sectionid,
 		name = NULL;
 		dns_message_currentname(msg, sectionid, &name);
 
-		isc_buffer_init(&target, t, sizeof(t));
+		isc_buffer_init(&target, tbuf, sizeof(tbuf));
 		first = ISC_TRUE;
 		print_name = name;
 
@@ -371,13 +365,13 @@ printrdata(dns_message_t *msg, dns_rdataset_t *rdataset, dns_name_t *owner,
 	isc_buffer_t target;
 	isc_result_t result;
 	isc_region_t r;
-	char t[4096];
+	char tbuf[4096];
 
 	UNUSED(msg);
 	if (headers)
 		printf(";; %s SECTION:\n", set_name);
 
-	isc_buffer_init(&target, t, sizeof(t));
+	isc_buffer_init(&target, tbuf, sizeof(tbuf));
 
 	result = dns_rdataset_totext(rdataset, owner, ISC_FALSE, ISC_FALSE,
 				     &target);
@@ -415,7 +409,7 @@ chase_cnamechain(dns_message_t *msg, dns_name_t *qname) {
 	}
 }
 
-isc_result_t
+static isc_result_t
 printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 	isc_boolean_t did_flag = ISC_FALSE;
 	dns_rdataset_t *opt, *tsig = NULL;
@@ -468,16 +462,14 @@ printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 		dns_name_t *name;
 
 		/* Add AAAA and MX lookups. */
-		dns_fixedname_init(&fixed);
-		name = dns_fixedname_name(&fixed);
+		name = dns_fixedname_initname(&fixed);
 		dns_name_copy(query->lookup->name, name, NULL);
 		chase_cnamechain(msg, name);
 		dns_name_format(name, namestr, sizeof(namestr));
 		lookup = clone_lookup(query->lookup, ISC_FALSE);
 		if (lookup != NULL) {
-			strncpy(lookup->textname, namestr,
+			strlcpy(lookup->textname, namestr,
 				sizeof(lookup->textname));
-			lookup->textname[sizeof(lookup->textname)-1] = 0;
 			lookup->rdtype = dns_rdatatype_aaaa;
 			lookup->rdtypeset = ISC_TRUE;
 			lookup->origin = NULL;
@@ -486,9 +478,8 @@ printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 		}
 		lookup = clone_lookup(query->lookup, ISC_FALSE);
 		if (lookup != NULL) {
-			strncpy(lookup->textname, namestr,
+			strlcpy(lookup->textname, namestr,
 				sizeof(lookup->textname));
-			lookup->textname[sizeof(lookup->textname)-1] = 0;
 			lookup->rdtype = dns_rdatatype_mx;
 			lookup->rdtypeset = ISC_TRUE;
 			lookup->origin = NULL;
@@ -603,7 +594,13 @@ printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 	return (result);
 }
 
-static const char * optstring = "46ac:dilnm:rst:vwCDN:R:TW:";
+static const char * optstring = "46ac:dilnm:rst:vVwCDN:R:TUW:";
+
+/*% version */
+static void
+version(void) {
+	fputs("host " VERSION "\n", stderr);
+}
 
 static void
 pre_parse_args(int argc, char **argv) {
@@ -615,16 +612,24 @@ pre_parse_args(int argc, char **argv) {
 			memdebugging = ISC_TRUE;
 			if (strcasecmp("trace", isc_commandline_argument) == 0)
 				isc_mem_debugging |= ISC_MEM_DEBUGTRACE;
-			else if (!strcasecmp("record",
-					     isc_commandline_argument) == 0)
+			else if (strcasecmp("record",
+					    isc_commandline_argument) == 0)
 				isc_mem_debugging |= ISC_MEM_DEBUGRECORD;
 			else if (strcasecmp("usage",
 					    isc_commandline_argument) == 0)
 				isc_mem_debugging |= ISC_MEM_DEBUGUSAGE;
 			break;
 
-		case '4': break;
-		case '6': break;
+		case '4':
+			if (ipv6only)
+				fatal("only one of -4 and -6 allowed");
+			ipv4only = ISC_TRUE;
+			break;
+		case '6':
+			if (ipv4only)
+				fatal("only one of -4 and -6 allowed");
+			ipv6only = ISC_TRUE;
+			break;
 		case 'a': break;
 		case 'c': break;
 		case 'd': break;
@@ -635,9 +640,15 @@ pre_parse_args(int argc, char **argv) {
 		case 's': break;
 		case 't': break;
 		case 'v': break;
+		case 'V':
+			  version();
+			  exit(0);
+			  break;
 		case 'w': break;
 		case 'C': break;
 		case 'D':
+			if (debugging)
+				debugtiming = ISC_TRUE;
 			debugging = ISC_TRUE;
 			break;
 		case 'N': break;
@@ -670,6 +681,7 @@ parse_args(isc_boolean_t is_batchfile, int argc, char **argv) {
 
 	lookup->servfail_stops = ISC_FALSE;
 	lookup->comments = ISC_FALSE;
+	short_form = !verbose;
 
 	while ((c = isc_commandline_parse(argc, argv, optstring)) != -1) {
 		switch (c) {
@@ -710,7 +722,7 @@ parse_args(isc_boolean_t is_batchfile, int argc, char **argv) {
 			    lookup->rdtype != dns_rdatatype_axfr)
 				lookup->rdtype = rdtype;
 			lookup->rdtypeset = ISC_TRUE;
-#ifdef WITH_IDN
+#ifdef WITH_IDNKIT
 			idnoptions = 0;
 #endif
 			if (rdtype == dns_rdatatype_axfr) {
@@ -722,7 +734,10 @@ parse_args(isc_boolean_t is_batchfile, int argc, char **argv) {
 				lookup->ixfr_serial = serial;
 				lookup->tcp_mode = ISC_TRUE;
 				list_type = rdtype;
-#ifdef WITH_IDN
+			} else if (rdtype == dns_rdatatype_any) {
+				if (!lookup->tcp_mode_set)
+					lookup->tcp_mode = ISC_TRUE;
+#ifdef WITH_IDNKIT
 			} else if (rdtype == dns_rdatatype_a ||
 				   rdtype == dns_rdatatype_aaaa ||
 				   rdtype == dns_rdatatype_mx) {
@@ -754,6 +769,9 @@ parse_args(isc_boolean_t is_batchfile, int argc, char **argv) {
 			if (!lookup->rdtypeset ||
 			    lookup->rdtype != dns_rdatatype_axfr)
 				lookup->rdtype = dns_rdatatype_any;
+#ifdef WITH_IDNKIT
+			idnoptions = 0;
+#endif
 			list_type = dns_rdatatype_any;
 			list_addresses = ISC_FALSE;
 			lookup->rdtypeset = ISC_TRUE;
@@ -788,6 +806,11 @@ parse_args(isc_boolean_t is_batchfile, int argc, char **argv) {
 			break;
 		case 'T':
 			lookup->tcp_mode = ISC_TRUE;
+			lookup->tcp_mode_set = ISC_TRUE;
+			break;
+		case 'U':
+			lookup->tcp_mode = ISC_FALSE;
+			lookup->tcp_mode_set = ISC_TRUE;
 			break;
 		case 'C':
 			debug("showing all SOAs");
@@ -809,18 +832,10 @@ parse_args(isc_boolean_t is_batchfile, int argc, char **argv) {
 			/* Handled by pre_parse_args(). */
 			break;
 		case '4':
-			if (have_ipv4) {
-				isc_net_disableipv6();
-				have_ipv6 = ISC_FALSE;
-			} else
-				fatal("can't find IPv4 networking");
+			/* Handled by pre_parse_args(). */
 			break;
 		case '6':
-			if (have_ipv6) {
-				isc_net_disableipv4();
-				have_ipv4 = ISC_FALSE;
-			} else
-				fatal("can't find IPv6 networking");
+			/* Handled by pre_parse_args(). */
 			break;
 		case 's':
 			lookup->servfail_stops = ISC_TRUE;
@@ -845,14 +860,12 @@ parse_args(isc_boolean_t is_batchfile, int argc, char **argv) {
 	lookup->pending = ISC_FALSE;
 	if (get_reverse(store, sizeof(store), hostname,
 			lookup->ip6_int, ISC_TRUE) == ISC_R_SUCCESS) {
-		strncpy(lookup->textname, store, sizeof(lookup->textname));
-		lookup->textname[sizeof(lookup->textname)-1] = 0;
+		strlcpy(lookup->textname, store, sizeof(lookup->textname));
 		lookup->rdtype = dns_rdatatype_ptr;
 		lookup->rdtypeset = ISC_TRUE;
 		default_lookups = ISC_FALSE;
 	} else {
-		strncpy(lookup->textname, hostname, sizeof(lookup->textname));
-		lookup->textname[sizeof(lookup->textname)-1]=0;
+		strlcpy(lookup->textname, hostname, sizeof(lookup->textname));
 		usesearch = ISC_TRUE;
 	}
 	lookup->new_search = ISC_TRUE;
@@ -870,9 +883,18 @@ main(int argc, char **argv) {
 	ISC_LIST_INIT(search_list);
 
 	fatalexit = 1;
-#ifdef WITH_IDN
+#ifdef WITH_IDNKIT
 	idnoptions = IDN_ASCCHECK;
 #endif
+
+	/* setup dighost callbacks */
+#ifdef DIG_SIGCHASE
+	dighost_printrdataset = printrdataset;
+#endif
+	dighost_printmessage = printmessage;
+	dighost_received = received;
+	dighost_trying = trying;
+	dighost_shutdown = host_shutdown;
 
 	debug("main()");
 	progname = argv[0];
@@ -880,8 +902,12 @@ main(int argc, char **argv) {
 	result = isc_app_start();
 	check_result(result, "isc_app_start");
 	setup_libs();
+	setup_system(ipv4only, ipv6only);
 	parse_args(ISC_FALSE, argc, argv);
-	setup_system();
+	if (keyfile[0] != 0)
+		setup_file_key();
+	else if (keysecret[0] != 0)
+		setup_text_key();
 	result = isc_app_onrun(mctx, global_task, onrun_callback, NULL);
 	check_result(result, "isc_app_onrun");
 	isc_app_run();

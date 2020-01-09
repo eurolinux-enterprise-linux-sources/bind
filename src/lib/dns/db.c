@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004, 2005, 2007-2009, 2011-2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2001, 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: db.c,v 1.99.4.1 2011/10/23 20:12:07 vjs Exp $ */
 
 /*! \file */
 
@@ -64,18 +56,14 @@ struct dns_dbimplementation {
  */
 
 #include "rbtdb.h"
-#ifdef BIND9
 #include "rbtdb64.h"
-#endif
 
 static ISC_LIST(dns_dbimplementation_t) implementations;
 static isc_rwlock_t implock;
 static isc_once_t once = ISC_ONCE_INIT;
 
 static dns_dbimplementation_t rbtimp;
-#ifdef BIND9
 static dns_dbimplementation_t rbt64imp;
-#endif
 
 static void
 initialize(void) {
@@ -87,19 +75,15 @@ initialize(void) {
 	rbtimp.driverarg = NULL;
 	ISC_LINK_INIT(&rbtimp, link);
 
-#ifdef BIND9
 	rbt64imp.name = "rbt64";
 	rbt64imp.create = dns_rbtdb64_create;
 	rbt64imp.mctx = NULL;
 	rbt64imp.driverarg = NULL;
 	ISC_LINK_INIT(&rbt64imp, link);
-#endif
 
 	ISC_LIST_INIT(implementations);
 	ISC_LIST_APPEND(implementations, &rbtimp, link);
-#ifdef BIND9
 	ISC_LIST_APPEND(implementations, &rbt64imp, link);
-#endif
 }
 
 static inline dns_dbimplementation_t *
@@ -301,31 +285,36 @@ dns_db_class(dns_db_t *db) {
 	return (db->rdclass);
 }
 
-#ifdef BIND9
 isc_result_t
-dns_db_beginload(dns_db_t *db, dns_addrdatasetfunc_t *addp,
-		 dns_dbload_t **dbloadp) {
+dns_db_beginload(dns_db_t *db, dns_rdatacallbacks_t *callbacks) {
 	/*
 	 * Begin loading 'db'.
 	 */
 
 	REQUIRE(DNS_DB_VALID(db));
-	REQUIRE(addp != NULL && *addp == NULL);
-	REQUIRE(dbloadp != NULL && *dbloadp == NULL);
+	REQUIRE(DNS_CALLBACK_VALID(callbacks));
 
-	return ((db->methods->beginload)(db, addp, dbloadp));
+	return ((db->methods->beginload)(db, callbacks));
 }
 
 isc_result_t
-dns_db_endload(dns_db_t *db, dns_dbload_t **dbloadp) {
+dns_db_endload(dns_db_t *db, dns_rdatacallbacks_t *callbacks) {
+	dns_dbonupdatelistener_t *listener;
+
 	/*
 	 * Finish loading 'db'.
 	 */
 
 	REQUIRE(DNS_DB_VALID(db));
-	REQUIRE(dbloadp != NULL && *dbloadp != NULL);
+	REQUIRE(DNS_CALLBACK_VALID(callbacks));
+	REQUIRE(callbacks->add_private != NULL);
 
-	return ((db->methods->endload)(db, dbloadp));
+	for (listener = ISC_LIST_HEAD(db->update_listeners);
+	     listener != NULL;
+	     listener = ISC_LIST_NEXT(listener, link))
+		listener->onupdate(db, listener->onupdate_arg);
+
+	return ((db->methods->endload)(db, callbacks));
 }
 
 isc_result_t
@@ -340,7 +329,8 @@ dns_db_load2(dns_db_t *db, const char *filename, dns_masterformat_t format) {
 
 isc_result_t
 dns_db_load3(dns_db_t *db, const char *filename, dns_masterformat_t format,
-	     unsigned int options) {
+	     unsigned int options)
+{
 	isc_result_t result, eresult;
 	dns_rdatacallbacks_t callbacks;
 
@@ -354,14 +344,13 @@ dns_db_load3(dns_db_t *db, const char *filename, dns_masterformat_t format,
 		options |= DNS_MASTER_AGETTL;
 
 	dns_rdatacallbacks_init(&callbacks);
-
-	result = dns_db_beginload(db, &callbacks.add, &callbacks.add_private);
+	result = dns_db_beginload(db, &callbacks);
 	if (result != ISC_R_SUCCESS)
 		return (result);
 	result = dns_master_loadfile2(filename, &db->origin, &db->origin,
 				      db->rdclass, options,
 				      &callbacks, db->mctx, format);
-	eresult = dns_db_endload(db, &callbacks.add_private);
+	eresult = dns_db_endload(db, &callbacks);
 	/*
 	 * We always call dns_db_endload(), but we only want to return its
 	 * result if dns_master_loadfile() succeeded.  If dns_master_loadfile()
@@ -372,6 +361,14 @@ dns_db_load3(dns_db_t *db, const char *filename, dns_masterformat_t format,
 		result = eresult;
 
 	return (result);
+}
+
+isc_result_t
+dns_db_serialize(dns_db_t *db, dns_dbversion_t *version, FILE *file) {
+	REQUIRE(DNS_DB_VALID(db));
+	if (db->methods->serialize == NULL)
+		return (ISC_R_NOTIMPLEMENTED);
+	return ((db->methods->serialize)(db, version, file));
 }
 
 isc_result_t
@@ -393,7 +390,6 @@ dns_db_dump2(dns_db_t *db, dns_dbversion_t *version, const char *filename,
 
 	return ((db->methods->dump)(db, version, filename, masterformat));
 }
-#endif /* BIND9 */
 
 /***
  *** Version Methods
@@ -449,6 +445,7 @@ void
 dns_db_closeversion(dns_db_t *db, dns_dbversion_t **versionp,
 		    isc_boolean_t commit)
 {
+	dns_dbonupdatelistener_t *listener;
 
 	/*
 	 * Close version '*versionp'.
@@ -459,6 +456,13 @@ dns_db_closeversion(dns_db_t *db, dns_dbversion_t **versionp,
 	REQUIRE(versionp != NULL && *versionp != NULL);
 
 	(db->methods->closeversion)(db, versionp, commit);
+
+	if (commit == ISC_TRUE) {
+		for (listener = ISC_LIST_HEAD(db->update_listeners);
+		     listener != NULL;
+		     listener = ISC_LIST_NEXT(listener, link))
+			listener->onupdate(db, listener->onupdate_arg);
+	}
 
 	ENSURE(*versionp == NULL);
 }
@@ -879,6 +883,16 @@ dns_db_nodecount(dns_db_t *db) {
 	return ((db->methods->nodecount)(db));
 }
 
+size_t
+dns_db_hashsize(dns_db_t *db) {
+	REQUIRE(DNS_DB_VALID(db));
+
+	if (db->methods->hashsize == NULL)
+		return (0);
+
+	return ((db->methods->hashsize)(db));
+}
+
 void
 dns_db_settask(dns_db_t *db, isc_task_t *task) {
 	REQUIRE(DNS_DB_VALID(db));
@@ -966,6 +980,16 @@ dns_db_getrrsetstats(dns_db_t *db) {
 }
 
 isc_result_t
+dns_db_setcachestats(dns_db_t *db, isc_stats_t *stats) {
+	REQUIRE(DNS_DB_VALID(db));
+
+	if (db->methods->setcachestats != NULL)
+		return ((db->methods->setcachestats)(db, stats));
+
+	return (ISC_R_NOTIMPLEMENTED);
+}
+
+isc_result_t
 dns_db_getnsec3parameters(dns_db_t *db, dns_dbversion_t *version,
 			  dns_hash_t *hash, isc_uint8_t *flags,
 			  isc_uint16_t *iterations,
@@ -978,6 +1002,19 @@ dns_db_getnsec3parameters(dns_db_t *db, dns_dbversion_t *version,
 		return ((db->methods->getnsec3parameters)(db, version, hash,
 							  flags, iterations,
 							  salt, salt_length));
+
+	return (ISC_R_NOTFOUND);
+}
+
+isc_result_t
+dns_db_getsize(dns_db_t *db, dns_dbversion_t *version, isc_uint64_t *records,
+	       isc_uint64_t *bytes)
+{
+	REQUIRE(DNS_DB_VALID(db));
+	REQUIRE(dns_db_iszone(db) == ISC_TRUE);
+
+	if (db->methods->getsize != NULL)
+		return ((db->methods->getsize)(db, version, records, bytes));
 
 	return (ISC_R_NOTFOUND);
 }
@@ -1007,21 +1044,86 @@ dns_db_resigned(dns_db_t *db, dns_rdataset_t *rdataset,
 		(db->methods->resigned)(db, rdataset, version);
 }
 
+/*
+ * Attach a database to policy zone databases.
+ * This should only happen when the caller has already ensured that
+ * it is dealing with a database that understands response policy zones.
+ */
+void
+dns_db_rpz_attach(dns_db_t *db, dns_rpz_zones_t *rpzs, dns_rpz_num_t rpz_num) {
+	REQUIRE(db->methods->rpz_attach != NULL);
+	(db->methods->rpz_attach)(db, rpzs, rpz_num);
+}
+
+/*
+ * Finish loading a response policy zone.
+ */
 isc_result_t
-dns_db_rpz_enabled(dns_db_t *db, dns_rpz_st_t *st)
+dns_db_rpz_ready(dns_db_t *db) {
+	if (db->methods->rpz_ready == NULL)
+		return (ISC_R_SUCCESS);
+	return ((db->methods->rpz_ready)(db));
+}
+
+/**
+ * Attach a notify-on-update function the database
+ */
+isc_result_t
+dns_db_updatenotify_register(dns_db_t *db,
+			     dns_dbupdate_callback_t fn,
+			     void *fn_arg)
 {
-	if (db->methods->rpz_enabled != NULL)
-		return ((db->methods->rpz_enabled)(db, st));
+	dns_dbonupdatelistener_t *listener;
+
+	REQUIRE(db != NULL);
+	REQUIRE(fn != NULL);
+
+	listener = isc_mem_get(db->mctx, sizeof(dns_dbonupdatelistener_t));
+	if (listener == NULL)
+		return (ISC_R_NOMEMORY);
+
+	listener->onupdate = fn;
+	listener->onupdate_arg = fn_arg;
+
+	ISC_LINK_INIT(listener, link);
+	ISC_LIST_APPEND(db->update_listeners, listener, link);
+
 	return (ISC_R_SUCCESS);
 }
 
-void
-dns_db_rpz_findips(dns_rpz_zone_t *rpz, dns_rpz_type_t rpz_type,
-		   dns_zone_t *zone, dns_db_t *db, dns_dbversion_t *version,
-		   dns_rdataset_t *ardataset, dns_rpz_st_t *st,
-		   dns_name_t *query_qname)
+isc_result_t
+dns_db_updatenotify_unregister(dns_db_t *db,
+			       dns_dbupdate_callback_t fn,
+			       void *fn_arg)
 {
-	if (db->methods->rpz_findips != NULL)
-		(db->methods->rpz_findips)(rpz, rpz_type, zone, db, version,
-					   ardataset, st, query_qname);
+	dns_dbonupdatelistener_t *listener;
+
+	REQUIRE(db != NULL);
+
+	for (listener = ISC_LIST_HEAD(db->update_listeners);
+	     listener != NULL;
+	     listener = ISC_LIST_NEXT(listener, link))
+	{
+		if ((listener->onupdate == fn) &&
+		    (listener->onupdate_arg == fn_arg))
+		{
+			ISC_LIST_UNLINK(db->update_listeners, listener, link);
+			isc_mem_put(db->mctx, listener,
+				    sizeof(dns_dbonupdatelistener_t));
+			return (ISC_R_SUCCESS);
+		}
+	}
+
+	return (ISC_R_NOTFOUND);
+}
+
+isc_result_t
+dns_db_nodefullname(dns_db_t *db, dns_dbnode_t *node, dns_name_t *name) {
+	REQUIRE(db != NULL);
+	REQUIRE(node != NULL);
+	REQUIRE(name != NULL);
+
+	if (db->methods->nodefullname == NULL)
+		return (ISC_R_NOTIMPLEMENTED);
+	return ((db->methods->nodefullname)(db, node, name));
 }

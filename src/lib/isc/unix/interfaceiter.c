@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2008  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: interfaceiter.c,v 1.45 2008/12/01 03:51:47 marka Exp $ */
 
 /*! \file */
 
@@ -79,14 +72,14 @@ get_addr(unsigned int family, isc_netaddr_t *dst, struct sockaddr *src,
 	dst->family = family;
 	switch (family) {
 	case AF_INET:
-		memcpy(&dst->type.in,
-		       &((struct sockaddr_in *) src)->sin_addr,
-		       sizeof(struct in_addr));
+		memmove(&dst->type.in,
+			&((struct sockaddr_in *) src)->sin_addr,
+			sizeof(struct in_addr));
 		break;
 	case AF_INET6:
 		sa6 = (struct sockaddr_in6 *)src;
-		memcpy(&dst->type.in6, &sa6->sin6_addr,
-		       sizeof(struct in6_addr));
+		memmove(&dst->type.in6, &sa6->sin6_addr,
+			sizeof(struct in6_addr));
 #ifdef ISC_PLATFORM_HAVESCOPEID
 		if (sa6->sin6_scope_id != 0)
 			isc_netaddr_setzone(dst, sa6->sin6_scope_id);
@@ -105,8 +98,8 @@ get_addr(unsigned int family, isc_netaddr_t *dst, struct sockaddr *src,
 			if (IN6_IS_ADDR_LINKLOCAL(&sa6->sin6_addr)) {
 				isc_uint16_t zone16;
 
-				memcpy(&zone16, &sa6->sin6_addr.s6_addr[2],
-				       sizeof(zone16));
+				memmove(&zone16, &sa6->sin6_addr.s6_addr[2],
+					sizeof(zone16));
 				zone16 = ntohs(zone16);
 				if (zone16 != 0) {
 					/* the zone ID is embedded */
@@ -186,7 +179,7 @@ linux_if_inet6_current(isc_interfaceiter_t *iter) {
 	char address[33];
 	char name[IF_NAMESIZE+1];
 	struct in6_addr addr6;
-	int ifindex, prefix, flag3, flag4;
+	unsigned int ifindex, prefix, flag3, flag4;
 	int res;
 	unsigned int i;
 
@@ -238,7 +231,7 @@ linux_if_inet6_current(isc_interfaceiter_t *iter) {
 		}
 	}
 	isc_netaddr_fromin6(&iter->current.netmask, &addr6);
-	strncpy(iter->current.name, name, sizeof(iter->current.name));
+	strlcpy(iter->current.name, name, sizeof(iter->current.name));
 	return (ISC_R_SUCCESS);
 }
 #endif
@@ -252,7 +245,7 @@ isc_interfaceiter_current(isc_interfaceiter_t *iter,
 			  isc_interface_t *ifdata)
 {
 	REQUIRE(iter->result == ISC_R_SUCCESS);
-	memcpy(ifdata, &iter->current, sizeof(*ifdata));
+	memmove(ifdata, &iter->current, sizeof(*ifdata));
 	return (ISC_R_SUCCESS);
 }
 

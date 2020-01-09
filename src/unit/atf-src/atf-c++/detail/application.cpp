@@ -1,7 +1,4 @@
-//
-// Automated Testing Framework (atf)
-//
-// Copyright (c) 2007, 2008, 2010 The NetBSD Foundation, Inc.
+// Copyright (c) 2007 The NetBSD Foundation, Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -25,10 +22,11 @@
 // IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 // IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+
+#include "atf-c++/detail/application.hpp"
 
 #if defined(HAVE_CONFIG_H)
-#include "bconfig.h"
+#include "config.h"
 #endif
 
 extern "C" {
@@ -41,9 +39,11 @@ extern "C" {
 #include <cstring>
 #include <iostream>
 
-#include "application.hpp"
-#include "sanity.hpp"
-#include "ui.hpp"
+extern "C" {
+#include "atf-c/defs.h"
+}
+
+#include "atf-c++/detail/sanity.hpp"
 
 #if !defined(HAVE_VSNPRINTF_IN_STD)
 namespace std {
@@ -102,17 +102,12 @@ impl::option::operator<(const impl::option& o)
 }
 
 impl::app::app(const std::string& description,
-               const std::string& manpage,
-               const std::string& global_manpage,
-               const bool use_ui) :
-    m_hflag(false),
+               const std::string& manpage) :
     m_argc(-1),
     m_argv(NULL),
     m_prog_name(NULL),
     m_description(description),
-    m_manpage(manpage),
-    m_global_manpage(global_manpage),
-    m_use_ui(use_ui)
+    m_manpage(manpage)
 {
 }
 
@@ -129,11 +124,7 @@ impl::app::inited(void)
 impl::app::options_set
 impl::app::options(void)
 {
-    options_set opts = specific_options();
-    if (m_use_ui) {
-        opts.insert(option('h', "", "Shows this help message"));
-    }
-    return opts;
+    return specific_options();
 }
 
 std::string
@@ -151,7 +142,8 @@ impl::app::specific_options(void)
 }
 
 void
-impl::app::process_option(int ch, const char* arg)
+impl::app::process_option(int ch ATF_DEFS_ATTRIBUTE_UNUSED,
+                          const char* arg ATF_DEFS_ATTRIBUTE_UNUSED)
 {
 }
 
@@ -178,14 +170,10 @@ impl::app::process_options(void)
     }
 
     int ch;
+    const int old_opterr = ::opterr;
     ::opterr = 0;
     while ((ch = ::getopt(m_argc, m_argv, optstr.c_str())) != -1) {
         switch (ch) {
-            case 'h':
-                INV(m_use_ui);
-                m_hflag = true;
-                break;
-
             case ':':
                 throw usage_error("Option -%c requires an argument.",
                                   ::optopt);
@@ -201,55 +189,11 @@ impl::app::process_options(void)
     m_argv += ::optind;
 
     // Clear getopt state just in case the test wants to use it.
+    opterr = old_opterr;
     optind = 1;
 #if defined(HAVE_OPTRESET)
     optreset = 1;
 #endif
-}
-
-void
-impl::app::usage(std::ostream& os)
-{
-    PRE(inited());
-
-    std::string args = specific_args();
-    if (!args.empty())
-        args = " " + args;
-    os << ui::format_text_with_tag(std::string(m_prog_name) + " [options]" +
-                                   args, "Usage: ", false) << "\n\n"
-       << ui::format_text(m_description) << "\n\n";
-
-    options_set opts = options();
-    INV(!opts.empty());
-    os << "Available options:\n";
-    size_t coldesc = 0;
-    for (options_set::const_iterator iter = opts.begin();
-         iter != opts.end(); iter++) {
-        const option& opt = (*iter);
-
-        if (opt.m_argument.length() + 1 > coldesc)
-            coldesc = opt.m_argument.length() + 1;
-    }
-    for (options_set::const_iterator iter = opts.begin();
-         iter != opts.end(); iter++) {
-        const option& opt = (*iter);
-
-        std::string tag = std::string("    -") + opt.m_character;
-        if (opt.m_argument.empty())
-            tag += "    ";
-        else
-            tag += " " + opt.m_argument + "    ";
-        os << ui::format_text_with_tag(opt.m_description, tag, false,
-                                       coldesc + 10) << "\n";
-    }
-    os << "\n";
-
-    std::string gmp;
-    if (!m_global_manpage.empty())
-        gmp = " and " + m_global_manpage;
-    os << ui::format_text("For more details please see " + m_manpage +
-                          gmp + ".")
-       << "\n";
 }
 
 int
@@ -283,55 +227,22 @@ impl::app::run(int argc, char* const* argv)
 
     int errcode;
     try {
-        int oldargc = m_argc;
-
         process_options();
-
-        if (m_hflag) {
-            INV(m_use_ui);
-            if (oldargc != 2)
-                throw usage_error("-h must be given alone.");
-
-            usage(std::cout);
-            errcode = EXIT_SUCCESS;
-        } else
-            errcode = main();
+        errcode = main();
     } catch (const usage_error& e) {
-        if (m_use_ui) {
-            std::cerr << ui::format_error(m_prog_name, e.what()) << "\n"
-                      << ui::format_info(m_prog_name, std::string("Type `") +
-                                         m_prog_name + " -h' for more details.")
-                      << "\n";
-        } else {
-            std::cerr << m_prog_name << ": ERROR: " << e.what() << "\n";
-            std::cerr << m_prog_name << ": See " << m_manpage << " for usage "
-                "details.\n";
-        }
+        std::cerr << m_prog_name << ": ERROR: " << e.what() << "\n";
+        std::cerr << m_prog_name << ": See " << m_manpage << " for usage "
+            "details.\n";
         errcode = EXIT_FAILURE;
     } catch (const std::runtime_error& e) {
-        if (m_use_ui) {
-            std::cerr << ui::format_error(m_prog_name, std::string(e.what()))
-                      << "\n";
-        } else {
-            std::cerr << m_prog_name << ": ERROR: " << e.what() << "\n";
-        }
+        std::cerr << m_prog_name << ": ERROR: " << e.what() << "\n";
         errcode = EXIT_FAILURE;
     } catch (const std::exception& e) {
-        if (m_use_ui) {
-            std::cerr << ui::format_error(m_prog_name, std::string("Caught "
-                "unexpected error: ") + e.what() + "\n" + bug) << "\n";
-        } else {
-            std::cerr << m_prog_name << ": ERROR: Caught unexpected error: "
-                      << e.what() << "\n";
-        }
+        std::cerr << m_prog_name << ": ERROR: Caught unexpected error: "
+                  << e.what() << "\n";
         errcode = EXIT_FAILURE;
     } catch (...) {
-        if (m_use_ui) {
-            std::cerr << ui::format_error(m_prog_name, std::string("Caught "
-                "unknown error\n") + bug) << "\n";
-        } else {
-            std::cerr << m_prog_name << ": ERROR: Caught unknown error\n";
-        }
+        std::cerr << m_prog_name << ": ERROR: Caught unknown error\n";
         errcode = EXIT_FAILURE;
     }
     return errcode;

@@ -1,0 +1,70 @@
+From 8963e300f7e465b3c96e859ba81e128fa508cefd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20Men=C5=A1=C3=ADk?= <pemensik@redhat.com>
+Date: Mon, 21 Jan 2019 19:15:40 +0100
+Subject: [PATCH 1/5] Turn off sending cookies by default
+
+Upstream has default sending cookies on by default. For compatiblity
+with bind 9.9.4, require inclusion of send-cookie in configuration or
+dig +cookie parameter to send cookie. Would not send EDNS extension in
+non-DNSSEC query by default.
+---
+ bin/dig/dig.c       | 4 ++--
+ bin/dig/dig.docbook | 4 ++--
+ bin/named/config.c  | 2 +-
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/bin/dig/dig.c b/bin/dig/dig.c
+index c577e31..8b23676 100644
+--- a/bin/dig/dig.c
++++ b/bin/dig/dig.c
+@@ -1429,7 +1429,7 @@ plus_option(const char *option, isc_boolean_t is_batchfile,
+ 					lookup->section_authority = ISC_TRUE;
+ 					lookup->section_question = ISC_FALSE;
+ 					lookup->dnssec = ISC_TRUE;
+-					lookup->sendcookie = ISC_TRUE;
++					lookup->sendcookie = ISC_FALSE;
+ 					usesearch = ISC_FALSE;
+ 				}
+ 				break;
+@@ -1883,7 +1883,7 @@ parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
+ 		default_lookup = make_empty_lookup();
+ 		default_lookup->adflag = ISC_TRUE;
+ 		default_lookup->edns = 0;
+-		default_lookup->sendcookie = ISC_TRUE;
++		default_lookup->sendcookie = ISC_FALSE;
+ 
+ #ifndef NOPOSIX
+ 		/*
+diff --git a/bin/dig/dig.docbook b/bin/dig/dig.docbook
+index d5dba72..575a308 100644
+--- a/bin/dig/dig.docbook
++++ b/bin/dig/dig.docbook
+@@ -617,10 +617,10 @@
+ 	      Send a COOKIE EDNS option, with optional
+ 	      value.  Replaying a COOKIE from a previous response will
+ 	      allow the server to identify a previous client.  The
+-	      default is <option>+cookie</option>.
++	      default is <option>+nocookie</option>.
+ 	    </para>
+ 	    <para>
+-	      <command>+cookie</command> is also set when +trace
++	      <command>+nocookie</command> is also set when +trace
+ 	      is set to better emulate the default queries from a
+ 	      nameserver.
+ 	    </para>
+diff --git a/bin/named/config.c b/bin/named/config.c
+index c50f759..7d97029 100644
+--- a/bin/named/config.c
++++ b/bin/named/config.c
+@@ -102,7 +102,7 @@ options {\n\
+ 	resolver-query-timeout 10;\n\
+ 	rrset-order { order random; };\n\
+ 	secroots-file \"named.secroots\";\n\
+-	send-cookie true;\n\
++	send-cookie false;\n\
+ #	serial-queries <obsolete>;\n\
+ 	serial-query-rate 20;\n\
+ 	server-id none;\n\
+-- 
+2.20.1
+

@@ -1,26 +1,16 @@
 #!/bin/sh -e
 #
-# Copyright (C) 2004, 2006-2012  Internet Systems Consortium, Inc. ("ISC")
-# Copyright (C) 2000-2003  Internet Software Consortium.
+# Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
-# Permission to use, copy, modify, and/or distribute this software for any
-# purpose with or without fee is hereby granted, provided that the above
-# copyright notice and this permission notice appear in all copies.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
-# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-# AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
-# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
-# OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-# PERFORMANCE OF THIS SOFTWARE.
-
-# $Id: sign.sh,v 1.50 2011/11/04 05:36:28 each Exp $
+# See the COPYRIGHT file distributed with this work for additional
+# information regarding copyright ownership.
 
 SYSTEMTESTTOP=../..
 . $SYSTEMTESTTOP/conf.sh
-
-RANDFILE=../random.data
 
 zone=example.
 infile=example.db.in
@@ -28,15 +18,15 @@ zonefile=example.db
 
 # Have the child generate a zone key and pass it to us.
 
-( cd ../ns3 && sh sign.sh )
+( cd ../ns3 && $SHELL sign.sh )
 
-for subdomain in secure bogus dynamic keyless nsec3 optout nsec3-unknown \
-    optout-unknown multiple rsasha256 rsasha512 kskonly update-nsec3 \
-    auto-nsec auto-nsec3 secure.below-cname ttlpatch split-dnssec \
-    split-smart expired expiring upper lower
-
+for subdomain in secure badds bogus dynamic keyless nsec3 optout \
+	nsec3-unknown optout-unknown multiple rsasha256 rsasha512 \
+	kskonly update-nsec3 auto-nsec auto-nsec3 secure.below-cname \
+	ttlpatch split-dnssec split-smart expired expiring upper lower \
+	dnskey-unknown dnskey-nsec3-unknown managed-future revkey
 do
-	cp ../ns3/dsset-$subdomain.example. .
+	cp ../ns3/dsset-$subdomain.example$TP .
 done
 
 keyname1=`$KEYGEN -q -r $RANDFILE -a DSA -b 768 -n zone $zone`
@@ -92,6 +82,18 @@ tolower($1) == "bad-dname.example." && $4 == "RRSIG" && $5 == "DNAME" {
 
 { print; }' > $zonefile.signed++ && mv $zonefile.signed++ $zonefile.signed
 
+#
+# signed in-addr.arpa w/ a delegation for 10.in-addr.arpa which is unsigned.
+#
+zone=in-addr.arpa.
+infile=in-addr.arpa.db.in
+zonefile=in-addr.arpa.db
+
+keyname1=`$KEYGEN -q -r $RANDFILE -a DSA -b 768 -n zone $zone`
+keyname2=`$KEYGEN -q -r $RANDFILE -a DSA -b 768 -n zone $zone`
+
+cat $infile $keyname1.key $keyname2.key >$zonefile
+$SIGNER -P -g -r $RANDFILE -o $zone -k $keyname1 $zonefile $keyname2 > /dev/null
 
 # Sign the privately secure file
 
@@ -111,10 +113,11 @@ $SIGNER -P -g -r $RANDFILE -o $privzone -l dlv $privzonefile > /dev/null
 dlvzone=dlv.
 dlvinfile=dlv.db.in
 dlvzonefile=dlv.db
+dlvsetfile=dlvset-`echo $privzone |sed -e "s/\.$//g"`$TP
 
 dlvkeyname=`$KEYGEN -q -r $RANDFILE -a RSAMD5 -b 768 -n zone $dlvzone`
 
-cat $dlvinfile $dlvkeyname.key dlvset-$privzone > $dlvzonefile
+cat $dlvinfile $dlvkeyname.key $dlvsetfile > $dlvzonefile
 
 $SIGNER -P -g -r $RANDFILE -o $dlvzone $dlvzonefile > /dev/null
 
@@ -184,3 +187,53 @@ key1=`$KEYGEN -q -r $RANDFILE -a RSASHA256 -b 1024 -n zone -fk $zone`
 key2=`$KEYGEN -q -r $RANDFILE -a RSASHA256 -b 1024 -n zone $zone`
 cat $key1.key $key2.key >> $zonefile
 $SIGNER -P -3 - -A -H 1 -g -r $RANDFILE -o $zone -k $key1 $zonefile $key2 > /dev/null
+
+zone=cds.secure
+infile=cds.secure.db.in
+zonefile=cds.secure.db
+key1=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone -fk $zone`
+key2=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone $zone`
+$DSFROMKEY -C $key1.key > $key1.cds
+cat $infile $key1.key $key2.key $key1.cds >$zonefile
+$SIGNER -P -g -r $RANDFILE -o $zone $zonefile > /dev/null
+
+zone=cds-update.secure
+infile=cds-update.secure.db.in
+zonefile=cds-update.secure.db
+key1=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone -fk $zone`
+key2=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone $zone`
+cat $infile $key1.key $key2.key > $zonefile
+$SIGNER -P -g -r $RANDFILE -o $zone $zonefile > /dev/null
+
+zone=cds-auto.secure
+infile=cds-auto.secure.db.in
+zonefile=cds-auto.secure.db
+key1=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone -fk $zone`
+key2=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone $zone`
+$DSFROMKEY -C $key1.key > $key1.cds
+cat $infile $key1.cds > $zonefile.signed
+
+zone=cdnskey.secure
+infile=cdnskey.secure.db.in
+zonefile=cdnskey.secure.db
+key1=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone -fk $zone`
+key2=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone $zone`
+sed 's/DNSKEY/CDNSKEY/' $key1.key > $key1.cds
+cat $infile $key1.key $key2.key $key1.cds >$zonefile
+$SIGNER -P -g -r $RANDFILE -o $zone $zonefile > /dev/null
+
+zone=cdnskey-update.secure
+infile=cdnskey-update.secure.db.in
+zonefile=cdnskey-update.secure.db
+key1=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone -fk $zone`
+key2=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone $zone`
+cat $infile $key1.key $key2.key > $zonefile
+$SIGNER -P -g -r $RANDFILE -o $zone $zonefile > /dev/null
+
+zone=cdnskey-auto.secure
+infile=cdnskey-auto.secure.db.in
+zonefile=cdnskey-auto.secure.db
+key1=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone -fk $zone`
+key2=`$KEYGEN -q -r $RANDFILE -a RSASHA1 -b 1024 -n zone $zone`
+sed 's/DNSKEY/CDNSKEY/' $key1.key > $key1.cds
+cat $infile $key1.cds > $zonefile.signed

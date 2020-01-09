@@ -1,7 +1,4 @@
-#
-# Automated Testing Framework (atf)
-#
-# Copyright (c) 2007, 2008, 2009, 2010 The NetBSD Foundation, Inc.
+# Copyright (c) 2007 The NetBSD Foundation, Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -25,15 +22,14 @@
 # IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
 
 check_PROGRAMS = bootstrap/h_app_empty
 bootstrap_h_app_empty_SOURCES = bootstrap/h_app_empty.cpp
-bootstrap_h_app_empty_LDADD = libatf-c++.la
+bootstrap_h_app_empty_LDADD = tools/libtools.a $(ATF_CXX_LIBS)
 
 check_PROGRAMS += bootstrap/h_app_opts_args
 bootstrap_h_app_opts_args_SOURCES = bootstrap/h_app_opts_args.cpp
-bootstrap_h_app_opts_args_LDADD = libatf-c++.la
+bootstrap_h_app_opts_args_LDADD = tools/libtools.a $(ATF_CXX_LIBS)
 
 check_PROGRAMS += bootstrap/h_tp_basic_c
 bootstrap_h_tp_basic_c_SOURCES = bootstrap/h_tp_basic_c.c
@@ -41,36 +37,32 @@ bootstrap_h_tp_basic_c_LDADD = libatf-c.la
 
 check_PROGRAMS += bootstrap/h_tp_basic_cpp
 bootstrap_h_tp_basic_cpp_SOURCES = bootstrap/h_tp_basic_cpp.cpp
-bootstrap_h_tp_basic_cpp_LDADD = libatf-c++.la
+bootstrap_h_tp_basic_cpp_LDADD = $(ATF_CXX_LIBS)
 
 check_SCRIPTS = bootstrap/h_tp_basic_sh
 CLEANFILES += bootstrap/h_tp_basic_sh
 EXTRA_DIST += bootstrap/h_tp_basic_sh.sh
 bootstrap/h_tp_basic_sh: $(srcdir)/bootstrap/h_tp_basic_sh.sh
-	test -d bootstrap || mkdir -p bootstrap
-	@src=$(srcdir)/bootstrap/h_tp_basic_sh.sh; dst=$@; $(BUILD_SH_TP)
+	$(AM_V_GEN)src=$(srcdir)/bootstrap/h_tp_basic_sh.sh; dst=$@; $(BUILD_SH_TP)
 
 check_SCRIPTS += bootstrap/h_tp_atf_check_sh
 CLEANFILES += bootstrap/h_tp_atf_check_sh
 EXTRA_DIST += bootstrap/h_tp_atf_check_sh.sh
 bootstrap/h_tp_atf_check_sh: \
 		$(srcdir)/bootstrap/h_tp_atf_check_sh.sh
-	test -d bootstrap || mkdir -p bootstrap
-	@src=$(srcdir)/bootstrap/h_tp_atf_check_sh.sh; dst=$@; $(BUILD_SH_TP)
+	$(AM_V_GEN)src=$(srcdir)/bootstrap/h_tp_atf_check_sh.sh; dst=$@; $(BUILD_SH_TP)
 
 check_SCRIPTS += bootstrap/h_tp_fail
 CLEANFILES += bootstrap/h_tp_fail
 EXTRA_DIST += bootstrap/h_tp_fail.sh
 bootstrap/h_tp_fail: $(srcdir)/bootstrap/h_tp_fail.sh
-	test -d bootstrap || mkdir -p bootstrap
-	@src=$(srcdir)/bootstrap/h_tp_fail.sh; dst=$@; $(BUILD_SH_TP)
+	$(AM_V_GEN)src=$(srcdir)/bootstrap/h_tp_fail.sh; dst=$@; $(BUILD_SH_TP)
 
 check_SCRIPTS += bootstrap/h_tp_pass
 CLEANFILES += bootstrap/h_tp_pass
 EXTRA_DIST += bootstrap/h_tp_pass.sh
 bootstrap/h_tp_pass: $(srcdir)/bootstrap/h_tp_pass.sh
-	test -d bootstrap || mkdir -p bootstrap
-	@src=$(srcdir)/bootstrap/h_tp_pass.sh; dst=$@; $(BUILD_SH_TP)
+	$(AM_V_GEN)src=$(srcdir)/bootstrap/h_tp_pass.sh; dst=$@; $(BUILD_SH_TP)
 
 DISTCLEANFILES = \
 		bootstrap/atconfig \
@@ -103,6 +95,7 @@ testsuite_incs=	$(srcdir)/bootstrap/t_application_help.at \
 	echo 'm4_define(AT_PACKAGE_VERSION,   @PACKAGE_VERSION@)'; \
 	echo 'm4_define(AT_PACKAGE_STRING,    @PACKAGE_STRING@)'; \
 	echo 'm4_define(AT_PACKAGE_BUGREPORT, @PACKAGE_BUGREPORT@)'; \
+	echo 'm4_define(ENABLE_TOOLS,         @ENABLE_TOOLS@)'; \
 	} >$(srcdir)/bootstrap/package.m4
 
 @target_srcdir@bootstrap/testsuite: $(srcdir)/bootstrap/testsuite.at \
@@ -113,8 +106,8 @@ testsuite_incs=	$(srcdir)/bootstrap/t_application_help.at \
 	    $(srcdir)/bootstrap/testsuite.at -o $@.tmp
 	mv $@.tmp $@
 
-installcheck-local: installcheck-bootstrap
-.PHONY: installcheck-bootstrap
+INSTALLCHECK_TARGETS += installcheck-bootstrap
+PHONY_TARGETS += installcheck-bootstrap
 installcheck-bootstrap: @target_srcdir@bootstrap/testsuite check
 	$(TESTS_ENVIRONMENT) $(srcdir)/bootstrap/testsuite
 

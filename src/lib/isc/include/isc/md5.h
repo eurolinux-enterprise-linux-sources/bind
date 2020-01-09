@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007, 2009, 2010  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000, 2001  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: md5.h,v 1.20 2010/01/07 23:48:54 tbox Exp $ */
 
 /*! \file isc/md5.h
  * \brief This is the header file for the MD5 message-digest algorithm.
@@ -43,6 +36,10 @@
 #ifndef ISC_MD5_H
 #define ISC_MD5_H 1
 
+#include <pk11/site.h>
+
+#ifndef PK11_MD5_DISABLE
+
 #include <isc/lang.h>
 #include <isc/platform.h>
 #include <isc/types.h>
@@ -51,9 +48,20 @@
 #define ISC_MD5_BLOCK_LENGTH 64U
 
 #ifdef ISC_PLATFORM_OPENSSLHASH
+#include <openssl/opensslv.h>
 #include <openssl/evp.h>
 
-typedef EVP_MD_CTX isc_md5_t;
+typedef struct {
+	EVP_MD_CTX *ctx;
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+	EVP_MD_CTX _ctx;
+#endif
+} isc_md5_t;
+
+#elif PKCS11CRYPTO
+#include <pk11/pk11.h>
+
+typedef pk11_context_t isc_md5_t;
 
 #else
 
@@ -78,6 +86,11 @@ isc_md5_update(isc_md5_t *ctx, const unsigned char *buf, unsigned int len);
 void
 isc_md5_final(isc_md5_t *ctx, unsigned char *digest);
 
+isc_boolean_t
+isc_md5_check(isc_boolean_t testing);
+
 ISC_LANG_ENDDECLS
+
+#endif /* !PK11_MD5_DISABLE */
 
 #endif /* ISC_MD5_H */

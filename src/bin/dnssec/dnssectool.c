@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009-2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000, 2001, 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: dnssectool.c,v 1.63 2011/10/21 03:55:33 marka Exp $ */
 
 /*! \file */
 
@@ -27,17 +19,23 @@
 
 #include <stdlib.h>
 
+#ifdef _WIN32
+#include <Winsock2.h>
+#endif
+
 #include <isc/base32.h>
 #include <isc/buffer.h>
+#include <isc/commandline.h>
 #include <isc/dir.h>
 #include <isc/entropy.h>
+#include <isc/file.h>
 #include <isc/heap.h>
 #include <isc/list.h>
 #include <isc/mem.h>
+#include <isc/print.h>
 #include <isc/string.h>
 #include <isc/time.h>
 #include <isc/util.h>
-#include <isc/print.h>
 
 #include <dns/db.h>
 #include <dns/dbiterator.h>
@@ -122,6 +120,12 @@ vbprintf(int level, const char *fmt, ...) {
 }
 
 void
+version(const char *name) {
+	fprintf(stderr, "%s %s\n", name, VERSION);
+	exit(0);
+}
+
+void
 type_format(const dns_rdatatype_t type, char *cp, unsigned int size) {
 	isc_buffer_t b;
 	isc_region_t r;
@@ -145,7 +149,7 @@ sig_format(dns_rdata_rrsig_t *sig, char *cp, unsigned int size) {
 }
 
 void
-setup_logging(int verbose, isc_mem_t *mctx, isc_log_t **logp) {
+setup_logging(isc_mem_t *mctx, isc_log_t **logp) {
 	isc_result_t result;
 	isc_logdestination_t destination;
 	isc_logconfig_t *logconfig = NULL;
@@ -207,12 +211,14 @@ cleanup_logging(isc_log_t **logp) {
 	REQUIRE(logp != NULL);
 
 	log = *logp;
+	*logp = NULL;
+
 	if (log == NULL)
 		return;
+
 	isc_log_destroy(&log);
 	isc_log_setcontext(NULL);
 	dns_log_setcontext(NULL);
-	logp = NULL;
 }
 
 void
@@ -300,11 +306,20 @@ time_units(isc_stdtime_t offset, char *suffix, const char *str) {
 	return(0); /* silence compiler warning */
 }
 
+static inline isc_boolean_t
+isnone(const char *str) {
+	return (ISC_TF((strcasecmp(str, "none") == 0) ||
+		       (strcasecmp(str, "never") == 0)));
+}
+
 dns_ttl_t
 strtottl(const char *str) {
 	const char *orig = str;
 	dns_ttl_t ttl;
 	char *endp;
+
+	if (isnone(str))
+		return ((dns_ttl_t) 0);
 
 	ttl = strtol(str, &endp, 0);
 	if (ttl == 0 && endp == str)
@@ -314,12 +329,23 @@ strtottl(const char *str) {
 }
 
 isc_stdtime_t
-strtotime(const char *str, isc_int64_t now, isc_int64_t base) {
+strtotime(const char *str, isc_int64_t now, isc_int64_t base,
+	  isc_boolean_t *setp)
+{
 	isc_int64_t val, offset;
 	isc_result_t result;
 	const char *orig = str;
 	char *endp;
-	int n;
+	size_t n;
+
+	if (isnone(str)) {
+		if (setp != NULL)
+			*setp = ISC_FALSE;
+		return ((isc_stdtime_t) 0);
+	}
+
+	if (setp != NULL)
+		*setp = ISC_TRUE;
 
 	if ((str[0] == '0' || str[0] == '-') && str[1] == '\0')
 		return ((isc_stdtime_t) 0);
@@ -332,14 +358,14 @@ strtotime(const char *str, isc_int64_t now, isc_int64_t base) {
 	 *   [+-]offset
 	 */
 	n = strspn(str, "0123456789");
-	if ((n == 8 || n == 14) &&
+	if ((n == 8u || n == 14u) &&
 	    (str[n] == '\0' || str[n] == '-' || str[n] == '+'))
 	{
 		char timestr[15];
 
 		strlcpy(timestr, str, sizeof(timestr));
 		timestr[n] = 0;
-		if (n == 8)
+		if (n == 8u)
 			strlcat(timestr, "000000", sizeof(timestr));
 		result = dns_time64_fromtext(timestr, &val);
 		if (result != ISC_R_SUCCESS)
@@ -448,6 +474,8 @@ key_collision(dst_key_t *dstkey, dns_name_t *name, const char *dir,
 	isc_uint16_t id, oldid;
 	isc_uint32_t rid, roldid;
 	dns_secalg_t alg;
+	char filename[ISC_DIR_NAMEMAX];
+	isc_buffer_t fileb;
 
 	if (exact != NULL)
 		*exact = ISC_FALSE;
@@ -455,6 +483,28 @@ key_collision(dst_key_t *dstkey, dns_name_t *name, const char *dir,
 	id = dst_key_id(dstkey);
 	rid = dst_key_rid(dstkey);
 	alg = dst_key_alg(dstkey);
+
+	/*
+	 * For HMAC and Diffie Hellman just check if there is a
+	 * direct collision as they can't be revoked.  Additionally
+	 * dns_dnssec_findmatchingkeys only handles DNSKEY which is
+	 * not used for HMAC.
+	 */
+	switch (alg) {
+	case DST_ALG_HMACMD5:
+	case DST_ALG_HMACSHA1:
+	case DST_ALG_HMACSHA224:
+	case DST_ALG_HMACSHA256:
+	case DST_ALG_HMACSHA384:
+	case DST_ALG_HMACSHA512:
+	case DST_ALG_DH:
+		isc_buffer_init(&fileb, filename, sizeof(filename));
+		result = dst_key_buildfilename(dstkey, DST_TYPE_PRIVATE,
+					       dir, &fileb);
+		if (result != ISC_R_SUCCESS)
+			return (ISC_TRUE);
+		return (isc_file_exists(filename));
+	}
 
 	ISC_LIST_INIT(matchkeys);
 	result = dns_dnssec_findmatchingkeys(name, dir, mctx, &matchkeys);
@@ -517,6 +567,21 @@ is_delegation(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *origin,
 		if (ttlp != NULL)
 			*ttlp = nsset.ttl;
 		dns_rdataset_disassociate(&nsset);
+	}
+
+	return (ISC_TF(result == ISC_R_SUCCESS));
+}
+
+isc_boolean_t
+has_dname(dns_db_t *db, dns_dbversion_t *ver, dns_dbnode_t *node) {
+	dns_rdataset_t dnameset;
+	isc_result_t result;
+
+	dns_rdataset_init(&dnameset);
+	result = dns_db_findrdataset(db, node, ver, dns_rdatatype_dname, 0, 0,
+				     &dnameset, NULL);
+	if (dns_rdataset_isassociated(&dnameset)) {
+		dns_rdataset_disassociate(&dnameset);
 	}
 
 	return (ISC_TF(result == ISC_R_SUCCESS));
@@ -725,11 +790,11 @@ record_nsec3(const unsigned char *rawhash, const dns_rdata_nsec3_t *nsec3,
 	element->next_length = nsec3->next_length;
 	element->iterations = nsec3->iterations;
 	cp = (unsigned char *)(element + 1);
-	memcpy(cp, nsec3->salt, nsec3->salt_length);
+	memmove(cp, nsec3->salt, nsec3->salt_length);
 	cp += nsec3->salt_length;
-	memcpy(cp, rawhash, nsec3->next_length);
+	memmove(cp, rawhash, nsec3->next_length);
 	cp += nsec3->next_length;
-	memcpy(cp, nsec3->next, nsec3->next_length);
+	memmove(cp, nsec3->next, nsec3->next_length);
 	result = isc_heap_insert(chains, element);
 	if (result != ISC_R_SUCCESS) {
 		fprintf(stderr, "isc_heap_insert failed: %s\n",
@@ -1642,10 +1707,8 @@ verifyzone(dns_db_t *db, dns_dbversion_t *ver,
 	 * present in the DNSKEY RRSET.
 	 */
 
-	dns_fixedname_init(&fname);
-	name = dns_fixedname_name(&fname);
-	dns_fixedname_init(&fnextname);
-	nextname = dns_fixedname_name(&fnextname);
+	name = dns_fixedname_initname(&fname);
+	nextname = dns_fixedname_initname(&fnextname);
 	dns_fixedname_init(&fprevname);
 	prevname = NULL;
 	dns_fixedname_init(&fzonecut);
@@ -1676,6 +1739,9 @@ verifyzone(dns_db_t *db, dns_dbversion_t *ver,
 			zonecut = dns_fixedname_name(&fzonecut);
 			dns_name_copy(name, zonecut, NULL);
 			isdelegation = ISC_TRUE;
+		} else if (has_dname(db, ver, node)) {
+			zonecut = dns_fixedname_name(&fzonecut);
+			dns_name_copy(name, zonecut, NULL);
 		}
 		nextnode = NULL;
 		result = dns_dbiterator_next(dbiter);
@@ -1790,7 +1856,7 @@ verifyzone(dns_db_t *db, dns_dbversion_t *ver,
 		for (i = 0; i < 256; i++) {
 			if ((ksk_algorithms[i] != 0) ||
 			    (standby_ksk[i] != 0) ||
-			    (revoked_zsk[i] != 0) ||
+			    (revoked_ksk[i] != 0) ||
 			    (zsk_algorithms[i] != 0) ||
 			    (standby_zsk[i] != 0) ||
 			    (revoked_zsk[i] != 0)) {
@@ -1810,3 +1876,42 @@ verifyzone(dns_db_t *db, dns_dbversion_t *ver,
 		}
 	}
 }
+
+isc_boolean_t
+isoptarg(const char *arg, char **argv, void(*usage)(void)) {
+	if (!strcasecmp(isc_commandline_argument, arg)) {
+		if (argv[isc_commandline_index] == NULL) {
+			fprintf(stderr, "%s: missing argument -%c %s\n",
+				program, isc_commandline_option,
+				isc_commandline_argument);
+			usage();
+		}
+		isc_commandline_argument = argv[isc_commandline_index];
+		/* skip to next arguement */
+		isc_commandline_index++;
+		return (ISC_TRUE);
+	}
+	return (ISC_FALSE);
+}
+
+#ifdef _WIN32
+void
+InitSockets(void) {
+	WORD wVersionRequested;
+	WSADATA wsaData;
+	int err;
+
+	wVersionRequested = MAKEWORD(2, 0);
+
+	err = WSAStartup( wVersionRequested, &wsaData );
+	if (err != 0) {
+		fprintf(stderr, "WSAStartup() failed: %d\n", err);
+		exit(1);
+	}
+}
+
+void
+DestroySockets(void) {
+	WSACleanup();
+}
+#endif

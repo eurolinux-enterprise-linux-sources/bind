@@ -1,7 +1,4 @@
-//
-// Automated Testing Framework (atf)
-//
-// Copyright (c) 2007, 2008, 2009 The NetBSD Foundation, Inc.
+// Copyright (c) 2007 The NetBSD Foundation, Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -25,7 +22,8 @@
 // IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 // IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+
+#include "atf-c++/check.hpp"
 
 #include <cstring>
 
@@ -34,11 +32,9 @@ extern "C" {
 #include "atf-c/error.h"
 }
 
-#include "check.hpp"
-
-#include "detail/exceptions.hpp"
-#include "detail/process.hpp"
-#include "detail/sanity.hpp"
+#include "atf-c++/detail/exceptions.hpp"
+#include "atf-c++/detail/process.hpp"
+#include "atf-c++/detail/sanity.hpp"
 
 namespace impl = atf::check;
 #define IMPL_NAME "atf::check"

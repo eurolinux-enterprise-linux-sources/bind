@@ -1,20 +1,14 @@
 /*
- * Copyright (C) 2011-2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 #include <config.h>
 
@@ -161,7 +155,9 @@ dlopen_dlz_authority(const char *zone, void *driverarg, void *dbdata,
 }
 
 static isc_result_t
-dlopen_dlz_findzonedb(void *driverarg, void *dbdata, const char *name)
+dlopen_dlz_findzonedb(void *driverarg, void *dbdata, const char *name,
+		      dns_clientinfomethods_t *methods,
+		      dns_clientinfo_t *clientinfo)
 {
 	dlopen_data_t *cd = (dlopen_data_t *) dbdata;
 	isc_result_t result;
@@ -169,7 +165,7 @@ dlopen_dlz_findzonedb(void *driverarg, void *dbdata, const char *name)
 	UNUSED(driverarg);
 
 	MAYBE_LOCK(cd);
-	result = cd->dlz_findzonedb(cd->dbdata, name);
+	result = cd->dlz_findzonedb(cd->dbdata, name, methods, clientinfo);
 	MAYBE_UNLOCK(cd);
 	return (result);
 }
@@ -243,11 +239,13 @@ dlopen_dlz_create(const char *dlzname, unsigned int argc, char *argv[],
 
 	cd->dl_path = isc_mem_strdup(cd->mctx, argv[1]);
 	if (cd->dl_path == NULL) {
+		result = ISC_R_NOMEMORY;
 		goto failed;
 	}
 
 	cd->dlzname = isc_mem_strdup(cd->mctx, dlzname);
 	if (cd->dlzname == NULL) {
+		result = ISC_R_NOMEMORY;
 		goto failed;
 	}
 
@@ -277,6 +275,7 @@ dlopen_dlz_create(const char *dlzname, unsigned int argc, char *argv[],
 		dlopen_log(ISC_LOG_ERROR,
 			   "dlz_dlopen failed to open library '%s' - %s",
 			   cd->dl_path, dlerror());
+		result = ISC_R_FAILURE;
 		goto failed;
 	}
 
@@ -291,10 +290,12 @@ dlopen_dlz_create(const char *dlzname, unsigned int argc, char *argv[],
 		dl_load_symbol(cd, "dlz_findzonedb", ISC_TRUE);
 
 	if (cd->dlz_create == NULL ||
+	    cd->dlz_version == NULL ||
 	    cd->dlz_lookup == NULL ||
 	    cd->dlz_findzonedb == NULL)
 	{
 		/* We're missing a required symbol */
+		result = ISC_R_FAILURE;
 		goto failed;
 	}
 
@@ -325,11 +326,14 @@ dlopen_dlz_create(const char *dlzname, unsigned int argc, char *argv[],
 
 	/* Check the version of the API is the same */
 	cd->version = cd->dlz_version(&cd->flags);
-	if (cd->version != DLZ_DLOPEN_VERSION) {
+	if (cd->version < (DLZ_DLOPEN_VERSION - DLZ_DLOPEN_AGE) ||
+	    cd->version > DLZ_DLOPEN_VERSION)
+	{
 		dlopen_log(ISC_LOG_ERROR,
-			   "dlz_dlopen: incorrect version %d "
-			   "should be %d in '%s'",
-			   cd->version, DLZ_DLOPEN_VERSION, cd->dl_path);
+			   "dlz_dlopen: %s: incorrect driver API version %d, "
+			   "requires %d",
+			   cd->dl_path, cd->version, DLZ_DLOPEN_VERSION);
+		result = ISC_R_FAILURE;
 		goto failed;
 	}
 
@@ -372,7 +376,6 @@ failed:
 	isc_mem_destroy(&mctx);
 	return (result);
 }
-
 
 /*
  * Called when bind is shutting down
@@ -453,7 +456,9 @@ dlopen_dlz_closeversion(const char *zone, isc_boolean_t commit,
  * Called on startup to configure any writeable zones
  */
 static isc_result_t
-dlopen_dlz_configure(dns_view_t *view, void *driverarg, void *dbdata) {
+dlopen_dlz_configure(dns_view_t *view, dns_dlzdb_t *dlzdb,
+		     void *driverarg, void *dbdata)
+{
 	dlopen_data_t *cd = (dlopen_data_t *) dbdata;
 	isc_result_t result;
 
@@ -464,7 +469,7 @@ dlopen_dlz_configure(dns_view_t *view, void *driverarg, void *dbdata) {
 
 	MAYBE_LOCK(cd);
 	cd->in_configure = ISC_TRUE;
-	result = cd->dlz_configure(view, cd->dbdata);
+	result = cd->dlz_configure(view, dlzdb, cd->dbdata);
 	cd->in_configure = ISC_FALSE;
 	MAYBE_UNLOCK(cd);
 
@@ -473,7 +478,7 @@ dlopen_dlz_configure(dns_view_t *view, void *driverarg, void *dbdata) {
 
 
 /*
- * Check for authority to change a name
+ * Check for authority to change a name.
  */
 static isc_boolean_t
 dlopen_dlz_ssumatch(const char *signer, const char *name, const char *tcpaddr,
@@ -498,7 +503,7 @@ dlopen_dlz_ssumatch(const char *signer, const char *name, const char *tcpaddr,
 
 
 /*
- * Add an rdataset
+ * Add an rdataset.
  */
 static isc_result_t
 dlopen_dlz_addrdataset(const char *name, const char *rdatastr,
@@ -520,7 +525,7 @@ dlopen_dlz_addrdataset(const char *name, const char *rdatastr,
 }
 
 /*
- * Subtract an rdataset
+ * Subtract an rdataset.
  */
 static isc_result_t
 dlopen_dlz_subrdataset(const char *name, const char *rdatastr,
@@ -542,7 +547,7 @@ dlopen_dlz_subrdataset(const char *name, const char *rdatastr,
 }
 
 /*
-  delete a rdataset
+ * Delete a rdataset.
  */
 static isc_result_t
 dlopen_dlz_delrdataset(const char *name, const char *type,
@@ -597,6 +602,7 @@ dlz_dlopen_init(isc_mem_t *mctx) {
 
 	result = dns_sdlzregister("dlopen", &dlz_dlopen_methods, NULL,
 				  DNS_SDLZFLAG_RELATIVEOWNER |
+				  DNS_SDLZFLAG_RELATIVERDATA |
 				  DNS_SDLZFLAG_THREADSAFE,
 				  mctx, &dlz_dlopen);
 

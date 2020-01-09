@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000, 2001  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: gssapictx.c,v 1.29 2011/08/29 06:33:25 marka Exp $ */
 
 #include <config.h>
 
@@ -68,8 +61,12 @@
  * always use one.  If we're not using our own SPNEGO implementation,
  * we include SPNEGO's OID.
  */
-#if defined(GSSAPI)
+#ifdef GSSAPI
+#ifdef WIN32
+#include <krb5/krb5.h>
+#else
 #include ISC_PLATFORM_KRB5HEADER
+#endif
 
 static unsigned char krb5_mech_oid_bytes[] = {
 	0x2a, 0x86, 0x48, 0x86, 0xf7, 0x12, 0x01, 0x02, 0x02
@@ -103,7 +100,7 @@ static gss_OID_set_desc mech_oid_set = {
 
 #define GBUFFER_TO_REGION(gb, r) \
 	do { \
-		(r).length = (gb).length; \
+	  (r).length = (unsigned int)(gb).length; \
 		(r).base = (gb).value; \
 	} while (0)
 
@@ -212,7 +209,7 @@ static void
 check_config(const char *gss_name) {
 	const char *p;
 	krb5_context krb5_ctx;
-	char *krb5_realm = NULL;
+	char *krb5_realm_name = NULL;
 
 	if (strncasecmp(gss_name, "DNS/", 4) != 0) {
 		gss_log(ISC_LOG_ERROR, "tkey-gssapi-credential (%s) "
@@ -224,22 +221,22 @@ check_config(const char *gss_name) {
 		gss_log(ISC_LOG_ERROR, "Unable to initialise krb5 context");
 		return;
 	}
-	if (krb5_get_default_realm(krb5_ctx, &krb5_realm) != 0) {
+	if (krb5_get_default_realm(krb5_ctx, &krb5_realm_name) != 0) {
 		gss_log(ISC_LOG_ERROR, "Unable to get krb5 default realm");
 		krb5_free_context(krb5_ctx);
 		return;
 	}
-	p = strchr(gss_name, '/');
+	p = strchr(gss_name, '@');
 	if (p == NULL) {
 		gss_log(ISC_LOG_ERROR, "badly formatted "
 			"tkey-gssapi-credentials (%s)", gss_name);
 		krb5_free_context(krb5_ctx);
 		return;
 	}
-	if (strcasecmp(p + 1, krb5_realm) != 0) {
+	if (strcasecmp(p + 1, krb5_realm_name) != 0) {
 		gss_log(ISC_LOG_ERROR, "default realm from krb5.conf (%s) "
 			"does not match tkey-gssapi-credential (%s)",
-			krb5_realm, gss_name);
+			krb5_realm_name, gss_name);
 		krb5_free_context(krb5_ctx);
 		return;
 	}
@@ -629,7 +626,6 @@ dst_gssapi_initctx(dns_name_t *name, isc_buffer_t *intoken,
 	if (gouttoken.length != 0U) {
 		GBUFFER_TO_REGION(gouttoken, r);
 		RETERR(isc_buffer_copyregion(outtoken, &r));
-		(void)gss_release_buffer(&minor, &gouttoken);
 	}
 
 	if (gret == GSS_S_COMPLETE)
@@ -638,6 +634,8 @@ dst_gssapi_initctx(dns_name_t *name, isc_buffer_t *intoken,
 		result = DNS_R_CONTINUE;
 
  out:
+	if (gouttoken.length != 0U)
+		(void)gss_release_buffer(&minor, &gouttoken);
 	(void)gss_release_name(&minor, &gname);
 	return (result);
 #else
@@ -680,7 +678,7 @@ dst_gssapi_acceptctx(gss_cred_id_t cred,
 		context = *ctxout;
 
 	if (gssapi_keytab != NULL) {
-#ifdef ISC_PLATFORM_GSSAPI_KRB5_HEADER
+#if defined(ISC_PLATFORM_GSSAPI_KRB5_HEADER) || defined(WIN32)
 		gret = gsskrb5_register_acceptor_identity(gssapi_keytab);
 		if (gret != GSS_S_COMPLETE) {
 			gss_log(3, "failed "
@@ -696,10 +694,14 @@ dst_gssapi_acceptctx(gss_cred_id_t cred,
 		 */
 		const char *old = getenv("KRB5_KTNAME");
 		if (old == NULL || strcmp(old, gssapi_keytab) != 0) {
-			char *kt = malloc(strlen(gssapi_keytab) + 13);
+			size_t size;
+			char *kt;
+
+			size = strlen(gssapi_keytab) + 13;
+			kt = malloc(size);
 			if (kt == NULL)
 				return (ISC_R_NOMEMORY);
-			sprintf(kt, "KRB5_KTNAME=%s", gssapi_keytab);
+			snprintf(kt, size, "KRB5_KTNAME=%s", gssapi_keytab);
 			if (putenv(kt) != 0)
 				return (ISC_R_NOMEMORY);
 		}
@@ -716,10 +718,7 @@ dst_gssapi_acceptctx(gss_cred_id_t cred,
 
 	switch (gret) {
 	case GSS_S_COMPLETE:
-		result = ISC_R_SUCCESS;
-		break;
 	case GSS_S_CONTINUE_NEEDED:
-		result = DNS_R_CONTINUE;
 		break;
 	case GSS_S_DEFECTIVE_TOKEN:
 	case GSS_S_DEFECTIVE_CREDENTIAL:
@@ -741,7 +740,8 @@ dst_gssapi_acceptctx(gss_cred_id_t cred,
 	}
 
 	if (gouttoken.length > 0U) {
-		RETERR(isc_buffer_allocate(mctx, outtoken, gouttoken.length));
+		RETERR(isc_buffer_allocate(mctx, outtoken,
+					   (unsigned int)gouttoken.length));
 		GBUFFER_TO_REGION(gouttoken, r);
 		RETERR(isc_buffer_copyregion(*outtoken, &r));
 		(void)gss_release_buffer(&minor, &gouttoken);
@@ -783,7 +783,8 @@ dst_gssapi_acceptctx(gss_cred_id_t cred,
 					gss_error_tostring(gret, minor, buf,
 							   sizeof(buf)));
 		}
-	}
+	} else
+		result = DNS_R_CONTINUE;
 
 	*ctxout = context;
 

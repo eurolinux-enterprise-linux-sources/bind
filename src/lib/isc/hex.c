@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2008  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: hex.c,v 1.20 2008/09/25 04:02:39 tbox Exp $ */
 
 /*! \file */
 
@@ -95,11 +88,11 @@ hex_decode_init(hex_decode_ctx_t *ctx, int length, isc_buffer_t *target)
 
 static inline isc_result_t
 hex_decode_char(hex_decode_ctx_t *ctx, int c) {
-	char *s;
+	const char *s;
 
 	if ((s = strchr(hex, toupper(c))) == NULL)
 		return (ISC_R_BADHEX);
-	ctx->val[ctx->digits++] = s - hex;
+	ctx->val[ctx->digits++] = (int)(s - hex);
 	if (ctx->digits == 2) {
 		unsigned char num;
 
@@ -183,7 +176,7 @@ str_totext(const char *source, isc_buffer_t *target) {
 	if (l > region.length)
 		return (ISC_R_NOSPACE);
 
-	memcpy(region.base, source, l);
+	memmove(region.base, source, l);
 	isc_buffer_add(target, l);
 	return (ISC_R_SUCCESS);
 }
@@ -195,7 +188,7 @@ mem_tobuffer(isc_buffer_t *target, void *base, unsigned int length) {
 	isc_buffer_availableregion(target, &tr);
 	if (length > tr.length)
 		return (ISC_R_NOSPACE);
-	memcpy(tr.base, base, length);
+	memmove(tr.base, base, length);
 	isc_buffer_add(target, length);
 	return (ISC_R_SUCCESS);
 }

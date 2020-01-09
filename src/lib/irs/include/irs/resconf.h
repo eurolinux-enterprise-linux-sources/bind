@@ -1,20 +1,14 @@
 /*
- * Copyright (C) 2009  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: resconf.h,v 1.3 2009/09/02 23:48:02 tbox Exp $ */
 
 #ifndef IRS_RESCONF_H
 #define IRS_RESCONF_H 1
@@ -46,7 +40,12 @@ isc_result_t
 irs_resconf_load(isc_mem_t *mctx, const char *filename, irs_resconf_t **confp);
 /*%<
  * Load the resolver configuration file 'filename' in the "resolv.conf" format,
- * and create a new irs_resconf_t object from the configuration.
+ * and create a new irs_resconf_t object from the configuration.  If the file
+ * is not found ISC_R_FILENOTFOUND is returned with the structure initialized
+ * as if file contained only:
+ *
+ *	nameserver ::1
+ *	nameserver 127.0.0.1
  *
  * Notes:
  *
@@ -54,6 +53,11 @@ irs_resconf_load(isc_mem_t *mctx, const char *filename, irs_resconf_t **confp);
  *	nameserver, domain, search, sortlist, ndots, and options.
  *	In addition, 'sortlist' is not actually effective; it's parsed, but
  *	the application cannot use the configuration.
+ *
+ * Returns:
+ * \li	ISC_R_SUCCESS on success
+ * \li  ISC_R_FILENOTFOUND if the file was not found. *confp will be valid.
+ * \li  other on error.
  *
  * Requires:
  *

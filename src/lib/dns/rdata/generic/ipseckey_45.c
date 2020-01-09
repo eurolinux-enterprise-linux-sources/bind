@@ -1,20 +1,14 @@
 /*
- * Copyright (C) 2005, 2007, 2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 #ifndef RDATA_GENERIC_IPSECKEY_45_C
 #define RDATA_GENERIC_IPSECKEY_45_C
@@ -35,7 +29,7 @@ fromtext_ipseckey(ARGS_FROMTEXT) {
 	unsigned char addr6[16];
 	isc_region_t region;
 
-	REQUIRE(type == 45);
+	REQUIRE(type == dns_rdatatype_ipseckey);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -87,7 +81,7 @@ fromtext_ipseckey(ARGS_FROMTEXT) {
 		isc_buffer_availableregion(target, &region);
 		if (region.length < 4)
 			return (ISC_R_NOSPACE);
-		memcpy(region.base, &addr, 4);
+		memmove(region.base, &addr, 4);
 		isc_buffer_add(target, 4);
 		break;
 
@@ -97,14 +91,15 @@ fromtext_ipseckey(ARGS_FROMTEXT) {
 		isc_buffer_availableregion(target, &region);
 		if (region.length < 16)
 			return (ISC_R_NOSPACE);
-		memcpy(region.base, addr6, 16);
+		memmove(region.base, addr6, 16);
 		isc_buffer_add(target, 16);
 		break;
 
 	case 3:
 		dns_name_init(&name, NULL);
 		buffer_fromregion(&buffer, &token.value.as_region);
-		origin = (origin != NULL) ? origin : dns_rootname;
+		if (origin == NULL)
+			origin = dns_rootname;
 		RETTOK(dns_name_fromtext(&name, &buffer, origin,
 					 options, target));
 		break;
@@ -124,7 +119,7 @@ totext_ipseckey(ARGS_TOTEXT) {
 	unsigned short num;
 	unsigned short gateway;
 
-	REQUIRE(rdata->type == 45);
+	REQUIRE(rdata->type == dns_rdatatype_ipseckey);
 	REQUIRE(rdata->length >= 3);
 
 	dns_name_init(&name, NULL);
@@ -141,7 +136,7 @@ totext_ipseckey(ARGS_TOTEXT) {
 	dns_rdata_toregion(rdata, &region);
 	num = uint8_fromregion(&region);
 	isc_region_consume(&region, 1);
-	sprintf(buf, "%u ", num);
+	snprintf(buf, sizeof(buf), "%u ", num);
 	RETERR(str_totext(buf, target));
 
 	/*
@@ -149,7 +144,7 @@ totext_ipseckey(ARGS_TOTEXT) {
 	 */
 	gateway = uint8_fromregion(&region);
 	isc_region_consume(&region, 1);
-	sprintf(buf, "%u ", gateway);
+	snprintf(buf, sizeof(buf), "%u ", gateway);
 	RETERR(str_totext(buf, target));
 
 	/*
@@ -157,7 +152,7 @@ totext_ipseckey(ARGS_TOTEXT) {
 	 */
 	num = uint8_fromregion(&region);
 	isc_region_consume(&region, 1);
-	sprintf(buf, "%u ", num);
+	snprintf(buf, sizeof(buf), "%u ", num);
 	RETERR(str_totext(buf, target));
 
 	/*
@@ -207,7 +202,7 @@ fromwire_ipseckey(ARGS_FROMWIRE) {
 	dns_name_t name;
 	isc_region_t region;
 
-	REQUIRE(type == 45);
+	REQUIRE(type == dns_rdatatype_ipseckey);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -254,7 +249,7 @@ static inline isc_result_t
 towire_ipseckey(ARGS_TOWIRE) {
 	isc_region_t region;
 
-	REQUIRE(rdata->type == 45);
+	REQUIRE(rdata->type == dns_rdatatype_ipseckey);
 	REQUIRE(rdata->length != 0);
 
 	UNUSED(cctx);
@@ -270,7 +265,7 @@ compare_ipseckey(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 45);
+	REQUIRE(rdata1->type == dns_rdatatype_ipseckey);
 	REQUIRE(rdata1->length >= 3);
 	REQUIRE(rdata2->length >= 3);
 
@@ -286,7 +281,7 @@ fromstruct_ipseckey(ARGS_FROMSTRUCT) {
 	isc_region_t region;
 	isc_uint32_t n;
 
-	REQUIRE(type == 45);
+	REQUIRE(type == dns_rdatatype_ipseckey);
 	REQUIRE(source != NULL);
 	REQUIRE(ipseckey->common.rdtype == type);
 	REQUIRE(ipseckey->common.rdclass == rdclass);
@@ -330,7 +325,7 @@ tostruct_ipseckey(ARGS_TOSTRUCT) {
 	dns_name_t name;
 	isc_uint32_t n;
 
-	REQUIRE(rdata->type == 45);
+	REQUIRE(rdata->type == dns_rdatatype_ipseckey);
 	REQUIRE(target != NULL);
 	REQUIRE(rdata->length >= 3);
 
@@ -364,7 +359,7 @@ tostruct_ipseckey(ARGS_TOSTRUCT) {
 		break;
 
 	case 2:
-		memcpy(ipseckey->in6_addr.s6_addr, region.base, 16);
+		memmove(ipseckey->in6_addr.s6_addr, region.base, 16);
 		isc_region_consume(&region, 16);
 		break;
 
@@ -398,7 +393,7 @@ freestruct_ipseckey(ARGS_FREESTRUCT) {
 	dns_rdata_ipseckey_t *ipseckey = source;
 
 	REQUIRE(source != NULL);
-	REQUIRE(ipseckey->common.rdtype == 45);
+	REQUIRE(ipseckey->common.rdtype == dns_rdatatype_ipseckey);
 
 	if (ipseckey->mctx == NULL)
 		return;
@@ -415,7 +410,7 @@ freestruct_ipseckey(ARGS_FREESTRUCT) {
 static inline isc_result_t
 additionaldata_ipseckey(ARGS_ADDLDATA) {
 
-	REQUIRE(rdata->type == 45);
+	REQUIRE(rdata->type == dns_rdatatype_ipseckey);
 
 	UNUSED(rdata);
 	UNUSED(add);
@@ -428,7 +423,7 @@ static inline isc_result_t
 digest_ipseckey(ARGS_DIGEST) {
 	isc_region_t region;
 
-	REQUIRE(rdata->type == 45);
+	REQUIRE(rdata->type == dns_rdatatype_ipseckey);
 
 	dns_rdata_toregion(rdata, &region);
 	return ((digest)(arg, &region));
@@ -437,7 +432,7 @@ digest_ipseckey(ARGS_DIGEST) {
 static inline isc_boolean_t
 checkowner_ipseckey(ARGS_CHECKOWNER) {
 
-	REQUIRE(type == 45);
+	REQUIRE(type == dns_rdatatype_ipseckey);
 
 	UNUSED(name);
 	UNUSED(type);
@@ -450,7 +445,7 @@ checkowner_ipseckey(ARGS_CHECKOWNER) {
 static inline isc_boolean_t
 checknames_ipseckey(ARGS_CHECKNAMES) {
 
-	REQUIRE(rdata->type == 45);
+	REQUIRE(rdata->type == dns_rdatatype_ipseckey);
 
 	UNUSED(rdata);
 	UNUSED(owner);
@@ -469,7 +464,7 @@ casecompare_ipseckey(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 45);
+	REQUIRE(rdata1->type == dns_rdatatype_ipseckey);
 	REQUIRE(rdata1->length >= 3);
 	REQUIRE(rdata2->length >= 3);
 

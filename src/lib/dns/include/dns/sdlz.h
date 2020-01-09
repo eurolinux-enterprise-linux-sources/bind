@@ -1,18 +1,12 @@
 /*
- * Portions Copyright (C) 2005-2007, 2009-2012  Internet Systems Consortium, Inc. ("ISC")
- * Portions Copyright (C) 1999-2001  Internet Software Consortium.
+ * Portions Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /*
@@ -50,7 +44,6 @@
  * USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id$ */
 
 /*! \file dns/sdlz.h */
 
@@ -152,8 +145,9 @@ typedef void (*dns_sdlzdestroy_t)(void *driverarg, void *dbdata);
  */
 
 typedef isc_result_t
-(*dns_sdlzfindzone_t)(void *driverarg, void *dbdata, const char *name);
-
+(*dns_sdlzfindzone_t)(void *driverarg, void *dbdata, const char *name,
+		      dns_clientinfomethods_t *methods,
+		      dns_clientinfo_t *clientinfo);
 /*%<
  * Method prototype.  Drivers implementing the SDLZ interface MUST
  * supply a find zone method.  This method is called when the DNS
@@ -227,8 +221,9 @@ typedef void (*dns_sdlzcloseversion_t)(const char *zone, isc_boolean_t commit,
  * If the call is successful then *versionp should be set to NULL
  */
 
-typedef isc_result_t (*dns_sdlzconfigure_t)(dns_view_t *view, void *driverarg,
-					    void *dbdata);
+typedef isc_result_t (*dns_sdlzconfigure_t)(dns_view_t *view,
+					    dns_dlzdb_t *dlzdb,
+					    void *driverarg, void *dbdata);
 /*%<
  * Method prototype.  Drivers implementing the SDLZ interface may
  * supply a configure method. When supplied, it will be called

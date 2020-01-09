@@ -1,23 +1,13 @@
 /*
- * Copyright (C) 2004, 2005, 2007-2009, 2011-2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2001, 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
-
-/* Reviewed: Thu Mar 16 16:52:50 PST 2000 by bwelling */
 
 /* RFC2915 */
 
@@ -127,7 +117,7 @@ fromtext_naptr(ARGS_FROMTEXT) {
 	isc_buffer_t buffer;
 	unsigned char *regex;
 
-	REQUIRE(type == 35);
+	REQUIRE(type == dns_rdatatype_naptr);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -181,7 +171,8 @@ fromtext_naptr(ARGS_FROMTEXT) {
 				      ISC_FALSE));
 	dns_name_init(&name, NULL);
 	buffer_fromregion(&buffer, &token.value.as_region);
-	origin = (origin != NULL) ? origin : dns_rootname;
+	if (origin == NULL)
+		origin = dns_rootname;
 	RETTOK(dns_name_fromtext(&name, &buffer, origin, options, target));
 	return (ISC_R_SUCCESS);
 }
@@ -195,7 +186,7 @@ totext_naptr(ARGS_TOTEXT) {
 	char buf[sizeof("64000")];
 	unsigned short num;
 
-	REQUIRE(rdata->type == 35);
+	REQUIRE(rdata->type == dns_rdatatype_naptr);
 	REQUIRE(rdata->length != 0);
 
 	dns_name_init(&name, NULL);
@@ -208,7 +199,7 @@ totext_naptr(ARGS_TOTEXT) {
 	 */
 	num = uint16_fromregion(&region);
 	isc_region_consume(&region, 2);
-	sprintf(buf, "%u", num);
+	snprintf(buf, sizeof(buf), "%u", num);
 	RETERR(str_totext(buf, target));
 	RETERR(str_totext(" ", target));
 
@@ -217,26 +208,26 @@ totext_naptr(ARGS_TOTEXT) {
 	 */
 	num = uint16_fromregion(&region);
 	isc_region_consume(&region, 2);
-	sprintf(buf, "%u", num);
+	snprintf(buf, sizeof(buf), "%u", num);
 	RETERR(str_totext(buf, target));
 	RETERR(str_totext(" ", target));
 
 	/*
 	 * Flags.
 	 */
-	RETERR(txt_totext(&region, target));
+	RETERR(txt_totext(&region, ISC_TRUE, target));
 	RETERR(str_totext(" ", target));
 
 	/*
 	 * Service.
 	 */
-	RETERR(txt_totext(&region, target));
+	RETERR(txt_totext(&region, ISC_TRUE, target));
 	RETERR(str_totext(" ", target));
 
 	/*
 	 * Regexp.
 	 */
-	RETERR(txt_totext(&region, target));
+	RETERR(txt_totext(&region, ISC_TRUE, target));
 	RETERR(str_totext(" ", target));
 
 	/*
@@ -253,7 +244,7 @@ fromwire_naptr(ARGS_FROMWIRE) {
 	isc_region_t sr;
 	unsigned char *regex;
 
-	REQUIRE(type == 35);
+	REQUIRE(type == dns_rdatatype_naptr);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -300,7 +291,7 @@ towire_naptr(ARGS_TOWIRE) {
 	dns_offsets_t offsets;
 	isc_region_t sr;
 
-	REQUIRE(rdata->type == 35);
+	REQUIRE(rdata->type == dns_rdatatype_naptr);
 	REQUIRE(rdata->length != 0);
 
 	dns_compress_setmethods(cctx, DNS_COMPRESS_NONE);
@@ -347,7 +338,7 @@ compare_naptr(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 35);
+	REQUIRE(rdata1->type == dns_rdatatype_naptr);
 	REQUIRE(rdata1->length != 0);
 	REQUIRE(rdata2->length != 0);
 
@@ -410,7 +401,7 @@ fromstruct_naptr(ARGS_FROMSTRUCT) {
 	dns_rdata_naptr_t *naptr = source;
 	isc_region_t region;
 
-	REQUIRE(type == 35);
+	REQUIRE(type == dns_rdatatype_naptr);
 	REQUIRE(source != NULL);
 	REQUIRE(naptr->common.rdtype == type);
 	REQUIRE(naptr->common.rdclass == rdclass);
@@ -440,7 +431,7 @@ tostruct_naptr(ARGS_TOSTRUCT) {
 	isc_result_t result;
 	dns_name_t name;
 
-	REQUIRE(rdata->type == 35);
+	REQUIRE(rdata->type == dns_rdatatype_naptr);
 	REQUIRE(target != NULL);
 	REQUIRE(rdata->length != 0);
 
@@ -508,7 +499,7 @@ freestruct_naptr(ARGS_FREESTRUCT) {
 	dns_rdata_naptr_t *naptr = source;
 
 	REQUIRE(source != NULL);
-	REQUIRE(naptr->common.rdtype == 35);
+	REQUIRE(naptr->common.rdtype == dns_rdatatype_naptr);
 
 	if (naptr->mctx == NULL)
 		return;
@@ -532,7 +523,7 @@ additionaldata_naptr(ARGS_ADDLDATA) {
 	unsigned int i, flagslen;
 	char *cp;
 
-	REQUIRE(rdata->type == 35);
+	REQUIRE(rdata->type == dns_rdatatype_naptr);
 
 	/*
 	 * Order, preference.
@@ -587,7 +578,7 @@ digest_naptr(ARGS_DIGEST) {
 	isc_result_t result;
 	dns_name_t name;
 
-	REQUIRE(rdata->type == 35);
+	REQUIRE(rdata->type == dns_rdatatype_naptr);
 
 	dns_rdata_toregion(rdata, &r1);
 	r2 = r1;
@@ -641,7 +632,7 @@ digest_naptr(ARGS_DIGEST) {
 static inline isc_boolean_t
 checkowner_naptr(ARGS_CHECKOWNER) {
 
-	REQUIRE(type == 35);
+	REQUIRE(type == dns_rdatatype_naptr);
 
 	UNUSED(name);
 	UNUSED(type);
@@ -654,7 +645,7 @@ checkowner_naptr(ARGS_CHECKOWNER) {
 static inline isc_boolean_t
 checknames_naptr(ARGS_CHECKNAMES) {
 
-	REQUIRE(rdata->type == 35);
+	REQUIRE(rdata->type == dns_rdatatype_naptr);
 
 	UNUSED(rdata);
 	UNUSED(owner);

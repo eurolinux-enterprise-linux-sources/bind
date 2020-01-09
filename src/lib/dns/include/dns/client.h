@@ -1,20 +1,14 @@
 /*
- * Copyright (C) 2009  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: client.h,v 1.3 2009/09/02 23:48:02 tbox Exp $ */
 
 #ifndef DNS_CLIENT_H
 #define DNS_CLIENT_H 1
@@ -77,16 +71,32 @@ ISC_LANG_BEGINDECLS
 /*%
  * Optional flags for dns_client_(start)resolve.
  */
-/*%< Disable DNSSEC validation. */
+/*%< Do not return DNSSEC data (e.g. RRSIGS) with response. */
 #define DNS_CLIENTRESOPT_NODNSSEC	0x01
 /*%< Allow running external context. */
 #define DNS_CLIENTRESOPT_ALLOWRUN	0x02
+/*%< Don't validate responses. */
+#define DNS_CLIENTRESOPT_NOVALIDATE	0x04
+/*%< Don't set the CD flag on upstream queries. */
+#define DNS_CLIENTRESOPT_NOCDFLAG	0x08
+/*%< Use TCP transport. */
+#define DNS_CLIENTRESOPT_TCP		0x10
 
 /*%
  * Optional flags for dns_client_(start)request.
  */
 /*%< Allow running external context. */
 #define DNS_CLIENTREQOPT_ALLOWRUN	0x01
+/*%< Use TCP transport. */
+#define DNS_CLIENTREQOPT_TCP		0x02
+
+/*%
+ * Optional flags for dns_client_(start)update.
+ */
+/*%< Allow running external context. */
+#define DNS_CLIENTUPDOPT_ALLOWRUN	0x01
+/*%< Use TCP transport. */
+#define DNS_CLIENTUPDOPT_TCP		0x02
 
 /*%
  * A dns_clientresevent_t is sent when name resolution performed by a client
@@ -149,6 +159,13 @@ isc_result_t
 dns_client_createx(isc_mem_t *mctx, isc_appctx_t *actx, isc_taskmgr_t *taskmgr,
 		   isc_socketmgr_t *socketmgr, isc_timermgr_t *timermgr,
 		   unsigned int options, dns_client_t **clientp);
+
+isc_result_t
+dns_client_createx2(isc_mem_t *mctx, isc_appctx_t *actx,
+	   isc_taskmgr_t *taskmgr, isc_socketmgr_t *socketmgr,
+	   isc_timermgr_t *timermgr, unsigned int options,
+	   dns_client_t **clientp,
+	   isc_sockaddr_t *localaddr4, isc_sockaddr_t *localaddr6);
 /*%<
  * Create a DNS client.  These functions create a new client object with
  * minimal internal resources such as the default 'view' for the IN class and
@@ -160,6 +177,12 @@ dns_client_createx(isc_mem_t *mctx, isc_appctx_t *actx, isc_taskmgr_t *taskmgr,
  * the managers internally.  A DNS client object created via
  * dns_client_create() is expected to be used by an application that only needs
  * simple synchronous services or by a thread-based application.
+ *
+ * dns_client_createx2 takes two additional parameters, 'localaddr4' and
+ * 'localaddr6', to specify the local address to use for each family. If
+ * both are set to NULL, then wildcard addresses will be used for both
+ * families. If only one is NULL, then the other address will be used
+ * as the local address, and the other protocol family will not be used.
  *
  * If the DNS_CLIENTCREATEOPT_USECACHE flag is set in 'options',
  * dns_client_create(x) will create a cache database with the view.
@@ -201,22 +224,22 @@ dns_client_destroy(dns_client_t **clientp);
 
 isc_result_t
 dns_client_setservers(dns_client_t *client, dns_rdataclass_t rdclass,
-		      dns_name_t *namespace, isc_sockaddrlist_t *addrs);
+		      dns_name_t *name_space, isc_sockaddrlist_t *addrs);
 /*%<
  * Specify a list of addresses of recursive name servers that the client will
  * use for name resolution.  A view for the 'rdclass' class must be created
- * beforehand.  If 'namespace' is non NULL, the specified server will be used
- * if and only if the query name is a subdomain of 'namespace'.  When servers
- * for multiple 'namespace's are provided, and a query name is covered by
- * more than one 'namespace', the servers for the best (longest) matching
- * namespace will be used.  If 'namespace' is NULL, it works as if
+ * beforehand.  If 'name_space' is non NULL, the specified server will be used
+ * if and only if the query name is a subdomain of 'name_space'.  When servers
+ * for multiple 'name_space's are provided, and a query name is covered by
+ * more than one 'name_space', the servers for the best (longest) matching
+ * name_space will be used.  If 'name_space' is NULL, it works as if
  * dns_rootname (.) were specified.
  *
  * Requires:
  *
  *\li	'client' is a valid client.
  *
- *\li	'namespace' is NULL or a valid name.
+ *\li	'name_space' is NULL or a valid name.
  *
  *\li	'addrs' != NULL.
  *
@@ -229,17 +252,37 @@ dns_client_setservers(dns_client_t *client, dns_rdataclass_t rdclass,
 
 isc_result_t
 dns_client_clearservers(dns_client_t *client, dns_rdataclass_t rdclass,
-			dns_name_t *namespace);
+			dns_name_t *name_space);
 /*%<
- * Remove configured recursive name servers for the 'rdclass' and 'namespace'
+ * Remove configured recursive name servers for the 'rdclass' and 'name_space'
  * from the client.  See the description of dns_client_setservers() for
- * the requirements about 'rdclass' and 'namespace'.
+ * the requirements about 'rdclass' and 'name_space'.
  *
  * Requires:
  *
  *\li	'client' is a valid client.
  *
- *\li	'namespace' is NULL or a valid name.
+ *\li	'name_space' is NULL or a valid name.
+ *
+ * Returns:
+ *
+ *\li	#ISC_R_SUCCESS				On success.
+ *
+ *\li	Anything else				Failure.
+ */
+
+isc_result_t
+dns_client_setdlv(dns_client_t *client, dns_rdataclass_t rdclass,
+		  const char *dlvname);
+/*%<
+ * Specify a name to use for DNSSEC lookaside validation.
+ * If a trusted key has been added for that name, then DLV will be
+ * used during validation.  If 'dlvname' is NULL, then DLV will no
+ * longer be used for this client.
+ *
+ * Requires:
+ *
+ *\li	'client' is a valid client.
  *
  * Returns:
  *
@@ -264,9 +307,12 @@ dns_client_startresolve(dns_client_t *client, dns_name_t *name,
  *
  * If any trusted keys are configured and the query name is considered to
  * belong to a secure zone, these functions also validate the responses
- * using DNSSEC by default.  If the DNS_CLIENTRESOPT_NODNSSEC flag is set
+ * using DNSSEC by default.  If the DNS_CLIENTRESOPT_NOVALIDATE flag is set
  * in 'options', DNSSEC validation is disabled regardless of the configured
- * trusted keys or the query name.
+ * trusted keys or the query name. With DNS_CLIENTRESOPT_NODNSSEC
+ * DNSSEC data is not returned with response. DNS_CLIENTRESOPT_NOCDFLAG
+ * disables the CD flag on queries, DNS_CLIENTRESOPT_TCP switches to
+ * the TCP (vs. UDP) transport.
  *
  * dns_client_resolve() provides a synchronous service.  This function starts
  * name resolution internally and blocks until it completes.  On success,
@@ -428,6 +474,8 @@ dns_client_startrequest(dns_client_t *client, dns_message_t *qmessage,
  * the response message (on success).  On return, '*transp' is set to an opaque
  * transaction ID so that the caller can cancel this request.
  *
+ * DNS_CLIENTREQOPT_TCP switches to the TCP (vs. UDP) transport.
+ *
  * Requires:
  *
  *\li	'client' is a valid client.
@@ -530,6 +578,12 @@ dns_client_startupdate(dns_client_t *client, dns_rdataclass_t rdclass,
  * NULL, in which case the library tries the update without any transaction
  * authentication.
  *
+ * It is typically expected that the client object passed to
+ * dns_client_update() was created via dns_client_create() and has its own
+ * managers and contexts.  However, if the DNS_CLIENTUPDOPT_ALLOWRUN flag is
+ * set in 'options', this function performs the synchronous service even if
+ * it does not have its own manager and context structures.
+ *
  * dns_client_update() provides a synchronous service.  This function blocks
  * until the entire update procedure completes, including the additional
  * queries when necessary.
@@ -544,8 +598,7 @@ dns_client_startupdate(dns_client_t *client, dns_rdataclass_t rdclass,
  * structure.  On return, '*transp' is set to an opaque transaction ID so that
  * the caller can cancel this update process.
  *
- * Notes:
- *\li	No options are currently defined.
+ * DNS_CLIENTUPDOPT_TCP switches to the TCP (vs. UDP) transport.
  *
  * Requires:
  *

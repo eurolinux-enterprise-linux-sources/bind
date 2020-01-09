@@ -1,0 +1,171 @@
+<!DOCTYPE book [
+<!ENTITY Scaron "&#x160;">
+<!ENTITY ccaron "&#x10D;">
+<!ENTITY aacute "&#x0E1;">
+<!ENTITY mdash "&#8212;">
+<!ENTITY ouml "&#xf6;">]>
+<!--
+ - Copyright (C) Internet Systems Consortium, Inc. ("ISC")
+ -
+ - This Source Code Form is subject to the terms of the Mozilla Public
+ - License, v. 2.0. If a copy of the MPL was not distributed with this
+ - file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ -
+ - See the COPYRIGHT file distributed with this work for additional
+ - information regarding copyright ownership.
+-->
+
+<section xmlns:db="http://docbook.org/ns/docbook" version="5.0"><info/>
+  <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="noteversion.xml"/>
+  <section xml:id="relnotes_intro"><info><title>Introduction</title></info>
+    <para>
+      This document summarizes changes since the last production
+      release on the BIND 9.11 (Extended Support Version) branch.
+      Please see the <filename>CHANGES</filename> file for a further
+      list of bug fixes and other changes.
+    </para>
+  </section>
+
+  <section xml:id="relnotes_download"><info><title>Download</title></info>
+    <para>
+      The latest versions of BIND 9 software can always be found at
+      <link xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.isc.org/downloads/">http://www.isc.org/downloads/</link>.
+      There you will find additional information about each release,
+      source code, and pre-compiled versions for Microsoft Windows
+      operating systems.
+    </para>
+  </section>
+
+  <section xml:id="relnotes_license"><info><title>License Change</title></info>
+    <para>
+      With the release of BIND 9.11.0, ISC changed to the open
+      source license for BIND from the ISC license to the Mozilla
+      Public License (MPL 2.0).
+    </para>
+    <para>
+      The MPL-2.0 license requires that if you make changes to
+      licensed software (e.g. BIND) and distribute them outside
+      your organization, that you publish those changes under that
+      same license. It does not require that you publish or disclose
+      anything other than the changes you made to our software.
+    </para>
+    <para>
+      This requirement will not affect anyone who is using BIND, with
+      or without modifications, without redistributing it, nor anyone
+      redistributing it without changes. Therefore, this change will be
+      without consequence for most individuals and organizations who are
+      using BIND.
+    </para>
+    <para>
+      Those unsure whether or not the license change affects their
+      use of BIND, or who wish to discuss how to comply with the
+      license may contact ISC at <link
+      xmlns:xlink="http://www.w3.org/1999/xlink"
+      xlink:href="https://www.isc.org/mission/contact/">
+      https://www.isc.org/mission/contact/</link>.
+    </para>
+  </section>
+
+  <section xml:id="win_support"><info><title>Legacy Windows No Longer Supported</title></info>
+    <para>
+      As of BIND 9.11.2, Windows XP and Windows 2003 are no longer supported
+      platforms for BIND; "XP" binaries are no longer available for download
+      from ISC.
+    </para>
+  </section>
+
+  <section xml:id="relnotes_security"><info><title>Security Fixes</title></info>
+    <itemizedlist>
+      <listitem>
+	<para>
+	  There was a long-existing flaw in the documentation for
+	  <command>ms-self</command>, <command>krb5-self</command>,
+	  <command>ms-subdomain</command>, and <command>krb5-subdomain</command>
+	  rules in <command>update-policy</command> statements.  Though
+	  the policies worked as intended, operators who configured their
+	  servers according to the misleading documentation may have
+	  thought zone updates were more restricted than they were;
+	  users of these rule types are advised to review the documentation
+	  and correct their configurations if necessary.  New rule types
+	  matching the previously documented behavior will be introduced
+	  in a future maintenance release. [GL !708]
+	</para>
+      </listitem>
+      <listitem>
+	<para>
+	  <command>named</command> could crash during recursive processing
+	  of DNAME records when <command>deny-answer-aliases</command> was
+	  in use. This flaw is disclosed in CVE-2018-5740. [GL #387]
+	</para>
+      </listitem>
+    </itemizedlist>
+  </section>
+
+  <section xml:id="relnotes_features"><info><title>New Features</title></info>
+    <itemizedlist>
+      <listitem>
+	<para>
+	  None.
+	</para>
+      </listitem>
+    </itemizedlist>
+  </section>
+
+  <section xml:id="relnotes_changes"><info><title>Feature Changes</title></info>
+    <itemizedlist>
+      <listitem>
+	<para>
+	  None.
+	</para>
+      </listitem>
+    </itemizedlist>
+  </section>
+
+  <section xml:id="relnotes_bugs"><info><title>Bug Fixes</title></info>
+    <itemizedlist>
+      <listitem>
+	<para>
+         Running <command>rndc reconfig</command> could cause
+         <command>inline-signing</command> to stop signing. [GL #439]
+       </para>
+      </listitem>
+      <listitem>
+       <para>
+         Reloading all zones caused zone maintenance to stop for
+         <command>inline-signing</command> zones. [GL #435]
+       </para>
+      </listitem>
+      <listitem>
+       <para>
+         Signatures loaded from the journal for the signed version
+         <command>inline-signing</command> zone were not scheduled for
+         refresh. [GL #482]
+       </para>
+      </listitem>
+      <listitem>
+       <para>
+         A referral response with a non-empty ANSWER section was
+         incorrectly treated as an error; this caused certain domains
+         to be non-resolvable. [GL #390]
+	</para>
+      </listitem>
+    </itemizedlist>
+  </section>
+
+  <section xml:id="end_of_life"><info><title>End of Life</title></info>
+    <para>
+      BIND 9.11 (Extended Support Version) will be supported until at
+      least December, 2021.
+      See <link xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://www.isc.org/downloads/software-support-policy/">https://www.isc.org/downloads/software-support-policy/</link> for details of ISC's software support policy.
+    </para>
+  </section>
+  <section xml:id="relnotes_thanks"><info><title>Thank You</title></info>
+
+    <para>
+      Thank you to everyone who assisted us in making this release possible.
+      If you would like to contribute to ISC to assist us in continuing to
+      make quality open source software, please visit our donations page at
+      <link xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.isc.org/donate/">http://www.isc.org/donate/</link>.
+    </para>
+  </section>
+</section>

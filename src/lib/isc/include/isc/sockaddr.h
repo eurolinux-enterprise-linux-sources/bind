@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007, 2009, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: sockaddr.h,v 1.57 2009/01/18 23:48:14 tbox Exp $ */
 
 #ifndef ISC_SOCKADDR_H
 #define ISC_SOCKADDR_H 1
@@ -42,8 +35,6 @@ struct isc_sockaddr {
 	unsigned int			length;		/* XXXRTH beginning? */
 	ISC_LINK(struct isc_sockaddr)	link;
 };
-
-typedef ISC_LIST(struct isc_sockaddr)	isc_sockaddrlist_t;
 
 #define ISC_SOCKADDR_CMPADDR	  0x0001	/*%< compare the address
 						 *   sin_addr/sin6_addr */
@@ -218,6 +209,12 @@ isc_boolean_t
 isc_sockaddr_issitelocal(const isc_sockaddr_t *sa);
 /*%<
  * Returns ISC_TRUE if the address is a sitelocal address.
+ */
+
+isc_boolean_t
+isc_sockaddr_isnetzero(const isc_sockaddr_t *sa);
+/*%<
+ * Returns ISC_TRUE if the address is in net zero.
  */
 
 isc_result_t

@@ -1,25 +1,19 @@
 /*
- * Copyright (C) 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
 
 /*! \file */
 
 #include <config.h>
 
+#include <stdlib.h>
 #include <time.h>
 
 #include <isc/app.h>
@@ -63,7 +57,7 @@ static isc_logcategory_t categories[] = {
 };
 
 static void
-cleanup_managers() {
+cleanup_managers(void) {
 	if (maintask != NULL)
 		isc_task_destroy(&maintask);
 	if (socketmgr != NULL)
@@ -75,15 +69,24 @@ cleanup_managers() {
 }
 
 static isc_result_t
-create_managers() {
+create_managers(unsigned int workers) {
 	isc_result_t result;
-#ifdef ISC_PLATFORM_USETHREADS
-	ncpus = isc_os_ncpus();
-#else
-	ncpus = 1;
-#endif
+	char *p;
 
-	CHECK(isc_taskmgr_create(mctx, ncpus, 0, &taskmgr));
+	if (workers == 0) {
+#ifdef ISC_PLATFORM_USETHREADS
+		workers = isc_os_ncpus();
+#else
+		workers = 1;
+#endif
+	}
+
+	p = getenv("ISC_TASK_WORKERS");
+	if (p != NULL) {
+		workers = atoi(p);
+	}
+
+	CHECK(isc_taskmgr_create(mctx, workers, 0, &taskmgr));
 	CHECK(isc_task_create(taskmgr, 0, &maintask));
 	isc_taskmgr_setexcltask(taskmgr, maintask);
 
@@ -91,13 +94,15 @@ create_managers() {
 	CHECK(isc_socketmgr_create(mctx, &socketmgr));
 	return (ISC_R_SUCCESS);
 
-  cleanup:
+ cleanup:
 	cleanup_managers();
 	return (result);
 }
 
 isc_result_t
-isc_test_begin(FILE *logfile, isc_boolean_t start_managers) {
+isc_test_begin(FILE *logfile, isc_boolean_t start_managers,
+	       unsigned int workers)
+{
 	isc_result_t result;
 
 	isc_mem_debugging |= ISC_MEM_DEBUGRECORD;
@@ -132,8 +137,9 @@ isc_test_begin(FILE *logfile, isc_boolean_t start_managers) {
 	ncpus = 1;
 #endif
 
-	if (start_managers)
-		CHECK(create_managers());
+	if (start_managers) {
+		CHECK(create_managers(workers));
+	}
 
 	return (ISC_R_SUCCESS);
 
@@ -143,13 +149,11 @@ isc_test_begin(FILE *logfile, isc_boolean_t start_managers) {
 }
 
 void
-isc_test_end() {
+isc_test_end(void) {
 	if (maintask != NULL)
 		isc_task_detach(&maintask);
 	if (taskmgr != NULL)
 		isc_taskmgr_destroy(&taskmgr);
-	if (lctx != NULL)
-		isc_log_destroy(&lctx);
 	if (hash_active) {
 		isc_hash_destroy();
 		hash_active = ISC_FALSE;
@@ -159,6 +163,8 @@ isc_test_end() {
 
 	cleanup_managers();
 
+	if (lctx != NULL)
+		isc_log_destroy(&lctx);
 	if (mctx != NULL)
 		isc_mem_destroy(&mctx);
 }

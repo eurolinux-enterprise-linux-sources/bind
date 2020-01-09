@@ -1,20 +1,14 @@
 /*
- * Copyright (C) 2005, 2007, 2008  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: atomic.h,v 1.10 2008/01/24 23:47:00 tbox Exp $ */
 
 #ifndef ISC_ATOMIC_H
 #define ISC_ATOMIC_H 1
@@ -62,7 +56,7 @@ isc_atomic_xaddq(isc_int64_t *p, isc_int64_t val) {
 #endif /* ISC_PLATFORM_HAVEXADDQ */
 
 /*
- * This routine atomically stores the value 'val' in 'p'.
+ * This routine atomically stores the value 'val' in 'p' (32-bit version).
  */
 static __inline__ void
 isc_atomic_store(isc_int32_t *p, isc_int32_t val) {
@@ -80,6 +74,28 @@ isc_atomic_store(isc_int32_t *p, isc_int32_t val) {
 		: "r"(val), "m"(*p)
 		: "memory");
 }
+
+#ifdef ISC_PLATFORM_HAVEATOMICSTOREQ
+/*
+ * This routine atomically stores the value 'val' in 'p' (64-bit version).
+ */
+static __inline__ void
+isc_atomic_storeq(isc_int64_t *p, isc_int64_t val) {
+	__asm__ volatile(
+#ifdef ISC_PLATFORM_USETHREADS
+		/*
+		 * xchg should automatically lock memory, but we add it
+		 * explicitly just in case (it at least doesn't harm)
+		 */
+		"lock;"
+#endif
+
+		"xchgq %1, %0"
+		:
+		: "r"(val), "m"(*p)
+		: "memory");
+}
+#endif /* ISC_PLATFORM_HAVEATOMICSTOREQ */
 
 /*
  * This routine atomically replaces the value in 'p' with 'val', if the
@@ -108,12 +124,10 @@ isc_atomic_cmpxchg(isc_int32_t *p, isc_int32_t cmpval, isc_int32_t val) {
  * positions of the stack frame, which would not actually point to the
  * intended address in the embedded mnemonic.
  */
-#include <isc/util.h>		/* for 'UNUSED' macro */
-
 static isc_int32_t
 isc_atomic_xadd(isc_int32_t *p, isc_int32_t val) {
-	UNUSED(p);
-	UNUSED(val);
+	(void)(p);
+	(void)(val);
 
 	__asm (
 		"movl 8(%ebp), %ecx\n"
@@ -134,8 +148,8 @@ isc_atomic_xadd(isc_int32_t *p, isc_int32_t val) {
 
 static void
 isc_atomic_store(isc_int32_t *p, isc_int32_t val) {
-	UNUSED(p);
-	UNUSED(val);
+	(void)(p);
+	(void)(val);
 
 	__asm (
 		"movl 8(%ebp), %ecx\n"
@@ -149,9 +163,9 @@ isc_atomic_store(isc_int32_t *p, isc_int32_t val) {
 
 static isc_int32_t
 isc_atomic_cmpxchg(isc_int32_t *p, isc_int32_t cmpval, isc_int32_t val) {
-	UNUSED(p);
-	UNUSED(cmpval);
-	UNUSED(val);
+	(void)(p);
+	(void)(cmpval);
+	(void)(val);
 
 	__asm (
 		"movl 8(%ebp), %ecx\n"

@@ -1,37 +1,27 @@
 /*
- * Copyright (C) 2004, 2006, 2007, 2009, 2011, 2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: ntservice.c,v 1.16 2011/01/13 08:50:29 tbox Exp $ */
 
 #include <config.h>
 #include <stdio.h>
 
 #include <isc/app.h>
+#include <isc/commandline.h>
 #include <isc/log.h>
+#include <isc/print.h>
+#include <isc/string.h>
 
 #include <named/globals.h>
 #include <named/ntservice.h>
 #include <named/main.h>
 #include <named/server.h>
-
-/* In fact more bound to the platform toolset... */
-#if defined(_M_IX86) && (_MSC_VER < 1600)
-#define ISC_ADJUST_FDIV
-#endif
 
 /* Handle to SCM for updating service status */
 static SERVICE_STATUS_HANDLE hServiceStatus = 0;
@@ -42,73 +32,13 @@ static char ConsoleTitle[128];
  * Forward declarations
  */
 void ServiceControl(DWORD dwCtrlCode);
-void GetArgs(int *, char ***, char ***);
-int main(int, char *[], char *[]); /* From ns_main.c */
-
-/*
- * Here we change the entry point for the executable to bindmain() from main()
- * This allows us to invoke as a service or from the command line easily.
- */
-#pragma comment(linker, "/entry:bindmain")
-
-/*
- * This is the entry point for the executable
- * We can now call main() explicitly or via StartServiceCtrlDispatcher()
- * as we need to.
- */
-int bindmain()
-{
-	int rc,
-	i = 1;
-
-	int argc;
-	char **envp, **argv;
-
-	/*
-	 * We changed the entry point function, so we must initialize argv,
-	 * etc. ourselves.  Ick.
-	 */
-	GetArgs(&argc, &argv, &envp);
-
-	/* Command line users should put -f in the options. */
-	/* XXXMPA should use isc_commandline_parse() here. */
-	while (argv[i]) {
-		if (!strcmp(argv[i], "-f") ||
-		    !strcmp(argv[i], "-g") ||
-		    !strcmp(argv[i], "-v") ||
-		    !strcmp(argv[i], "-V")) {
-			foreground = TRUE;
-			break;
-		}
-		i++;
-	}
-
-	if (foreground) {
-		/* run in console window */
-		exit(main(argc, argv, envp));
-	} else {
-		/* Start up as service */
-		char *SERVICE_NAME = BIND_SERVICE_NAME;
-
-		SERVICE_TABLE_ENTRY dispatchTable[] = {
-			{ TEXT(SERVICE_NAME), (LPSERVICE_MAIN_FUNCTION)main },
-			{ NULL, NULL }
-		};
-
-		rc = StartServiceCtrlDispatcher(dispatchTable);
-		if (!rc) {
-			fprintf(stderr, "Use -f to run from the command line.\n");
-			exit(GetLastError());
-		}
-	}
-	exit(0);
-}
+int bindmain(int, char *[]); /* From main.c */
 
 /*
  * Initialize the Service by registering it.
  */
 void
-ntservice_init() {
+ntservice_init(void) {
 	if (!foreground) {
 		/* Register handler with the SCM */
 		hServiceStatus = RegisterServiceCtrlHandler(BIND_SERVICE_NAME,
@@ -116,26 +46,24 @@ ntservice_init() {
 		if (!hServiceStatus) {
 			ns_main_earlyfatal(
 				"could not register service control handler");
-			UpdateSCM(SERVICE_STOPPED);
-			exit(1);
 		}
 		UpdateSCM(SERVICE_RUNNING);
 	} else {
-		strcpy(ConsoleTitle, "BIND Version ");
-		strcat(ConsoleTitle, VERSION);
+		strlcpy(ConsoleTitle, "BIND Version ", sizeof(ConsoleTitle));
+		strlcat(ConsoleTitle, VERSION, sizeof(ConsoleTitle));
 		SetConsoleTitle(ConsoleTitle);
 	}
 }
 
 void
-ntservice_shutdown() {
+ntservice_shutdown(void) {
 	UpdateSCM(SERVICE_STOPPED);
 }
 /*
  * Routine to check if this is a service or a foreground program
  */
 BOOL
-ntservice_isservice() {
+ntservice_isservice(void) {
 	return(!foreground);
 }
 /*
@@ -189,60 +117,55 @@ void UpdateSCM(DWORD state) {
 	}
 }
 
-/*
- * C-runtime stuff used to initialize the app and
- * get argv, argc, envp.
- */
+/* unhook main */
 
-typedef struct
-{
-	int newmode;
-} _startupinfo;
-
-_CRTIMP void __cdecl __set_app_type(int);
-_CRTIMP void __cdecl __getmainargs(int *, char ***, char ***, int,
-				   _startupinfo *);
-void __cdecl _setargv(void);
-
-#ifdef ISC_ADJUST_FDIV
-/* Pentium FDIV adjustment */
-extern int _adjust_fdiv;
-extern int * _imp___adjust_fdiv;
-/* Floating point precision */
-extern void _setdefaultprecision();
-#endif
-
-extern int _newmode;		/* malloc new() handler mode */
-extern int _dowildcard;		/* passed to __getmainargs() */
-
-typedef void (__cdecl *_PVFV)(void);
-extern void __cdecl _initterm(_PVFV *, _PVFV *);
-extern _PVFV *__onexitbegin;
-extern _PVFV *__onexitend;
-extern _CRTIMP char **__initenv;
+#undef main
 
 /*
- * Do the work that mainCRTStartup() would normally do
+ * This is the entry point for the executable
+ * We can now call bindmain() explicitly or via StartServiceCtrlDispatcher()
+ * as we need to.
  */
-void GetArgs(int *argc, char ***argv, char ***envp)
+int main(int argc, char *argv[])
 {
-	_startupinfo startinfo;
+	int rc, ch;
 
-	/*
-	 * Set the app type to Console (check CRT/SRC/INTERNAL.H:
-	 * \#define _CONSOLE_APP 1)
-	 */
-	__set_app_type(1);
+	/* Command line users should put -f in the options. */
+	isc_commandline_errprint = ISC_FALSE;
+	while ((ch = isc_commandline_parse(argc, argv, NS_MAIN_ARGS)) != -1) {
+		switch (ch) {
+		case 'f':
+		case 'g':
+		case 'v':
+		case 'V':
+			foreground = TRUE;
+			break;
+		default:
+			break;
+		}
+	}
+	isc_commandline_reset = ISC_TRUE;
 
-	/* Mark this module as an EXE file */
-	__onexitbegin = __onexitend = (_PVFV *)(-1);
+	if (foreground) {
+		/* run in console window */
+		exit(bindmain(argc, argv));
+	} else {
+		/* Start up as service */
+		char *SERVICE_NAME = BIND_SERVICE_NAME;
 
-	startinfo.newmode = _newmode;
-	__getmainargs(argc, argv, envp, _dowildcard, &startinfo);
-	__initenv = *envp;
+		SERVICE_TABLE_ENTRY dispatchTable[] = {
+			{ TEXT(SERVICE_NAME),
+			  (LPSERVICE_MAIN_FUNCTION)bindmain },
+			{ NULL, NULL }
+		};
 
-#ifdef ISC_ADJUST_FDIV
-	_adjust_fdiv = * _imp___adjust_fdiv;
-	_setdefaultprecision();
-#endif
+		rc = StartServiceCtrlDispatcher(dispatchTable);
+		if (!rc) {
+			fprintf(stderr,
+				"Use -f to run from the command line.\n");
+			/* will be 1063 when launched as a console app */
+			exit(GetLastError());
+		}
+	}
+	exit(0);
 }

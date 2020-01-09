@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2009, 2011  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2001  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: journal.h,v 1.43 2011/12/22 07:32:41 each Exp $ */
 
 #ifndef DNS_JOURNAL_H
 #define DNS_JOURNAL_H 1
@@ -235,19 +228,12 @@ dns_journal_current_rr(dns_journal_t *j, dns_name_t **name, isc_uint32_t *ttl,
 isc_result_t
 dns_journal_rollforward(isc_mem_t *mctx, dns_db_t *db, unsigned int options,
 			const char *filename);
-
-isc_result_t
-dns_journal_rollforward2(isc_mem_t *mctx, dns_db_t *db, unsigned int options,
-			 isc_uint32_t resign, const char *filename);
 /*%<
  * Roll forward (play back) the journal file "filename" into the
  * database "db".  This should be called when the server starts
- * after a shutdown or crash.  'resign' is how many seconds before
- * a RRSIG is due to expire it should be scheduled to be regenerated.
+ * after a shutdown or crash.
  *
  * Requires:
- *\li	dns_journal_rollforward() requires that DNS_JOURNALOPT_RESIGN
- *	is not set.
  *\li   'mctx' is a valid memory context.
  *\li	'db' is a valid database which does not have a version
  *           open for writing.

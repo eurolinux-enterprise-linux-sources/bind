@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009-2011  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2001, 2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: cfg_test.c,v 1.25 2011/09/05 23:46:54 tbox Exp $ */
 
 /*! \file */
 
@@ -25,9 +17,11 @@
 #include <stdlib.h>
 
 #include <isc/mem.h>
+#include <isc/print.h>
 #include <isc/string.h>
 #include <isc/util.h>
 
+#include <isccfg/grammar.h>
 #include <isccfg/namedconf.h>
 
 #include <dns/log.h>
@@ -72,6 +66,7 @@ main(int argc, char **argv) {
 	isc_boolean_t grammar = ISC_FALSE;
 	isc_boolean_t memstats = ISC_FALSE;
 	char *filename = NULL;
+	unsigned int zonetype = 0;
 
 	RUNTIME_CHECK(isc_mem_create(0, 0, &mctx) == ISC_R_SUCCESS);
 
@@ -105,6 +100,36 @@ main(int argc, char **argv) {
 	while (argc > 1) {
 		if (strcmp(argv[1], "--grammar") == 0) {
 			grammar = ISC_TRUE;
+		} else if (strcmp(argv[1], "--zonegrammar") == 0) {
+			argv++, argc--;
+			if (argc <= 1)  {
+				usage();
+			}
+			if (strcmp(argv[1], "master") == 0 ||
+			    strcmp(argv[1], "primary") == 0)
+			{
+				zonetype = CFG_ZONE_MASTER;
+			} else if (strcmp(argv[1], "slave") == 0 ||
+				   strcmp(argv[1], "seconary") == 0)
+			{
+				zonetype = CFG_ZONE_SLAVE;
+			} else if (strcmp(argv[1], "stub") == 0) {
+				zonetype = CFG_ZONE_STUB;
+			} else if (strcmp(argv[1], "static-stub") == 0) {
+				zonetype = CFG_ZONE_STATICSTUB;
+			} else if (strcmp(argv[1], "hint") == 0) {
+				zonetype = CFG_ZONE_HINT;
+			} else if (strcmp(argv[1], "forward") == 0) {
+				zonetype = CFG_ZONE_FORWARD;
+			} else if (strcmp(argv[1], "redirect") == 0) {
+				zonetype = CFG_ZONE_REDIRECT;
+			} else if (strcmp(argv[1], "delegation-only") == 0) {
+				zonetype = CFG_ZONE_DELEGATION;
+			} else if (strcmp(argv[1], "in-view") == 0) {
+				zonetype = CFG_ZONE_INVIEW;
+			} else {
+				usage();
+			}
 		} else if (strcmp(argv[1], "--memstats") == 0) {
 			memstats = ISC_TRUE;
 		} else if (strcmp(argv[1], "--named") == 0) {
@@ -123,6 +148,8 @@ main(int argc, char **argv) {
 		if (type == NULL)
 			usage();
 		cfg_print_grammar(type, output, NULL);
+	} else if (zonetype != 0) {
+		cfg_print_zonegrammar(zonetype, output, NULL);
 	} else {
 		if (type == NULL || filename == NULL)
 			usage();

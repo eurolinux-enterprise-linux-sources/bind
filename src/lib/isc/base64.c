@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2001, 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: base64.c,v 1.34 2009/10/21 23:48:05 tbox Exp $ */
 
 /*! \file */
 
@@ -118,13 +111,13 @@ base64_decode_init(base64_decode_ctx_t *ctx, int length, isc_buffer_t *target)
 
 static inline isc_result_t
 base64_decode_char(base64_decode_ctx_t *ctx, int c) {
-	char *s;
+	const char *s;
 
 	if (ctx->seen_end)
 		return (ISC_R_BADBASE64);
 	if ((s = strchr(base64, c)) == NULL)
 		return (ISC_R_BADBASE64);
-	ctx->val[ctx->digits++] = s - base64;
+	ctx->val[ctx->digits++] = (int)(s - base64);
 	if (ctx->digits == 4) {
 		int n;
 		unsigned char buf[3];
@@ -234,7 +227,7 @@ str_totext(const char *source, isc_buffer_t *target) {
 	if (l > region.length)
 		return (ISC_R_NOSPACE);
 
-	memcpy(region.base, source, l);
+	memmove(region.base, source, l);
 	isc_buffer_add(target, l);
 	return (ISC_R_SUCCESS);
 }
@@ -246,7 +239,7 @@ mem_tobuffer(isc_buffer_t *target, void *base, unsigned int length) {
 	isc_buffer_availableregion(target, &tr);
 	if (length > tr.length)
 		return (ISC_R_NOSPACE);
-	memcpy(tr.base, base, length);
+	memmove(tr.base, base, length);
 	isc_buffer_add(target, length);
 	return (ISC_R_SUCCESS);
 }

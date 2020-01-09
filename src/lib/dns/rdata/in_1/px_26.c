@@ -1,23 +1,13 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2001, 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: px_26.c,v 1.45 2009/12/04 22:06:37 tbox Exp $ */
-
-/* Reviewed: Mon Mar 20 10:44:27 PST 2000 */
 
 /* RFC2163 */
 
@@ -32,12 +22,15 @@ fromtext_in_px(ARGS_FROMTEXT) {
 	dns_name_t name;
 	isc_buffer_t buffer;
 
-	REQUIRE(type == 26);
-	REQUIRE(rdclass == 1);
+	REQUIRE(type == dns_rdatatype_px);
+	REQUIRE(rdclass == dns_rdataclass_in);
 
 	UNUSED(type);
 	UNUSED(rdclass);
 	UNUSED(callbacks);
+
+	if (origin == NULL)
+		origin = dns_rootname;
 
 	/*
 	 * Preference.
@@ -55,7 +48,6 @@ fromtext_in_px(ARGS_FROMTEXT) {
 				      ISC_FALSE));
 	dns_name_init(&name, NULL);
 	buffer_fromregion(&buffer, &token.value.as_region);
-	origin = (origin != NULL) ? origin : dns_rootname;
 	RETTOK(dns_name_fromtext(&name, &buffer, origin, options, target));
 
 	/*
@@ -65,7 +57,6 @@ fromtext_in_px(ARGS_FROMTEXT) {
 				      ISC_FALSE));
 	dns_name_init(&name, NULL);
 	buffer_fromregion(&buffer, &token.value.as_region);
-	origin = (origin != NULL) ? origin : dns_rootname;
 	RETTOK(dns_name_fromtext(&name, &buffer, origin, options, target));
 	return (ISC_R_SUCCESS);
 }
@@ -79,8 +70,8 @@ totext_in_px(ARGS_TOTEXT) {
 	char buf[sizeof("64000")];
 	unsigned short num;
 
-	REQUIRE(rdata->type == 26);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_px);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 	REQUIRE(rdata->length != 0);
 
 	dns_name_init(&name, NULL);
@@ -92,7 +83,7 @@ totext_in_px(ARGS_TOTEXT) {
 	dns_rdata_toregion(rdata, &region);
 	num = uint16_fromregion(&region);
 	isc_region_consume(&region, 2);
-	sprintf(buf, "%u", num);
+	snprintf(buf, sizeof(buf), "%u", num);
 	RETERR(str_totext(buf, target));
 	RETERR(str_totext(" ", target));
 
@@ -118,8 +109,8 @@ fromwire_in_px(ARGS_FROMWIRE) {
 	dns_name_t name;
 	isc_region_t sregion;
 
-	REQUIRE(type == 26);
-	REQUIRE(rdclass == 1);
+	REQUIRE(type == dns_rdatatype_px);
+	REQUIRE(rdclass == dns_rdataclass_in);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -154,8 +145,8 @@ towire_in_px(ARGS_TOWIRE) {
 	dns_offsets_t offsets;
 	isc_region_t region;
 
-	REQUIRE(rdata->type == 26);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_px);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 	REQUIRE(rdata->length != 0);
 
 	dns_compress_setmethods(cctx, DNS_COMPRESS_NONE);
@@ -192,8 +183,8 @@ compare_in_px(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 26);
-	REQUIRE(rdata1->rdclass == 1);
+	REQUIRE(rdata1->type == dns_rdatatype_px);
+	REQUIRE(rdata1->rdclass == dns_rdataclass_in);
 	REQUIRE(rdata1->length != 0);
 	REQUIRE(rdata2->length != 0);
 
@@ -231,8 +222,8 @@ fromstruct_in_px(ARGS_FROMSTRUCT) {
 	dns_rdata_in_px_t *px = source;
 	isc_region_t region;
 
-	REQUIRE(type == 26);
-	REQUIRE(rdclass == 1);
+	REQUIRE(type == dns_rdatatype_px);
+	REQUIRE(rdclass == dns_rdataclass_in);
 	REQUIRE(source != NULL);
 	REQUIRE(px->common.rdtype == type);
 	REQUIRE(px->common.rdclass == rdclass);
@@ -254,8 +245,8 @@ tostruct_in_px(ARGS_TOSTRUCT) {
 	isc_region_t region;
 	isc_result_t result;
 
-	REQUIRE(rdata->type == 26);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_px);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 	REQUIRE(target != NULL);
 	REQUIRE(rdata->length != 0);
 
@@ -293,8 +284,8 @@ freestruct_in_px(ARGS_FREESTRUCT) {
 	dns_rdata_in_px_t *px = source;
 
 	REQUIRE(source != NULL);
-	REQUIRE(px->common.rdclass == 1);
-	REQUIRE(px->common.rdtype == 26);
+	REQUIRE(px->common.rdclass == dns_rdataclass_in);
+	REQUIRE(px->common.rdtype == dns_rdatatype_px);
 
 	if (px->mctx == NULL)
 		return;
@@ -306,8 +297,8 @@ freestruct_in_px(ARGS_FREESTRUCT) {
 
 static inline isc_result_t
 additionaldata_in_px(ARGS_ADDLDATA) {
-	REQUIRE(rdata->type == 26);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_px);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 
 	UNUSED(rdata);
 	UNUSED(add);
@@ -322,8 +313,8 @@ digest_in_px(ARGS_DIGEST) {
 	dns_name_t name;
 	isc_result_t result;
 
-	REQUIRE(rdata->type == 26);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_px);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 
 	dns_rdata_toregion(rdata, &r1);
 	r2 = r1;
@@ -347,8 +338,8 @@ digest_in_px(ARGS_DIGEST) {
 static inline isc_boolean_t
 checkowner_in_px(ARGS_CHECKOWNER) {
 
-	REQUIRE(type == 26);
-	REQUIRE(rdclass == 1);
+	REQUIRE(type == dns_rdatatype_px);
+	REQUIRE(rdclass == dns_rdataclass_in);
 
 	UNUSED(name);
 	UNUSED(type);
@@ -361,8 +352,8 @@ checkowner_in_px(ARGS_CHECKOWNER) {
 static inline isc_boolean_t
 checknames_in_px(ARGS_CHECKNAMES) {
 
-	REQUIRE(rdata->type == 26);
-	REQUIRE(rdata->rdclass == 1);
+	REQUIRE(rdata->type == dns_rdatatype_px);
+	REQUIRE(rdata->rdclass == dns_rdataclass_in);
 
 	UNUSED(rdata);
 	UNUSED(owner);

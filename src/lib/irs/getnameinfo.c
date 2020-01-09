@@ -1,20 +1,13 @@
 /*
- * Copyright (C) 2009, 2011-2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
 
 /*! \file */
 
@@ -103,6 +96,7 @@
 #include <isc/netaddr.h>
 #include <isc/print.h>
 #include <isc/sockaddr.h>
+#include <isc/string.h>
 #include <isc/util.h>
 
 #include <dns/byaddr.h>
@@ -143,9 +137,10 @@ static struct afd {
 	} while (0)
 
 int
-getnameinfo(const struct sockaddr *sa, socklen_t salen, char *host,
-	    IRS_GETNAMEINFO_BUFLEN_T hostlen, char *serv,
-	    IRS_GETNAMEINFO_BUFLEN_T servlen, IRS_GETNAMEINFO_FLAGS_T flags)
+getnameinfo(const struct sockaddr *sa, IRS_GETNAMEINFO_SOCKLEN_T salen,
+	    char *host, IRS_GETNAMEINFO_BUFLEN_T hostlen,
+	    char *serv, IRS_GETNAMEINFO_BUFLEN_T servlen,
+	    IRS_GETNAMEINFO_FLAGS_T flags)
 {
 	struct afd *afd = NULL;
 	struct servent *sp;
@@ -212,11 +207,11 @@ getnameinfo(const struct sockaddr *sa, socklen_t salen, char *host,
 		snprintf(numserv, sizeof(numserv), "%d", ntohs(port));
 		if ((strlen(numserv) + 1) > servlen)
 			ERR(EAI_OVERFLOW);
-		strcpy(serv, numserv);
+		strlcpy(serv, numserv, servlen);
 	} else {
 		if ((strlen(sp->s_name) + 1) > servlen)
 			ERR(EAI_OVERFLOW);
-		strcpy(serv, sp->s_name);
+		strlcpy(serv, sp->s_name, servlen);
 	}
 
 #if 0
@@ -273,7 +268,7 @@ getnameinfo(const struct sockaddr *sa, socklen_t salen, char *host,
 #endif
 		if (strlen(numaddr) + 1 > hostlen)
 			ERR(EAI_OVERFLOW);
-		strcpy(host, numaddr);
+		strlcpy(host, numaddr, hostlen);
 	} else {
 		isc_netaddr_t netaddr;
 		dns_fixedname_t ptrfname;
@@ -295,8 +290,7 @@ getnameinfo(const struct sockaddr *sa, socklen_t salen, char *host,
 
 		/* Make query name */
 		isc_netaddr_fromsockaddr(&netaddr, (const isc_sockaddr_t *)sa);
-		dns_fixedname_init(&ptrfname);
-		ptrname = dns_fixedname_name(&ptrfname);
+		ptrname = dns_fixedname_initname(&ptrfname);
 		iresult = dns_byaddr_createptrname2(&netaddr, 0, ptrname);
 		if (iresult != ISC_R_SUCCESS)
 			ERR(EAI_FAIL);
@@ -327,8 +321,13 @@ getnameinfo(const struct sockaddr *sa, socklen_t salen, char *host,
 		case DNS_R_NOVALIDKEY:
 		case DNS_R_NOVALIDDS:
 		case DNS_R_NOVALIDSIG:
-			ERR(EAI_INSECUREDATA);
-			break;
+			/*
+			 * Don't use ERR as GCC 7 wants to raise a
+			 * warning with ERR about possible falling
+			 * through which is impossible.
+			 */
+			result = EAI_INSECUREDATA;
+			goto cleanup;
 		default:
 			ERR(EAI_FAIL);
 		}
@@ -399,7 +398,7 @@ getnameinfo(const struct sockaddr *sa, socklen_t salen, char *host,
 				ERR(EAI_SYSTEM);
 			if ((strlen(numaddr) + 1) > hostlen)
 				ERR(EAI_OVERFLOW);
-			strcpy(host, numaddr);
+			strlcpy(host, numaddr, hostlen);
 		}
 	}
 	result = SUCCESS;

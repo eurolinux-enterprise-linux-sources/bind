@@ -1,6 +1,3 @@
-//
-// Automated Testing Framework (atf)
-//
 // Copyright (c) 2009 The NetBSD Foundation, Inc.
 // All rights reserved.
 //
@@ -25,19 +22,18 @@
 // IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 // IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+
+#include "atf-c++/detail/application.hpp"
 
 extern "C" {
 #include <unistd.h>
 }
 
-#include "application.hpp"
-
-#include "../macros.hpp"
+#include <atf-c++.hpp>
 
 class getopt_app : public atf::application::app {
 public:
-    getopt_app(void) : app("description", "manpage", "other") {}
+    getopt_app(void) : app("description", "manpage") {}
 
     int main(void)
     {
@@ -52,13 +48,16 @@ public:
         char *const argv[] = { arg1, arg2, arg3, arg4, NULL };
 
         int ch;
+        bool zflag;
 
         // Given that this obviously is an application, and that we used the
         // same driver to start, we can test getopt(3) right here without doing
         // any fancy stuff.
+        zflag = false;
         while ((ch = ::getopt(argc, argv, ":Z")) != -1) {
             switch (ch) {
             case 'Z':
+                zflag = true;
                 break;
 
             case '?':
@@ -68,6 +67,7 @@ public:
             }
         }
 
+        ATF_REQUIRE(zflag);
         ATF_REQUIRE_EQ(1, argc - optind);
         ATF_REQUIRE_EQ(std::string("foo"), argv[optind]);
 

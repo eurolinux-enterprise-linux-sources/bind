@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004, 2005, 2007-2009, 2011-2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 #include <config.h>
 
@@ -209,9 +202,16 @@ initialize_ipv6only(void) {
 				  try_ipv6only) == ISC_R_SUCCESS);
 }
 
+#ifdef __notyet__
+/*
+ * XXXMPA requires win32/socket.c to be updated to support
+ * WSASendMsg and WSARecvMsg which are themselves Winsock
+ * and compiler version dependent.
+ */
 static void
 try_ipv6pktinfo(void) {
-	int s, on;
+	SOCKET s;
+	int on;
 	char strbuf[ISC_STRERRORSIZE];
 	isc_result_t result;
 	int optname;
@@ -261,6 +261,7 @@ initialize_ipv6pktinfo(void) {
 	RUNTIME_CHECK(isc_once_do(&once_ipv6pktinfo,
 				  try_ipv6pktinfo) == ISC_R_SUCCESS);
 }
+#endif /* __notyet__ */
 #endif /* WANT_IPV6 */
 #endif /* ISC_PLATFORM_HAVEIPV6 */
 
@@ -278,6 +279,7 @@ isc_net_probe_ipv6only(void) {
 
 isc_result_t
 isc_net_probe_ipv6pktinfo(void) {
+#ifdef __notyet__
 #ifdef ISC_PLATFORM_HAVEIPV6
 #ifdef WANT_IPV6
 	initialize_ipv6pktinfo();
@@ -285,6 +287,7 @@ isc_net_probe_ipv6pktinfo(void) {
 	ipv6pktinfo_result = ISC_R_NOTFOUND;
 #endif
 #endif
+#endif /* __notyet__ */
 	return (ipv6pktinfo_result);
 }
 
@@ -330,4 +333,9 @@ isc_net_enableipv6(void) {
 	initialize();
 	if (ipv6_result == ISC_R_DISABLED)
 		ipv6_result = ISC_R_SUCCESS;
+}
+
+unsigned int
+isc_net_probedscp(void) {
+	return (0);
 }

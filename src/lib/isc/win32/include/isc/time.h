@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004, 2006-2009, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2001  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: time.h,v 1.35 2009/01/05 23:47:54 tbox Exp $ */
 
 #ifndef ISC_TIME_H
 #define ISC_TIME_H 1
@@ -40,6 +33,13 @@ struct isc_interval {
 };
 
 LIBISC_EXTERNAL_DATA extern const isc_interval_t * const isc_interval_zero;
+
+/*
+ * ISC_FORMATHTTPTIMESTAMP_SIZE needs to be 30 in C locale and potentially
+ * more for other locales to handle longer national abbreviations when
+ * expanding strftime's %a and %b.
+ */
+#define ISC_FORMATHTTPTIMESTAMP_SIZE 50
 
 ISC_LANG_BEGINDECLS
 
@@ -224,6 +224,16 @@ isc_time_microdiff(const isc_time_t *t1, const isc_time_t *t2);
  *	The difference of t1 - t2, or 0 if t1 <= t2.
  */
 
+isc_result_t
+isc_time_parsehttptimestamp(char *input, isc_time_t *t);
+/*%<
+ * Parse the time in 'input' into the isc_time_t pointed to by 't',
+ * expecting a format like "Mon, 30 Aug 2000 04:06:47 GMT"
+ *
+ *  Requires:
+ *\li      'buf' and 't' are not NULL.
+ */
+
 isc_uint32_t
 isc_time_nanoseconds(const isc_time_t *t);
 /*
@@ -269,6 +279,16 @@ isc_time_formathttptimestamp(const isc_time_t *t, char *buf, unsigned int len);
  *
  */
 
+isc_result_t
+isc_time_parsehttptimestamp(char *input, isc_time_t *t);
+/*%<
+ * Parse the time in 'input' into the isc_time_t pointed to by 't',
+ * expecting a format like "Mon, 30 Aug 2000 04:06:47 GMT"
+ *
+ *  Requires:
+ *\li      'buf' and 't' are not NULL.
+ */
+
 void
 isc_time_formatISO8601(const isc_time_t *t, char *buf, unsigned int len);
 /*%<
@@ -283,8 +303,52 @@ isc_time_formatISO8601(const isc_time_t *t, char *buf, unsigned int len);
  *
  */
 
+void
+isc_time_formatISO8601ms(const isc_time_t *t, char *buf, unsigned int len);
+/*%<
+ * Format the time 't' into the buffer 'buf' of length 'len',
+ * using the ISO8601 format: "yyyy-mm-ddThh:mm:ss.sssZ"
+ * If the text does not fit in the buffer, the result is indeterminate,
+ * but is always guaranteed to be null terminated.
+ *
+ *  Requires:
+ *\li      'len' > 0
+ *\li      'buf' points to an array of at least len chars
+ *
+ */
+
 isc_uint32_t
 isc_time_seconds(const isc_time_t *t);
+/*%<
+ * Return the number of seconds since the epoch stored in a time structure.
+ *
+ * Requires:
+ *
+ *\li	't' is a valid pointer.
+ */
+
+isc_result_t
+isc_time_secondsastimet(const isc_time_t *t, time_t *secondsp);
+/*%<
+ * Ensure the number of seconds in an isc_time_t is representable by a time_t.
+ *
+ * Notes:
+ *\li	The number of seconds stored in an isc_time_t might be larger
+ *	than the number of seconds a time_t is able to handle.  Since
+ *	time_t is mostly opaque according to the ANSI/ISO standard
+ *	(essentially, all you can be sure of is that it is an arithmetic type,
+ *	not even necessarily integral), it can be tricky to ensure that
+ *	the isc_time_t is in the range a time_t can handle.  Use this
+ *	function in place of isc_time_seconds() any time you need to set a
+ *	time_t from an isc_time_t.
+ *
+ * Requires:
+ *\li	't' is a valid pointer.
+ *
+ * Returns:
+ *\li	Success
+ *\li	Out of range
+ */
 
 ISC_LANG_ENDDECLS
 

@@ -1,6 +1,3 @@
-#
-# Automated Testing Framework (atf)
-#
 # Copyright (c) 2010 The NetBSD Foundation, Inc.
 # All rights reserved.
 #
@@ -25,7 +22,6 @@
 # IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
 
 atf_test_case no_descr
 no_descr_head()
@@ -35,8 +31,8 @@ no_descr_head()
 no_descr_body()
 {
     for h in $(get_helpers); do
-        atf_check -s eq:0 -o ignore -e empty ${h} -s $(atf_get_srcdir) -l
-        atf_check -s eq:0 -o match:passed -e empty ${h} -s $(atf_get_srcdir) \
+        atf_check -s eq:0 -o ignore -e ignore ${h} -s $(atf_get_srcdir) -l
+        atf_check -s eq:0 -o match:passed -e ignore ${h} -s $(atf_get_srcdir) \
             metadata_no_descr
     done
 }
@@ -49,8 +45,8 @@ no_head_head()
 no_head_body()
 {
     for h in $(get_helpers); do
-        atf_check -s eq:0 -o ignore -e empty ${h} -s $(atf_get_srcdir) -l
-        atf_check -s eq:0 -o match:passed -e empty ${h} -s $(atf_get_srcdir) \
+        atf_check -s eq:0 -o ignore -e ignore ${h} -s $(atf_get_srcdir) -l
+        atf_check -s eq:0 -o match:passed -e ignore ${h} -s $(atf_get_srcdir) \
             metadata_no_head
     done
 }

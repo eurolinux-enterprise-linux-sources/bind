@@ -1,23 +1,13 @@
 /*
- * Copyright (C) 2004, 2007, 2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
-
-/* Reviewed: Thu Mar 16 15:18:32 PST 2000 by explorer */
 
 #ifndef RDATA_GENERIC_SOA_6_C
 #define RDATA_GENERIC_SOA_6_C
@@ -33,13 +23,14 @@ fromtext_soa(ARGS_FROMTEXT) {
 	isc_uint32_t n;
 	isc_boolean_t ok;
 
-	REQUIRE(type == 6);
+	REQUIRE(type == dns_rdatatype_soa);
 
 	UNUSED(type);
 	UNUSED(rdclass);
 	UNUSED(callbacks);
 
-	origin = (origin != NULL) ? origin : dns_rootname;
+	if (origin == NULL)
+		origin = dns_rootname;
 
 	for (i = 0; i < 2; i++) {
 		RETERR(isc_lex_getmastertoken(lexer, &token,
@@ -95,16 +86,16 @@ totext_soa(ARGS_TOTEXT) {
 	isc_boolean_t sub;
 	int i;
 	isc_boolean_t multiline;
-	isc_boolean_t comment;
+	isc_boolean_t comm;
 
-	REQUIRE(rdata->type == 6);
+	REQUIRE(rdata->type == dns_rdatatype_soa);
 	REQUIRE(rdata->length != 0);
 
 	multiline = ISC_TF((tctx->flags & DNS_STYLEFLAG_MULTILINE) != 0);
 	if (multiline)
-		comment = ISC_TF((tctx->flags & DNS_STYLEFLAG_RRCOMMENT) != 0);
+		comm = ISC_TF((tctx->flags & DNS_STYLEFLAG_RRCOMMENT) != 0);
 	else
-		comment = ISC_FALSE;
+		comm = ISC_FALSE;
 
 
 	dns_name_init(&mname, NULL);
@@ -136,9 +127,9 @@ totext_soa(ARGS_TOTEXT) {
 		unsigned long num;
 		num = uint32_fromregion(&dregion);
 		isc_region_consume(&dregion, 4);
-		sprintf(buf, comment ? "%-10lu ; " : "%lu", num);
+		snprintf(buf, sizeof(buf), comm ? "%-10lu ; " : "%lu", num);
 		RETERR(str_totext(buf, target));
-		if (comment) {
+		if (comm) {
 			RETERR(str_totext(soa_fieldnames[i], target));
 			/* Print times in week/day/hour/minute/second form */
 			if (i >= 1) {
@@ -165,7 +156,7 @@ fromwire_soa(ARGS_FROMWIRE) {
 	isc_region_t sregion;
 	isc_region_t tregion;
 
-	REQUIRE(type == 6);
+	REQUIRE(type == dns_rdatatype_soa);
 
 	UNUSED(type);
 	UNUSED(rdclass);
@@ -186,7 +177,7 @@ fromwire_soa(ARGS_FROMWIRE) {
 	if (tregion.length < 20)
 		return (ISC_R_NOSPACE);
 
-	memcpy(tregion.base, sregion.base, 20);
+	memmove(tregion.base, sregion.base, 20);
 	isc_buffer_forward(source, 20);
 	isc_buffer_add(target, 20);
 
@@ -202,7 +193,7 @@ towire_soa(ARGS_TOWIRE) {
 	dns_offsets_t moffsets;
 	dns_offsets_t roffsets;
 
-	REQUIRE(rdata->type == 6);
+	REQUIRE(rdata->type == dns_rdatatype_soa);
 	REQUIRE(rdata->length != 0);
 
 	dns_compress_setmethods(cctx, DNS_COMPRESS_GLOBAL14);
@@ -224,7 +215,7 @@ towire_soa(ARGS_TOWIRE) {
 	if (tregion.length < 20)
 		return (ISC_R_NOSPACE);
 
-	memcpy(tregion.base, sregion.base, 20);
+	memmove(tregion.base, sregion.base, 20);
 	isc_buffer_add(target, 20);
 	return (ISC_R_SUCCESS);
 }
@@ -239,7 +230,7 @@ compare_soa(ARGS_COMPARE) {
 
 	REQUIRE(rdata1->type == rdata2->type);
 	REQUIRE(rdata1->rdclass == rdata2->rdclass);
-	REQUIRE(rdata1->type == 6);
+	REQUIRE(rdata1->type == dns_rdatatype_soa);
 	REQUIRE(rdata1->length != 0);
 	REQUIRE(rdata2->length != 0);
 
@@ -280,7 +271,7 @@ fromstruct_soa(ARGS_FROMSTRUCT) {
 	dns_rdata_soa_t *soa = source;
 	isc_region_t region;
 
-	REQUIRE(type == 6);
+	REQUIRE(type == dns_rdatatype_soa);
 	REQUIRE(source != NULL);
 	REQUIRE(soa->common.rdtype == type);
 	REQUIRE(soa->common.rdclass == rdclass);
@@ -306,7 +297,7 @@ tostruct_soa(ARGS_TOSTRUCT) {
 	dns_name_t name;
 	isc_result_t result;
 
-	REQUIRE(rdata->type == 6);
+	REQUIRE(rdata->type == dns_rdatatype_soa);
 	REQUIRE(target != NULL);
 	REQUIRE(rdata->length != 0);
 
@@ -358,7 +349,7 @@ freestruct_soa(ARGS_FREESTRUCT) {
 	dns_rdata_soa_t *soa = source;
 
 	REQUIRE(source != NULL);
-	REQUIRE(soa->common.rdtype == 6);
+	REQUIRE(soa->common.rdtype == dns_rdatatype_soa);
 
 	if (soa->mctx == NULL)
 		return;
@@ -374,7 +365,7 @@ additionaldata_soa(ARGS_ADDLDATA) {
 	UNUSED(add);
 	UNUSED(arg);
 
-	REQUIRE(rdata->type == 6);
+	REQUIRE(rdata->type == dns_rdatatype_soa);
 
 	return (ISC_R_SUCCESS);
 }
@@ -384,7 +375,7 @@ digest_soa(ARGS_DIGEST) {
 	isc_region_t r;
 	dns_name_t name;
 
-	REQUIRE(rdata->type == 6);
+	REQUIRE(rdata->type == dns_rdatatype_soa);
 
 	dns_rdata_toregion(rdata, &r);
 
@@ -404,7 +395,7 @@ digest_soa(ARGS_DIGEST) {
 static inline isc_boolean_t
 checkowner_soa(ARGS_CHECKOWNER) {
 
-	REQUIRE(type == 6);
+	REQUIRE(type == dns_rdatatype_soa);
 
 	UNUSED(name);
 	UNUSED(type);
@@ -419,7 +410,7 @@ checknames_soa(ARGS_CHECKNAMES) {
 	isc_region_t region;
 	dns_name_t name;
 
-	REQUIRE(rdata->type == 6);
+	REQUIRE(rdata->type == dns_rdatatype_soa);
 
 	UNUSED(owner);
 

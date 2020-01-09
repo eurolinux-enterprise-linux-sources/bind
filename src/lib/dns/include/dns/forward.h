@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004-2007, 2009  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000, 2001  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: forward.h,v 1.13 2009/09/02 23:48:02 tbox Exp $ */
 
 #ifndef DNS_FORWARD_H
 #define DNS_FORWARD_H 1
@@ -24,13 +16,22 @@
 
 #include <isc/lang.h>
 #include <isc/result.h>
+#include <isc/sockaddr.h>
 
 #include <dns/types.h>
 
 ISC_LANG_BEGINDECLS
 
+struct dns_forwarder {
+	isc_sockaddr_t			addr;
+	isc_dscp_t			dscp;
+	ISC_LINK(dns_forwarder_t)	link;
+};
+
+typedef ISC_LIST(struct dns_forwarder)	dns_forwarderlist_t;
+
 struct dns_forwarders {
-	isc_sockaddrlist_t	addrs;
+	dns_forwarderlist_t	fwdrs;
 	dns_fwdpolicy_t		fwdpolicy;
 };
 
@@ -49,17 +50,22 @@ dns_fwdtable_create(isc_mem_t *mctx, dns_fwdtable_t **fwdtablep);
  */
 
 isc_result_t
+dns_fwdtable_addfwd(dns_fwdtable_t *fwdtable, dns_name_t *name,
+		    dns_forwarderlist_t *fwdrs, dns_fwdpolicy_t policy);
+isc_result_t
 dns_fwdtable_add(dns_fwdtable_t *fwdtable, dns_name_t *name,
 		 isc_sockaddrlist_t *addrs, dns_fwdpolicy_t policy);
 /*%<
  * Adds an entry to the forwarding table.  The entry associates
  * a domain with a list of forwarders and a forwarding policy.  The
- * addrs list is copied if not empty, so the caller should free its copy.
+ * addrs/fwdrs list is copied if not empty, so the caller should free
+ * its copy.
  *
  * Requires:
  * \li	fwdtable is a valid forwarding table.
  * \li	name is a valid name
- * \li	addrs is a valid list of sockaddrs, which may be empty.
+ * \li	addrs/fwdrs is a valid list of isc_sockaddr/dns_forwarder
+ *      structures, which may be empty.
  *
  * Returns:
  * \li	#ISC_R_SUCCESS

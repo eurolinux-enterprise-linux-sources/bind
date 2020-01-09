@@ -1,0 +1,92 @@
+Release Notes for BIND Version 9.11.4-P2
+
+Introduction
+
+This document summarizes changes since the last production release on the
+BIND 9.11 (Extended Support Version) branch. Please see the CHANGES file
+for a further list of bug fixes and other changes.
+
+Download
+
+The latest versions of BIND 9 software can always be found at http://
+www.isc.org/downloads/. There you will find additional information about
+each release, source code, and pre-compiled versions for Microsoft Windows
+operating systems.
+
+License Change
+
+With the release of BIND 9.11.0, ISC changed to the open source license
+for BIND from the ISC license to the Mozilla Public License (MPL 2.0).
+
+The MPL-2.0 license requires that if you make changes to licensed software
+(e.g. BIND) and distribute them outside your organization, that you
+publish those changes under that same license. It does not require that
+you publish or disclose anything other than the changes you made to our
+software.
+
+This requirement will not affect anyone who is using BIND, with or without
+modifications, without redistributing it, nor anyone redistributing it
+without changes. Therefore, this change will be without consequence for
+most individuals and organizations who are using BIND.
+
+Those unsure whether or not the license change affects their use of BIND,
+or who wish to discuss how to comply with the license may contact ISC at
+https://www.isc.org/mission/contact/.
+
+Legacy Windows No Longer Supported
+
+As of BIND 9.11.2, Windows XP and Windows 2003 are no longer supported
+platforms for BIND; "XP" binaries are no longer available for download
+from ISC.
+
+Security Fixes
+
+  * There was a long-existing flaw in the documentation for ms-self,
+    krb5-self, ms-subdomain, and krb5-subdomain rules in update-policy
+    statements. Though the policies worked as intended, operators who
+    configured their servers according to the misleading documentation may
+    have thought zone updates were more restricted than they were; users
+    of these rule types are advised to review the documentation and
+    correct their configurations if necessary. New rule types matching the
+    previously documented behavior will be introduced in a future
+    maintenance release. [GL !708]
+
+  * named could crash during recursive processing of DNAME records when
+    deny-answer-aliases was in use. This flaw is disclosed in
+    CVE-2018-5740. [GL #387]
+
+New Features
+
+  * None.
+
+Feature Changes
+
+  * None.
+
+Bug Fixes
+
+  * Running rndc reconfig could cause inline-signing to stop signing. [GL
+    #439]
+
+  * Reloading all zones caused zone maintenance to stop for inline-signing
+    zones. [GL #435]
+
+  * Signatures loaded from the journal for the signed version
+    inline-signing zone were not scheduled for refresh. [GL #482]
+
+  * A referral response with a non-empty ANSWER section was incorrectly
+    treated as an error; this caused certain domains to be non-resolvable.
+    [GL #390]
+
+End of Life
+
+BIND 9.11 (Extended Support Version) will be supported until at least
+December, 2021. See https://www.isc.org/downloads/software-support-policy/
+for details of ISC's software support policy.
+
+Thank You
+
+Thank you to everyone who assisted us in making this release possible. If
+you would like to contribute to ISC to assist us in continuing to make
+quality open source software, please visit our donations page at http://
+www.isc.org/donate/.

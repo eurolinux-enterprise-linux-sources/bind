@@ -1,17 +1,12 @@
 /*
- * Copyright (C) 2004-2008, 2012, 2013  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /* $Id: acache.c,v 1.22 2008/02/07 23:46:54 tbox Exp $ */
@@ -24,6 +19,7 @@
 #include <isc/magic.h>
 #include <isc/mem.h>
 #include <isc/mutex.h>
+#include <isc/platform.h>
 #include <isc/random.h>
 #include <isc/refcount.h>
 #include <isc/rwlock.h>
@@ -31,6 +27,7 @@
 #include <isc/task.h>
 #include <isc/time.h>
 #include <isc/timer.h>
+#include <isc/util.h>
 
 #include <dns/acache.h>
 #include <dns/db.h>
@@ -41,6 +38,10 @@
 #include <dns/rdataset.h>
 #include <dns/result.h>
 #include <dns/zone.h>
+
+#if defined(ISC_PLATFORM_HAVESTDATOMIC)
+#include <stdatomic.h>
+#endif
 
 #define ACACHE_MAGIC			ISC_MAGIC('A', 'C', 'H', 'E')
 #define DNS_ACACHE_VALID(acache)	ISC_MAGIC_VALID(acache, ACACHE_MAGIC)
@@ -78,8 +79,13 @@
 
 #define DEFAULT_ACACHE_ENTRY_LOCK_COUNT	1009	 /*%< Should be prime. */
 
-#if defined(ISC_RWLOCK_USEATOMIC) && defined(ISC_PLATFORM_HAVEATOMICSTORE)
+#if defined(ISC_RWLOCK_USEATOMIC) &&					\
+	((defined(ISC_PLATFORM_HAVESTDATOMIC) && defined(ATOMIC_LONG_LOCK_FREE)) || \
+	 defined(ISC_PLATFORM_HAVEATOMICSTORE))
 #define ACACHE_USE_RWLOCK 1
+#if (defined(ISC_PLATFORM_HAVESTDATOMIC) && defined(ATOMIC_LONG_LOCK_FREE))
+#define ACACHE_HAVESTDATOMIC 1
+#endif
 #endif
 
 #ifdef ACACHE_USE_RWLOCK
@@ -88,8 +94,15 @@
 #define ACACHE_LOCK(l, t)	RWLOCK((l), (t))
 #define ACACHE_UNLOCK(l, t)	RWUNLOCK((l), (t))
 
+#ifdef ACACHE_HAVESTDATOMIC
+#define acache_storetime(entry, t) \
+	atomic_store_explicit(&(entry)->lastused, (t), \
+			      memory_order_relaxed);
+#else
 #define acache_storetime(entry, t) \
 	(isc_atomic_store((isc_int32_t *)&(entry)->lastused, (t)))
+#endif
+
 #else
 #define ACACHE_INITLOCK(l)	isc_mutex_init(l)
 #define ACACHE_DESTROYLOCK(l)	DESTROYLOCK(l)
@@ -235,7 +248,11 @@ struct dns_acacheentry {
 	void 			*cbarg;
 
 	/* Timestamp of the last time this entry is referred to */
+#ifdef ACACHE_HAVESTDATOMIC
+	atomic_uint_fast32_t	lastused;
+#else
 	isc_stdtime32_t		lastused;
+#endif
 };
 
 /*
@@ -472,8 +489,7 @@ finddbent(dns_acache_t *acache, dns_db_t *db, dbentry_t **dbentryp) {
 	 * The caller must be holding the acache lock.
 	 */
 
-	bucket = isc_hash_calc((const unsigned char *)&db,
-			       sizeof(db), ISC_TRUE) % DBBUCKETS;
+	bucket = isc_hash_function(&db, sizeof(db), ISC_TRUE, NULL) % DBBUCKETS;
 
 	for (dbentry = ISC_LIST_HEAD(acache->dbbucket[bucket]);
 	     dbentry != NULL;
@@ -1264,8 +1280,7 @@ dns_acache_setdb(dns_acache_t *acache, dns_db_t *db) {
 	dbentry->db = NULL;
 	dns_db_attach(db, &dbentry->db);
 
-	bucket = isc_hash_calc((const unsigned char *)&db,
-			       sizeof(db), ISC_TRUE) % DBBUCKETS;
+	bucket = isc_hash_function(&db, sizeof(db), ISC_TRUE, NULL) % DBBUCKETS;
 
 	ISC_LIST_APPEND(acache->dbbucket[bucket], dbentry, link);
 
@@ -1353,8 +1368,8 @@ dns_acache_putdb(dns_acache_t *acache, dns_db_t *db) {
 	INSIST(ISC_LIST_EMPTY(dbentry->originlist) &&
 	       ISC_LIST_EMPTY(dbentry->referlist));
 
-	bucket = isc_hash_calc((const unsigned char *)&db,
-			       sizeof(db), ISC_TRUE) % DBBUCKETS;
+	bucket = isc_hash_function(&db, sizeof(db), ISC_TRUE, NULL) % DBBUCKETS;
+
 	ISC_LIST_UNLINK(acache->dbbucket[bucket], dbentry, link);
 	dns_db_detach(&dbentry->db);
 
@@ -1377,6 +1392,7 @@ dns_acache_createentry(dns_acache_t *acache, dns_db_t *origdb,
 	dns_acacheentry_t *newentry;
 	isc_result_t result;
 	isc_uint32_t r;
+	isc_stdtime_t tmptime;
 
 	REQUIRE(DNS_ACACHE_VALID(acache));
 	REQUIRE(entryp != NULL && *entryp == NULL);
@@ -1432,7 +1448,8 @@ dns_acache_createentry(dns_acache_t *acache, dns_db_t *origdb,
 	newentry->origdb = NULL;
 	dns_db_attach(origdb, &newentry->origdb);
 
-	isc_stdtime_get(&newentry->lastused);
+	isc_stdtime_get(&tmptime);
+	acache_storetime(newentry, tmptime);
 
 	newentry->magic = ACACHEENTRY_MAGIC;
 
@@ -1505,7 +1522,6 @@ dns_acache_getentry(dns_acacheentry_t *entry, dns_zone_t **zonep,
 			 * trick to get the latest counter from the original
 			 * header.
 			 */
-			dns_rdataset_init(ardataset);
 			dns_rdataset_clone(erdataset, ardataset);
 			ISC_LIST_APPEND(fname->list, ardataset, link);
 		}

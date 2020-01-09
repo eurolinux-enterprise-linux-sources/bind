@@ -1,20 +1,14 @@
 /*
- * Copyright (C) 2009, 2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 #ifndef ISC_STATS_H
 #define ISC_STATS_H 1
@@ -111,6 +105,26 @@ isc_stats_dump(isc_stats_t *stats, isc_stats_dumper_t dump_fn, void *arg,
  * in stats, dump_fn is called with its current value and the given argument
  * arg.  By default counters that have a value of 0 is skipped; if options has
  * the ISC_STATSDUMP_VERBOSE flag, even such counters are dumped.
+ *
+ * Requires:
+ *\li	'stats' is a valid isc_stats_t.
+ */
+
+void
+isc_stats_set(isc_stats_t *stats, isc_uint64_t val,
+	      isc_statscounter_t counter);
+/*%<
+ * Set the given counter to the specfied value.
+ *
+ * Requires:
+ *\li	'stats' is a valid isc_stats_t.
+ */
+
+void
+isc_stats_set(isc_stats_t *stats, isc_uint64_t val,
+	      isc_statscounter_t counter);
+/*%<
+ * Set the given counter to the specfied value.
  *
  * Requires:
  *\li	'stats' is a valid isc_stats_t.

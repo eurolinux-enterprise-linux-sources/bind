@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2001  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 /*! \file */
 
@@ -53,7 +46,7 @@ ttlfmt(unsigned int t, const char *s, isc_boolean_t verbose,
        isc_boolean_t space, isc_buffer_t *target)
 {
 	char tmp[60];
-	size_t len;
+	unsigned int len;
 	isc_region_t region;
 
 	if (verbose)
@@ -68,7 +61,7 @@ ttlfmt(unsigned int t, const char *s, isc_boolean_t verbose,
 	isc_buffer_availableregion(target, &region);
 	if (len > region.length)
 		return (ISC_R_NOSPACE);
-	memcpy(region.base, tmp, len);
+	memmove(region.base, tmp, len);
 	isc_buffer_add(target, len);
 
 	return (ISC_R_SUCCESS);
@@ -79,6 +72,13 @@ ttlfmt(unsigned int t, const char *s, isc_boolean_t verbose,
  */
 isc_result_t
 dns_ttl_totext(isc_uint32_t src, isc_boolean_t verbose, isc_buffer_t *target) {
+	return (dns_ttl_totext2(src, verbose, ISC_TRUE, target));
+}
+
+isc_result_t
+dns_ttl_totext2(isc_uint32_t src, isc_boolean_t verbose,
+		isc_boolean_t upcase, isc_buffer_t *target)
+{
 	unsigned secs, mins, hours, days, weeks, x;
 
 	secs = src % 60;   src /= 60;
@@ -116,7 +116,7 @@ dns_ttl_totext(isc_uint32_t src, isc_boolean_t verbose, isc_buffer_t *target) {
 	 * in upper case. (Why?  Because BIND 8 does that.
 	 * Presumably it has a reason.)
 	 */
-	if (x == 1 && !verbose) {
+	if (x == 1 && upcase && !verbose) {
 		isc_region_t region;
 		/*
 		 * The unit letter is the last character in the
@@ -142,14 +142,14 @@ dns_ttl_fromtext(isc_textregion_t *source, isc_uint32_t *ttl) {
 	isc_result_t result;
 
 	result = bind_ttl(source, ttl);
-	if (result != ISC_R_SUCCESS)
+	if (result != ISC_R_SUCCESS && result != ISC_R_RANGE)
 		result = DNS_R_BADTTL;
 	return (result);
 }
 
 static isc_result_t
 bind_ttl(isc_textregion_t *source, isc_uint32_t *ttl) {
-	isc_uint32_t tmp = 0;
+	isc_uint64_t tmp = 0ULL;
 	isc_uint32_t n;
 	char *s;
 	char buf[64];
@@ -161,8 +161,8 @@ bind_ttl(isc_textregion_t *source, isc_uint32_t *ttl) {
 	 */
 	if (source->length > sizeof(buf) - 1)
 		return (DNS_R_SYNTAX);
-	strncpy(buf, source->base, source->length);
-	buf[source->length] = '\0';
+	/* Copy source->length bytes and NUL terminate. */
+	snprintf(buf, sizeof(buf), "%.*s", (int)source->length, source->base);
 	s = buf;
 
 	do {
@@ -179,32 +179,32 @@ bind_ttl(isc_textregion_t *source, isc_uint32_t *ttl) {
 		switch (*s) {
 		case 'w':
 		case 'W':
-			tmp += n * 7 * 24 * 3600;
+			tmp += (isc_uint64_t) n * 7 * 24 * 3600;
 			s++;
 			break;
 		case 'd':
 		case 'D':
-			tmp += n * 24 * 3600;
+			tmp += (isc_uint64_t) n * 24 * 3600;
 			s++;
 			break;
 		case 'h':
 		case 'H':
-			tmp += n * 3600;
+			tmp += (isc_uint64_t) n * 3600;
 			s++;
 			break;
 		case 'm':
 		case 'M':
-			tmp += n * 60;
+			tmp += (isc_uint64_t) n * 60;
 			s++;
 			break;
 		case 's':
 		case 'S':
-			tmp += n;
+			tmp += (isc_uint64_t) n;
 			s++;
 			break;
 		case '\0':
 			/* Plain number? */
-			if (tmp != 0)
+			if (tmp != 0ULL)
 				return (DNS_R_SYNTAX);
 			tmp = n;
 			break;
@@ -212,6 +212,10 @@ bind_ttl(isc_textregion_t *source, isc_uint32_t *ttl) {
 			return (DNS_R_SYNTAX);
 		}
 	} while (*s != '\0');
-	*ttl = tmp;
+
+	if (tmp > 0xffffffffULL)
+		return (ISC_R_RANGE);
+
+	*ttl = (isc_uint32_t)(tmp & 0xffffffffUL);
 	return (ISC_R_SUCCESS);
 }

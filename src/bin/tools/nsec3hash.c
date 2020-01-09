@@ -1,20 +1,13 @@
 /*
- * Copyright (C) 2006, 2008, 2009, 2011  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: nsec3hash.c,v 1.8 2011/11/02 23:46:24 tbox Exp $ */
 
 #include <config.h>
 
@@ -59,8 +52,9 @@ check_result(isc_result_t result, const char *message) {
 }
 
 static void
-usage() {
-	printf("Usage: %s salt algorithm iterations domain\n", program);
+usage(void) {
+	fprintf(stderr, "Usage: %s salt algorithm iterations domain\n",
+		program);
 	exit(1);
 }
 
@@ -100,8 +94,7 @@ main(int argc, char **argv) {
 	if (iterations > 0xffffU)
 		fatal("iterations to large");
 
-	dns_fixedname_init(&fixed);
-	name = dns_fixedname_name(&fixed);
+	name = dns_fixedname_initname(&fixed);
 	isc_buffer_init(&buffer, argv[4], strlen(argv[4]));
 	isc_buffer_add(&buffer, strlen(argv[4]));
 	result = dns_name_fromtext(name, &buffer, dns_rootname, 0, NULL);
@@ -115,7 +108,7 @@ main(int argc, char **argv) {
 	region.base = hash;
 	region.length = length;
 	isc_buffer_init(&buffer, text, sizeof(text));
-	isc_base32hex_totext(&region, 1, "", &buffer);
+	isc_base32hexnp_totext(&region, 1, "", &buffer);
 	fprintf(stdout, "%.*s (salt=%s, hash=%u, iterations=%u)\n",
 		(int)isc_buffer_usedlength(&buffer), text, argv[1], hash_alg, iterations);
 	return(0);

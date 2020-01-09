@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007, 2009  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id: netaddr.h,v 1.37 2009/01/17 23:47:43 tbox Exp $ */
 
 #ifndef ISC_NETADDR_H
 #define ISC_NETADDR_H 1
@@ -66,7 +59,7 @@ isc_result_t
 isc_netaddr_masktoprefixlen(const isc_netaddr_t *s, unsigned int *lenp);
 /*%<
  * Convert a netmask in 's' into a prefix length in '*lenp'.
- * The mask should consist of zero or more '1' bits in the most
+ * The mask should consist of zero or more '1' bits in the
  * most significant part of the address, followed by '0' bits.
  * If this is not the case, #ISC_R_MASKNONCONTIG is returned.
  *
@@ -155,6 +148,12 @@ isc_netaddr_issitelocal(isc_netaddr_t *na);
  * Returns #ISC_TRUE if the address is a site local address.
  */
 
+isc_boolean_t
+isc_netaddr_isnetzero(isc_netaddr_t *na);
+/*%<
+ * Returns #ISC_TRUE if the address is in net zero.
+ */
+
 void
 isc_netaddr_fromv4mapped(isc_netaddr_t *t, const isc_netaddr_t *s);
 /*%<
@@ -175,6 +174,12 @@ isc_netaddr_prefixok(const isc_netaddr_t *na, unsigned int prefixlen);
  *	ISC_R_FAILURE		extra bits.
  */
 
+isc_boolean_t
+isc_netaddr_isloopback(const isc_netaddr_t *na);
+/*
+ * Test whether the netaddr 'na' is a loopback IPv4 or IPv6 address (in
+ * 127.0.0.0/8 or ::1).
+ */
 ISC_LANG_ENDDECLS
 
 #endif /* ISC_NETADDR_H */

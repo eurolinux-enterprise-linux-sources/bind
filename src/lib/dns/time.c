@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009-2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 /*! \file */
 
@@ -35,12 +28,12 @@
 #include <dns/result.h>
 #include <dns/time.h>
 
-static int days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+static const int days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
 isc_result_t
 dns_time64_totext(isc_int64_t t, isc_buffer_t *target) {
 	struct tm tm;
-	char buf[sizeof("YYYYMMDDHHMMSS")];
+	char buf[sizeof("!!!!!!YYYY!!!!!!!!MM!!!!!!!!DD!!!!!!!!HH!!!!!!!!MM!!!!!!!!SS")];
 	int secs;
 	unsigned int l;
 	isc_region_t region;
@@ -98,7 +91,7 @@ dns_time64_totext(isc_int64_t t, isc_buffer_t *target) {
 	if (l > region.length)
 		return (ISC_R_NOSPACE);
 
-	memcpy(region.base, buf, l);
+	memmove(region.base, buf, l);
 	isc_buffer_add(target, l);
 	return (ISC_R_SUCCESS);
 }
@@ -161,6 +154,14 @@ dns_time64_fromtext(const char *source, isc_int64_t *target) {
 	RANGE(1, 12, month);
 	RANGE(1, days[month - 1] +
 		 ((month == 2 && is_leap(year)) ? 1 : 0), day);
+#ifdef __COVERITY__
+	/*
+	 * Use a simplified range to silence Coverity warning (in
+	 * arithmetic with day below).
+	 */
+	RANGE(1, 31, day);
+#endif /* __COVERITY__ */
+
 	RANGE(0, 23, hour);
 	RANGE(0, 59, minute);
 	RANGE(0, 60, second);		/* 60 == leap second. */

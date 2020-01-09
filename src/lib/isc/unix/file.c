@@ -1,18 +1,12 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009, 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /*
@@ -27,11 +21,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. All advertising materials mentioning features or use of this software
- *    must display the following acknowledgement:
- *      This product includes software developed by the University of
- *      California, Berkeley and its contributors.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -48,7 +38,6 @@
  * SUCH DAMAGE.
  */
 
-/* $Id$ */
 
 /*! \file */
 
@@ -65,11 +54,17 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 
+#ifdef HAVE_SYS_MMAN_H
+#include <sys/mman.h>
+#endif
+
 #include <isc/dir.h>
 #include <isc/file.h>
 #include <isc/log.h>
 #include <isc/mem.h>
+#include <isc/print.h>
 #include <isc/random.h>
+#include <isc/sha2.h>
 #include <isc/string.h>
 #include <isc/time.h>
 #include <isc/util.h>
@@ -97,6 +92,33 @@ file_stats(const char *file, struct stat *stats) {
 	return (result);
 }
 
+static isc_result_t
+fd_stats(int fd, struct stat *stats) {
+	isc_result_t result = ISC_R_SUCCESS;
+
+	REQUIRE(stats != NULL);
+
+	if (fstat(fd, stats) != 0)
+		result = isc__errno2result(errno);
+
+	return (result);
+}
+
+isc_result_t
+isc_file_getsizefd(int fd, off_t *size) {
+	isc_result_t result;
+	struct stat stats;
+
+	REQUIRE(size != NULL);
+
+	result = fd_stats(fd, &stats);
+
+	if (result == ISC_R_SUCCESS)
+		*size = stats.st_size;
+
+	return (result);
+}
+
 isc_result_t
 isc_file_mode(const char *file, mode_t *modep) {
 	isc_result_t result;
@@ -112,30 +134,46 @@ isc_file_mode(const char *file, mode_t *modep) {
 }
 
 isc_result_t
-isc_file_getmodtime(const char *file, isc_time_t *time) {
+isc_file_getmodtime(const char *file, isc_time_t *modtime) {
 	isc_result_t result;
 	struct stat stats;
 
 	REQUIRE(file != NULL);
-	REQUIRE(time != NULL);
+	REQUIRE(modtime != NULL);
 
 	result = file_stats(file, &stats);
 
 	if (result == ISC_R_SUCCESS)
-		/*
-		 * XXXDCL some operating systems provide nanoseconds, too,
-		 * such as BSD/OS via st_mtimespec.
-		 */
-		isc_time_set(time, stats.st_mtime, 0);
+#ifdef ISC_PLATFORM_HAVESTATNSEC
+		isc_time_set(modtime, stats.st_mtime, stats.st_mtim.tv_nsec);
+#else
+		isc_time_set(modtime, stats.st_mtime, 0);
+#endif
 
 	return (result);
 }
 
 isc_result_t
-isc_file_settime(const char *file, isc_time_t *time) {
+isc_file_getsize(const char *file, off_t *size) {
+	isc_result_t result;
+	struct stat stats;
+
+	REQUIRE(file != NULL);
+	REQUIRE(size != NULL);
+
+	result = file_stats(file, &stats);
+
+	if (result == ISC_R_SUCCESS)
+		*size = stats.st_size;
+
+	return (result);
+}
+
+isc_result_t
+isc_file_settime(const char *file, isc_time_t *when) {
 	struct timeval times[2];
 
-	REQUIRE(file != NULL && time != NULL);
+	REQUIRE(file != NULL && when != NULL);
 
 	/*
 	 * tv_sec is at least a 32 bit quantity on all platforms we're
@@ -147,7 +185,7 @@ isc_file_settime(const char *file, isc_time_t *time) {
 	 *   * isc_time_seconds is changed to be > 32 bits but long is 32 bits
 	 *      and isc_time_seconds has at least 33 significant bits.
 	 */
-	times[0].tv_sec = times[1].tv_sec = (long)isc_time_seconds(time);
+	times[0].tv_sec = times[1].tv_sec = (long)isc_time_seconds(when);
 
 	/*
 	 * Here is the real check for the high bit being set.
@@ -163,7 +201,7 @@ isc_file_settime(const char *file, isc_time_t *time) {
 	 * we can at least cast to signed so the IRIX compiler shuts up.
 	 */
 	times[0].tv_usec = times[1].tv_usec =
-		(isc_int32_t)(isc_time_nanoseconds(time) / 1000);
+		(isc_int32_t)(isc_time_nanoseconds(when) / 1000);
 
 	if (utimes(file, times) < 0)
 		return (isc__errno2result(errno));
@@ -181,12 +219,15 @@ isc_file_mktemplate(const char *path, char *buf, size_t buflen) {
 
 isc_result_t
 isc_file_template(const char *path, const char *templet, char *buf,
-			size_t buflen) {
-	char *s;
+		  size_t buflen)
+{
+	const char *s;
 
-	REQUIRE(path != NULL);
 	REQUIRE(templet != NULL);
 	REQUIRE(buf != NULL);
+
+	if (path == NULL)
+		path = "";
 
 	s = strrchr(templet, '/');
 	if (s != NULL)
@@ -195,30 +236,30 @@ isc_file_template(const char *path, const char *templet, char *buf,
 	s = strrchr(path, '/');
 
 	if (s != NULL) {
-		if ((s - path + 1 + strlen(templet) + 1) > buflen)
+		size_t prefixlen = s - path + 1;
+		if ((prefixlen + strlen(templet) + 1) > buflen)
 			return (ISC_R_NOSPACE);
 
-		strncpy(buf, path, s - path + 1);
-		buf[s - path + 1] = '\0';
-		strcat(buf, templet);
+		/* Copy 'prefixlen' bytes and NUL terminate. */
+		strlcpy(buf, path, ISC_MIN(prefixlen + 1, buflen));
+		strlcat(buf, templet, buflen);
 	} else {
 		if ((strlen(templet) + 1) > buflen)
 			return (ISC_R_NOSPACE);
 
-		strcpy(buf, templet);
+		strlcpy(buf, templet, buflen);
 	}
 
 	return (ISC_R_SUCCESS);
 }
 
-static char alphnum[] =
+static const char alphnum[] =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 isc_result_t
 isc_file_renameunique(const char *file, char *templet) {
 	char *x;
 	char *cp;
-	isc_uint32_t which;
 
 	REQUIRE(file != NULL);
 	REQUIRE(templet != NULL);
@@ -231,6 +272,8 @@ isc_file_renameunique(const char *file, char *templet) {
 
 	x = cp--;
 	while (cp >= templet && *cp == 'X') {
+		isc_uint32_t which;
+
 		isc_random_get(&which);
 		*cp = alphnum[which % (sizeof(alphnum) - 1)];
 		x = cp--;
@@ -239,7 +282,7 @@ isc_file_renameunique(const char *file, char *templet) {
 		if (errno != EEXIST)
 			return (isc__errno2result(errno));
 		for (cp = x;;) {
-			char *t;
+			const char *t;
 			if (*cp == '\0')
 				return (ISC_R_FAILURE);
 			t = strchr(alphnum, *cp);
@@ -276,7 +319,6 @@ isc_file_openuniquemode(char *templet, int mode, FILE **fp) {
 	isc_result_t result = ISC_R_SUCCESS;
 	char *x;
 	char *cp;
-	isc_uint32_t which;
 
 	REQUIRE(templet != NULL);
 	REQUIRE(fp != NULL && *fp == NULL);
@@ -289,6 +331,8 @@ isc_file_openuniquemode(char *templet, int mode, FILE **fp) {
 
 	x = cp--;
 	while (cp >= templet && *cp == 'X') {
+		isc_uint32_t which;
+
 		isc_random_get(&which);
 		*cp = alphnum[which % (sizeof(alphnum) - 1)];
 		x = cp--;
@@ -397,6 +441,23 @@ isc_file_isplainfile(const char *filename) {
 }
 
 isc_result_t
+isc_file_isplainfilefd(int fd) {
+	/*
+	 * This function returns success if filename is a plain file.
+	 */
+	struct stat filestat;
+	memset(&filestat,0,sizeof(struct stat));
+
+	if ((fstat(fd, &filestat)) == -1)
+		return(isc__errno2result(errno));
+
+	if(! S_ISREG(filestat.st_mode))
+		return(ISC_R_INVALIDFILE);
+
+	return(ISC_R_SUCCESS);
+}
+
+isc_result_t
 isc_file_isdirectory(const char *filename) {
 	/*
 	 * This function returns success if filename exists and is a
@@ -413,6 +474,7 @@ isc_file_isdirectory(const char *filename) {
 
 	return(ISC_R_SUCCESS);
 }
+
 
 isc_boolean_t
 isc_file_isabsolute(const char *filename) {
@@ -438,7 +500,7 @@ isc_file_ischdiridempotent(const char *filename) {
 
 const char *
 isc_file_basename(const char *filename) {
-	char *s;
+	const char *s;
 
 	REQUIRE(filename != NULL);
 
@@ -462,7 +524,7 @@ isc_file_progname(const char *filename, char *buf, size_t buflen) {
 
 	if (len > buflen)
 		return (ISC_R_NOSPACE);
-	memcpy(buf, base, len);
+	memmove(buf, base, len);
 
 	return (ISC_R_SUCCESS);
 }
@@ -484,15 +546,17 @@ dir_current(char *dirname, size_t length) {
 	cwd = getcwd(dirname, length);
 
 	if (cwd == NULL) {
-		if (errno == ERANGE)
+		if (errno == ERANGE) {
 			result = ISC_R_NOSPACE;
-		else
+		} else {
 			result = isc__errno2result(errno);
+		}
 	} else {
-		if (strlen(dirname) + 1 == length)
+		if (strlen(dirname) + 1 == length) {
 			result = ISC_R_NOSPACE;
-		else if (dirname[1] != '\0')
-			strcat(dirname, "/");
+		} else if (dirname[1] != '\0') {
+			strlcat(dirname, "/", length);
+		}
 	}
 
 	return (result);
@@ -506,7 +570,7 @@ isc_file_absolutepath(const char *filename, char *path, size_t pathlen) {
 		return (result);
 	if (strlen(path) + strlen(filename) + 1 > pathlen)
 		return (ISC_R_NOSPACE);
-	strcat(path, filename);
+	strlcat(path, filename, pathlen);
 	return (ISC_R_SUCCESS);
 }
 
@@ -556,9 +620,11 @@ isc_file_safecreate(const char *filename, FILE **fp) {
 }
 
 isc_result_t
-isc_file_splitpath(isc_mem_t *mctx, char *path, char **dirname, char **basename)
+isc_file_splitpath(isc_mem_t *mctx, const char *path, char **dirname,
+		   char const **bname)
 {
-	char *dir, *file, *slash;
+	char *dir;
+	const char *file, *slash;
 
 	if (path == NULL)
 		return (ISC_R_INVALIDFILE);
@@ -587,7 +653,127 @@ isc_file_splitpath(isc_mem_t *mctx, char *path, char **dirname, char **basename)
 	}
 
 	*dirname = dir;
-	*basename = file;
+	*bname = file;
 
 	return (ISC_R_SUCCESS);
+}
+
+void *
+isc_file_mmap(void *addr, size_t len, int prot,
+	      int flags, int fd, off_t offset)
+{
+#ifdef HAVE_MMAP
+	return (mmap(addr, len, prot, flags, fd, offset));
+#else
+	void *buf;
+	ssize_t ret;
+	off_t end;
+
+	UNUSED(addr);
+	UNUSED(prot);
+	UNUSED(flags);
+
+	end = lseek(fd, 0, SEEK_END);
+	lseek(fd, offset, SEEK_SET);
+	if (end - offset < (off_t) len)
+		len = end - offset;
+
+	buf = malloc(len);
+	if (buf == NULL)
+		return (NULL);
+
+	ret = read(fd, buf, len);
+	if (ret != (ssize_t) len) {
+		free(buf);
+		buf = NULL;
+	}
+
+	return (buf);
+#endif
+}
+
+int
+isc_file_munmap(void *addr, size_t len) {
+#ifdef HAVE_MMAP
+	return (munmap(addr, len));
+#else
+	UNUSED(len);
+
+	free(addr);
+	return (0);
+#endif
+}
+
+#define DISALLOW "\\/ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+#ifndef PATH_MAX
+#define PATH_MAX 1024
+#endif
+
+isc_result_t
+isc_file_sanitize(const char *dir, const char *base, const char *ext,
+		  char *path, size_t length)
+{
+	char buf[PATH_MAX], hash[ISC_SHA256_DIGESTSTRINGLENGTH];
+	size_t l = 0;
+
+	REQUIRE(base != NULL);
+	REQUIRE(path != NULL);
+
+	l = strlen(base) + 1;
+
+	/*
+	 * allow room for a full sha256 hash (64 chars
+	 * plus null terminator)
+	 */
+	if (l < 65U)
+		l = 65;
+
+	if (dir != NULL)
+		l += strlen(dir) + 1;
+	if (ext != NULL)
+		l += strlen(ext) + 1;
+
+	if (l > length || l > (unsigned)PATH_MAX)
+		return (ISC_R_NOSPACE);
+
+	/* Check whether the full-length SHA256 hash filename exists */
+	isc_sha256_data((const void *) base, strlen(base), hash);
+	snprintf(buf, sizeof(buf), "%s%s%s%s%s",
+		dir != NULL ? dir : "", dir != NULL ? "/" : "",
+		hash, ext != NULL ? "." : "", ext != NULL ? ext : "");
+	if (isc_file_exists(buf)) {
+		strlcpy(path, buf, length);
+		return (ISC_R_SUCCESS);
+	}
+
+	/* Check for a truncated SHA256 hash filename */
+	hash[16] = '\0';
+	snprintf(buf, sizeof(buf), "%s%s%s%s%s",
+		dir != NULL ? dir : "", dir != NULL ? "/" : "",
+		hash, ext != NULL ? "." : "", ext != NULL ? ext : "");
+	if (isc_file_exists(buf)) {
+		strlcpy(path, buf, length);
+		return (ISC_R_SUCCESS);
+	}
+
+	/*
+	 * If neither hash filename already exists, then we'll use
+	 * the original base name if it has no disallowed characters,
+	 * or the truncated hash name if it does.
+	 */
+	if (strpbrk(base, DISALLOW) != NULL) {
+		strlcpy(path, buf, length);
+		return (ISC_R_SUCCESS);
+	}
+
+	snprintf(buf, sizeof(buf), "%s%s%s%s%s",
+		dir != NULL ? dir : "", dir != NULL ? "/" : "",
+		base, ext != NULL ? "." : "", ext != NULL ? ext : "");
+	strlcpy(path, buf, length);
+	return (ISC_R_SUCCESS);
+}
+
+isc_boolean_t
+isc_file_isdirwritable(const char *path) {
+	return (ISC_TF(access(path, W_OK|X_OK) == 0));
 }

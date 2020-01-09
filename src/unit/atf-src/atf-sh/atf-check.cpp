@@ -1,7 +1,4 @@
-//
-// Automated Testing Framework (atf)
-//
-// Copyright (c) 2008, 2009, 2010 The NetBSD Foundation, Inc.
+// Copyright (c) 2008 The NetBSD Foundation, Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -25,7 +22,6 @@
 // IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 // OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 // IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
 
 extern "C" {
 #include <sys/types.h>
@@ -40,6 +36,7 @@ extern "C" {
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <ios>
 #include <iostream>
 #include <iterator>
 #include <list>
@@ -47,10 +44,9 @@ extern "C" {
 #include <utility>
 
 #include "atf-c++/check.hpp"
-#include "atf-c++/config.hpp"
-#include "atf-c++/utils.hpp"
-
 #include "atf-c++/detail/application.hpp"
+#include "atf-c++/detail/auto_array.hpp"
+#include "atf-c++/detail/env.hpp"
 #include "atf-c++/detail/exceptions.hpp"
 #include "atf-c++/detail/fs.hpp"
 #include "atf-c++/detail/process.hpp"
@@ -111,17 +107,20 @@ class temp_file : public std::ostream {
     int m_fd;
 
 public:
-    temp_file(const atf::fs::path& p) :
+    temp_file(const char* pattern) :
         std::ostream(NULL),
         m_fd(-1)
     {
-        atf::utils::auto_array< char > buf(new char[p.str().length() + 1]);
-        std::strcpy(buf.get(), p.c_str());
+        const atf::fs::path file = atf::fs::path(
+            atf::env::get("TMPDIR", "/tmp")) / pattern;
+
+        atf::auto_array< char > buf(new char[file.str().length() + 1]);
+        std::strcpy(buf.get(), file.c_str());
 
         m_fd = ::mkstemp(buf.get());
         if (m_fd == -1)
             throw atf::system_error("atf_check::temp_file::temp_file(" +
-                                    p.str() + ")", "mkstemp(3) failed",
+                                    file.str() + ")", "mkstemp(3) failed",
                                     errno);
 
         m_path.reset(new atf::fs::path(buf.get()));
@@ -185,6 +184,7 @@ static struct name_number {
     { "int", SIGINT },
     { "quit", SIGQUIT },
     { "trap", SIGTRAP },
+    { "abrt", SIGABRT },
     { "kill", SIGKILL },
     { "segv", SIGSEGV },
     { "pipe", SIGPIPE },
@@ -269,7 +269,7 @@ parse_status_check_arg(const std::string& arg)
         else
             value = parse_signal(value_str);
     } else
-        throw atf::application::usage_error("Invalid output checker");
+        throw atf::application::usage_error("Invalid status checker");
 
     return status_check(type, negated, value);
 }
@@ -329,10 +329,13 @@ static
 std::auto_ptr< atf::check::check_result >
 execute(const char* const* argv)
 {
+    // TODO: This should go to stderr... but fixing it now may be hard as test
+    // cases out there might be relying on stderr being silent.
     std::cout << "Executing command [ ";
     for (int i = 0; argv[i] != NULL; ++i)
         std::cout << argv[i] << " ";
     std::cout << "]\n";
+    std::cout.flush();
 
     atf::process::argv_array argva(argv);
     return atf::check::exec(argva);
@@ -345,7 +348,7 @@ execute_with_shell(char* const* argv)
     const std::string cmd = flatten_argv(argv);
 
     const char* sh_argv[4];
-    sh_argv[0] = atf::config::get("atf_shell").c_str();
+    sh_argv[0] = atf::env::get("ATF_SHELL", ATF_SHELL).c_str();
     sh_argv[1] = "-c";
     sh_argv[2] = cmd.c_str();
     sh_argv[3] = NULL;
@@ -379,7 +382,7 @@ grep_file(const atf::fs::path& path, const std::string& regexp)
     bool found = false;
 
     std::string line;
-    while (!found && std::getline(stream, line).good()) {
+    while (!found && !std::getline(stream, line).fail()) {
         if (atf::text::match(line, regexp))
             found = true;
     }
@@ -422,8 +425,6 @@ compare_files(const atf::fs::path& p1, const atf::fs::path& p2)
         if (f2.bad())
             throw std::runtime_error("Failed to read from " + p1.str());
 
-        std::cout << "1 read: " << f1.gcount() << "\n";
-        std::cout << "2 read: " << f2.gcount() << "\n";
         if ((f1.gcount() == 0) && (f2.gcount() == 0)) {
             equal = true;
             break;
@@ -620,9 +621,7 @@ run_output_check(const output_check oc, const atf::fs::path& path,
     } else if (oc.type == oc_ignore) {
         result = true;
     } else if (oc.type == oc_inline) {
-        atf::fs::path path2 = atf::fs::path(atf::config::get("atf_workdir"))
-                              / "inline.XXXXXX";
-        temp_file temp(path2);
+        temp_file temp("atf-check.XXXXXX");
         temp.write(decode(oc.value));
         temp.close();
 
@@ -721,7 +720,7 @@ const char* atf_check::m_description =
     "atf-check executes given command and analyzes its results.";
 
 atf_check::atf_check(void) :
-    app(m_description, "atf-check(1)", "atf(7)"),
+    app(m_description, "atf-check(1)"),
     m_xflag(false)
 {
 }

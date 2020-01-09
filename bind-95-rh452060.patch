@@ -1,10 +1,12 @@
-diff -up bind-9.5.0-P2/bin/dig/dighost.c.rh452060 bind-9.5.0-P2/bin/dig/dighost.c
---- bind-9.5.0-P2/bin/dig/dighost.c.rh452060	2008-12-01 22:30:01.000000000 +0100
-+++ bind-9.5.0-P2/bin/dig/dighost.c	2008-12-01 22:30:07.000000000 +0100
-@@ -1280,6 +1280,12 @@ clear_query(dig_query_t *query) {
+diff --git a/bin/dig/dighost.c b/bin/dig/dighost.c
+index f657c30..ff9a2d2 100644
+--- a/bin/dig/dighost.c
++++ b/bin/dig/dighost.c
+@@ -1694,6 +1694,13 @@ clear_query(dig_query_t *query) {
  
- 	debug("clear_query(%p)", query);
- 
+ 	if (query->timer != NULL)
+ 		isc_timer_detach(&query->timer);
++
 +	if (query->waiting_senddone) {
 +		debug("send_done not yet called");
 +		query->pending_free = ISC_TRUE;
@@ -14,7 +16,7 @@ diff -up bind-9.5.0-P2/bin/dig/dighost.c.rh452060 bind-9.5.0-P2/bin/dig/dighost.
  	lookup = query->lookup;
  
  	if (lookup->current_query == query)
-@@ -1301,10 +1307,7 @@ clear_query(dig_query_t *query) {
+@@ -1719,10 +1726,7 @@ clear_query(dig_query_t *query) {
  	isc_mempool_put(commctx, query->recvspace);
  	isc_buffer_invalidate(&query->recvbuf);
  	isc_buffer_invalidate(&query->lengthbuf);
@@ -26,7 +28,7 @@ diff -up bind-9.5.0-P2/bin/dig/dighost.c.rh452060 bind-9.5.0-P2/bin/dig/dighost.
  }
  
  /*%
-@@ -2175,9 +2178,9 @@ send_done(isc_task_t *_task, isc_event_t
+@@ -2811,9 +2815,9 @@ send_done(isc_task_t *_task, isc_event_t *event) {
  	isc_event_free(&event);
  
  	if (query->pending_free)

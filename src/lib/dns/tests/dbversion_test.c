@@ -1,20 +1,14 @@
 /*
- * Copyright (C) 2011, 2012  Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 /*! \file */
 
@@ -43,8 +37,8 @@
 static char tempname[11] = "dtXXXXXXXX";
 
 static void
-callback(const char *file, int line, isc_assertiontype_t type,
-	 const char *cond)
+local_callback(const char *file, int line, isc_assertiontype_t type,
+	       const char *cond)
 {
 	UNUSED(file); UNUSED(line); UNUSED(type); UNUSED(cond);
 	if (strcmp(tempname, "dtXXXXXXXX"))
@@ -57,7 +51,7 @@ static dns_db_t *db1 = NULL, *db2 = NULL;
 static dns_dbversion_t *v1 = NULL, *v2 = NULL;
 
 static void
-setup_db() {
+setup_db(void) {
 	isc_result_t result;
 	result = dns_db_create(mctx, "rbt", dns_rootname, dns_dbtype_zone,
 			       dns_rdataclass_in, 0, NULL, &db1);
@@ -71,7 +65,7 @@ setup_db() {
 }
 
 static void
-close_db() {
+close_db(void) {
 	if (v1 != NULL) {
 		dns_db_closeversion(db1, &v1, ISC_FALSE);
 		ATF_REQUIRE_EQ(v1, NULL);
@@ -138,7 +132,7 @@ ATF_TC_BODY(attachversion_bad, tc) {
 
 	UNUSED(tc);
 
-	attachversion(callback);
+	attachversion(local_callback);
 }
 
 static void
@@ -179,7 +173,7 @@ ATF_TC_BODY(closeversion_bad, tc) {
 
 	UNUSED(tc);
 
-	closeversion(callback);
+	closeversion(local_callback);
 }
 
 static void
@@ -227,7 +221,7 @@ ATF_TC_BODY(find_bad, tc) {
 
 	UNUSED(tc);
 
-	find(callback);
+	find(local_callback);
 }
 
 static void
@@ -281,7 +275,7 @@ ATF_TC_BODY(allrdatasets_bad, tc) {
 
 	UNUSED(tc);
 
-	allrdatasets(callback);
+	allrdatasets(local_callback);
 }
 
 static void
@@ -336,7 +330,7 @@ ATF_TC_BODY(findrdataset_bad, tc) {
 
 	UNUSED(tc);
 
-	findrdataset(callback);
+	findrdataset(local_callback);
 }
 
 static void
@@ -391,7 +385,7 @@ ATF_TC_BODY(deleterdataset_bad, tc) {
 
 	UNUSED(tc);
 
-	deleterdataset(callback);
+	deleterdataset(local_callback);
 }
 
 static void
@@ -423,7 +417,7 @@ subtract(isc_assertioncallback_t callback) {
 	result = dns_db_subtractrdataset(db1, node, VERSION(callback),
 					 &rdataset, 0, NULL);
 	if (callback != NULL)
-		atf_tc_fail("dns_db_dns_db_subtractrdataset did not assert");
+		atf_tc_fail("dns_db_subtractrdataset did not assert");
 	ATF_REQUIRE_EQ(result, DNS_R_UNCHANGED);
 
 	dns_db_detachnode(db1, &node);
@@ -453,7 +447,7 @@ ATF_TC_BODY(subtractrdataset_bad, tc) {
 
 	UNUSED(tc);
 
-	subtract(callback);
+	subtract(local_callback);
 }
 
 static void
@@ -501,7 +495,7 @@ ATF_TC_BODY(dump_bad, tc) {
 
 	UNUSED(tc);
 
-	dump(callback);
+	dump(local_callback);
 }
 
 static void
@@ -563,7 +557,7 @@ ATF_TC_BODY(addrdataset_bad, tc) {
 
 	UNUSED(tc);
 
-	addrdataset(callback);
+	addrdataset(local_callback);
 }
 
 static void
@@ -612,7 +606,7 @@ ATF_TC_BODY(getnsec3parameters_bad, tc) {
 
 	UNUSED(tc);
 
-	getnsec3parameters(callback);
+	getnsec3parameters(local_callback);
 }
 
 static void
@@ -706,7 +700,7 @@ ATF_TC_BODY(resigned_bad, tc) {
 
 	UNUSED(tc);
 
-	resigned(callback);
+	resigned(local_callback);
 }
 
 /*

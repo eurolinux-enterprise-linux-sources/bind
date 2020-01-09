@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004, 2005, 2007-2009, 2011-2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2001, 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 /*! \file */
 
@@ -96,7 +89,7 @@ dns_nsec_compressbitmap(unsigned char *map, const unsigned char *raw,
 		map += octet + 1;
 		raw += 32;
 	}
-	return (map - start);
+	return (unsigned int)(map - start);
 }
 
 isc_result_t
@@ -115,7 +108,7 @@ dns_nsec_buildrdata(dns_db_t *db, dns_dbversion_t *version,
 
 	memset(buffer, 0, DNS_NSEC_BUFFERSIZE);
 	dns_name_toregion(target, &r);
-	memcpy(buffer, r.base, r.length);
+	memmove(buffer, r.base, r.length);
 	r.base = buffer;
 	/*
 	 * Use the end of the space for a raw bitmap leaving enough
@@ -164,7 +157,7 @@ dns_nsec_buildrdata(dns_db_t *db, dns_dbversion_t *version,
 
 	nsec_bits += dns_nsec_compressbitmap(nsec_bits, bm, max_type);
 
-	r.length = nsec_bits - r.base;
+	r.length = (unsigned int)(nsec_bits - r.base);
 	INSIST(r.length <= DNS_NSEC_BUFFERSIZE);
 	dns_rdata_fromregion(rdata,
 			     dns_db_class(db),
@@ -189,11 +182,10 @@ dns_nsec_build(dns_db_t *db, dns_dbversion_t *version, dns_dbnode_t *node,
 
 	RETERR(dns_nsec_buildrdata(db, version, node, target, data, &rdata));
 
+	dns_rdatalist_init(&rdatalist);
 	rdatalist.rdclass = dns_db_class(db);
 	rdatalist.type = dns_rdatatype_nsec;
-	rdatalist.covers = 0;
 	rdatalist.ttl = ttl;
-	ISC_LIST_INIT(rdatalist.rdata);
 	ISC_LIST_APPEND(rdatalist.rdata, &rdata, link);
 	RETERR(dns_rdatalist_tordataset(&rdatalist, &rdataset));
 	result = dns_db_addrdataset(db, node, version, 0, &rdataset,
@@ -436,7 +428,7 @@ dns_nsec_noexistnodata(dns_rdatatype_t type, dns_name_t *name,
 						  nlabels, &common);
 		}
 		result = dns_name_concatenate(dns_wildcardname, &common,
-					       wild, NULL);
+					      wild, NULL);
 		if (result != ISC_R_SUCCESS) {
 			dns_rdata_freestruct(&nsec);
 			(*logit)(arg, ISC_LOG_DEBUG(3),

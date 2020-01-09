@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: update.c,v 1.199 2011/12/22 07:32:40 each Exp $ */
 
 #include <config.h>
 
@@ -224,6 +216,28 @@ struct update_event {
 	dns_message_t		*answer;
 };
 
+/*%
+ * Prepare an RR for the addition of the new RR 'ctx->update_rr',
+ * with TTL 'ctx->update_rr_ttl', to its rdataset, by deleting
+ * the RRs if it is replaced by the new RR or has a conflicting TTL.
+ * The necessary changes are appended to ctx->del_diff and ctx->add_diff;
+ * we need to do all deletions before any additions so that we don't run
+ * into transient states with conflicting TTLs.
+ */
+
+typedef struct {
+	dns_db_t *db;
+	dns_dbversion_t *ver;
+	dns_diff_t *diff;
+	dns_name_t *name;
+	dns_name_t *oldname;
+	dns_rdata_t *update_rr;
+	dns_ttl_t update_rr_ttl;
+	isc_boolean_t ignore_add;
+	dns_diff_t del_diff;
+	dns_diff_t add_diff;
+} add_rr_prepare_ctx_t;
+
 /**************************************************************************/
 /*
  * Forward declarations.
@@ -233,6 +247,7 @@ static void update_action(isc_task_t *task, isc_event_t *event);
 static void updatedone_action(isc_task_t *task, isc_event_t *event);
 static isc_result_t send_forward_event(ns_client_t *client, dns_zone_t *zone);
 static void forward_done(isc_task_t *task, isc_event_t *event);
+static isc_result_t add_rr_prepare_action(void *data, rr_t *rr);
 
 /**************************************************************************/
 
@@ -404,7 +419,6 @@ do_one_tuple(dns_difftuple_t **tuple, dns_db_t *db, dns_dbversion_t *ver,
 	 * Create a singleton diff.
 	 */
 	dns_diff_init(diff->mctx, &temp_diff);
-	temp_diff.resign = diff->resign;
 	ISC_LIST_APPEND(temp_diff.tuples, *tuple, link);
 
 	/*
@@ -542,9 +556,22 @@ foreach_rrset(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 	isc_result_t result;
 	dns_dbnode_t *node;
 	dns_rdatasetiter_t *iter;
+	dns_clientinfomethods_t cm;
+	dns_clientinfo_t ci;
+	dns_dbversion_t *oldver = NULL;
+
+	dns_clientinfomethods_init(&cm, ns_client_sourceip);
+
+	/*
+	 * Only set the clientinfo 'versionp' if the new version is
+	 * different from the current version
+	 */
+	dns_db_currentversion(db, &oldver);
+	dns_clientinfo_init(&ci, NULL, (ver != oldver) ? ver : NULL);
+	dns_db_closeversion(db, &oldver, ISC_FALSE);
 
 	node = NULL;
-	result = dns_db_findnode(db, name, ISC_FALSE, &node);
+	result = dns_db_findnodeext(db, name, ISC_FALSE, &cm, &ci, &node);
 	if (result == ISC_R_NOTFOUND)
 		return (ISC_R_SUCCESS);
 	if (result != ISC_R_SUCCESS)
@@ -621,6 +648,20 @@ foreach_rr(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 	isc_result_t result;
 	dns_dbnode_t *node;
 	dns_rdataset_t rdataset;
+	dns_clientinfomethods_t cm;
+	dns_clientinfo_t ci;
+	dns_dbversion_t *oldver = NULL;
+	dns_fixedname_t fixed;
+
+	dns_clientinfomethods_init(&cm, ns_client_sourceip);
+
+	/*
+	 * Only set the clientinfo 'versionp' if the new version is
+	 * different from the current version
+	 */
+	dns_db_currentversion(db, &oldver);
+	dns_clientinfo_init(&ci, NULL, (ver != oldver) ? ver : NULL);
+	dns_db_closeversion(db, &oldver, ISC_FALSE);
 
 	if (type == dns_rdatatype_any)
 		return (foreach_node_rr(db, ver, name,
@@ -631,7 +672,8 @@ foreach_rr(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 	    (type == dns_rdatatype_rrsig && covers == dns_rdatatype_nsec3))
 		result = dns_db_findnsec3node(db, name, ISC_FALSE, &node);
 	else
-		result = dns_db_findnode(db, name, ISC_FALSE, &node);
+		result = dns_db_findnodeext(db, name, ISC_FALSE,
+					    &cm, &ci, &node);
 	if (result == ISC_R_NOTFOUND)
 		return (ISC_R_SUCCESS);
 	if (result != ISC_R_SUCCESS)
@@ -646,6 +688,14 @@ foreach_rr(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 	}
 	if (result != ISC_R_SUCCESS)
 		goto cleanup_node;
+
+	if (rr_action == add_rr_prepare_action) {
+		add_rr_prepare_ctx_t *ctx = rr_action_data;
+
+		ctx->oldname = dns_fixedname_initname(&fixed);
+		dns_name_copy(name, ctx->oldname, NULL);
+		dns_rdataset_getownercase(&rdataset, ctx->oldname);
+	}
 
 	for (result = dns_rdataset_first(&rdataset);
 	     result == ISC_R_SUCCESS;
@@ -814,8 +864,11 @@ typedef struct {
 	/* The signature's name if the request was signed. */
 	dns_name_t *signer;
 
-	/* The address of the client if the request was received via TCP. */
-	isc_netaddr_t *tcpaddr;
+	/* The address of the client. */
+	isc_netaddr_t *addr;
+
+	/* Whether the request was sent via TCP. */
+	isc_boolean_t tcp;
 
 	/* The ssu table to check against. */
 	dns_ssutable_t *table;
@@ -836,16 +889,17 @@ ssu_checkrule(void *data, dns_rdataset_t *rrset) {
 	if (rrset->type == dns_rdatatype_rrsig ||
 	    rrset->type == dns_rdatatype_nsec)
 		return (ISC_R_SUCCESS);
-	result = dns_ssutable_checkrules(ssuinfo->table, ssuinfo->signer,
-					 ssuinfo->name, ssuinfo->tcpaddr,
-					 rrset->type, ssuinfo->key);
+	result = dns_ssutable_checkrules2(ssuinfo->table, ssuinfo->signer,
+					  ssuinfo->name, ssuinfo->addr,
+					  ssuinfo->tcp, &ns_g_server->aclenv,
+					  rrset->type, ssuinfo->key);
 	return (result == ISC_TRUE ? ISC_R_SUCCESS : ISC_R_FAILURE);
 }
 
 static isc_boolean_t
 ssu_checkall(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 	     dns_ssutable_t *ssutable, dns_name_t *signer,
-	     isc_netaddr_t *tcpaddr, dst_key_t *key)
+	     isc_netaddr_t *addr, isc_boolean_t tcp, dst_key_t *key)
 {
 	isc_result_t result;
 	ssu_check_t ssuinfo;
@@ -853,7 +907,8 @@ ssu_checkall(dns_db_t *db, dns_dbversion_t *ver, dns_name_t *name,
 	ssuinfo.name = name;
 	ssuinfo.table = ssutable;
 	ssuinfo.signer = signer;
-	ssuinfo.tcpaddr = tcpaddr;
+	ssuinfo.addr = addr;
+	ssuinfo.tcp = tcp;
 	ssuinfo.key = key;
 	result = foreach_rrset(db, ver, name, ssu_checkrule, &ssuinfo);
 	return (ISC_TF(result == ISC_R_SUCCESS));
@@ -1264,40 +1319,30 @@ delete_if(rr_predicate *predicate, dns_db_t *db, dns_dbversion_t *ver,
 }
 
 /**************************************************************************/
-/*%
- * Prepare an RR for the addition of the new RR 'ctx->update_rr',
- * with TTL 'ctx->update_rr_ttl', to its rdataset, by deleting
- * the RRs if it is replaced by the new RR or has a conflicting TTL.
- * The necessary changes are appended to ctx->del_diff and ctx->add_diff;
- * we need to do all deletions before any additions so that we don't run
- * into transient states with conflicting TTLs.
- */
-
-typedef struct {
-	dns_db_t *db;
-	dns_dbversion_t *ver;
-	dns_diff_t *diff;
-	dns_name_t *name;
-	dns_rdata_t *update_rr;
-	dns_ttl_t update_rr_ttl;
-	isc_boolean_t ignore_add;
-	dns_diff_t del_diff;
-	dns_diff_t add_diff;
-} add_rr_prepare_ctx_t;
 
 static isc_result_t
 add_rr_prepare_action(void *data, rr_t *rr) {
 	isc_result_t result = ISC_R_SUCCESS;
 	add_rr_prepare_ctx_t *ctx = data;
 	dns_difftuple_t *tuple = NULL;
-	isc_boolean_t equal;
+	isc_boolean_t equal, case_equal, ttl_equal;
 
 	/*
-	 * If the update RR is a "duplicate" of the update RR,
+	 * Are the new and old cases equal?
+	 */
+	case_equal = dns_name_caseequal(ctx->name, ctx->oldname);
+
+	/*
+	 * Are the ttl's equal?
+	 */
+	ttl_equal = rr->ttl == ctx->update_rr_ttl;
+
+	/*
+	 * If the update RR is a "duplicate" of a existing RR,
 	 * the update should be silently ignored.
 	 */
 	equal = ISC_TF(dns_rdata_casecompare(&rr->rdata, ctx->update_rr) == 0);
-	if (equal && rr->ttl == ctx->update_rr_ttl) {
+	if (equal && case_equal && ttl_equal) {
 		ctx->ignore_add = ISC_TRUE;
 		return (ISC_R_SUCCESS);
 	}
@@ -1308,19 +1353,19 @@ add_rr_prepare_action(void *data, rr_t *rr) {
 	 */
 	if (replaces_p(ctx->update_rr, &rr->rdata)) {
 		CHECK(dns_difftuple_create(ctx->del_diff.mctx, DNS_DIFFOP_DEL,
-					   ctx->name, rr->ttl, &rr->rdata,
+					   ctx->oldname, rr->ttl, &rr->rdata,
 					   &tuple));
 		dns_diff_append(&ctx->del_diff, &tuple);
 		return (ISC_R_SUCCESS);
 	}
 
 	/*
-	 * If this RR differs in TTL from the update RR,
-	 * its TTL must be adjusted.
+	 * If this RR differs in TTL or case from the update RR,
+	 * its TTL and case must be adjusted.
 	 */
-	if (rr->ttl != ctx->update_rr_ttl) {
+	if (!ttl_equal || !case_equal) {
 		CHECK(dns_difftuple_create(ctx->del_diff.mctx, DNS_DIFFOP_DEL,
-					   ctx->name, rr->ttl, &rr->rdata,
+					   ctx->oldname, rr->ttl, &rr->rdata,
 					   &tuple));
 		dns_diff_append(&ctx->del_diff, &tuple);
 		if (!equal) {
@@ -1663,8 +1708,7 @@ check_mx(ns_client_t *client, dns_zone_t *zone,
 	struct in_addr addr;
 	unsigned int options;
 
-	dns_fixedname_init(&fixed);
-	foundname = dns_fixedname_name(&fixed);
+	foundname = dns_fixedname_initname(&fixed);
 	dns_rdata_init(&rdata);
 	options = dns_zone_getoptions(zone);
 
@@ -1684,7 +1728,7 @@ check_mx(ns_client_t *client, dns_zone_t *zone,
 		dns_name_format(&mx.mx, namebuf, sizeof(namebuf));
 		dns_name_format(&t->name, ownerbuf, sizeof(ownerbuf));
 		isaddress = ISC_FALSE;
-		if ((options & DNS_RDATA_CHECKMX) != 0 &&
+		if ((options & DNS_ZONEOPT_CHECKMX) != 0 &&
 		    strlcpy(tmp, namebuf, sizeof(tmp)) < sizeof(tmp)) {
 			if (tmp[strlen(tmp) - 1] == '.')
 				tmp[strlen(tmp) - 1] = '\0';
@@ -1693,7 +1737,7 @@ check_mx(ns_client_t *client, dns_zone_t *zone,
 				isaddress = ISC_TRUE;
 		}
 
-		if (isaddress && (options & DNS_RDATA_CHECKMXFAIL) != 0) {
+		if (isaddress && (options & DNS_ZONEOPT_CHECKMXFAIL) != 0) {
 			update_log(client, zone, ISC_LOG_ERROR,
 				   "%s/MX: '%s': %s",
 				   ownerbuf, namebuf,
@@ -2435,7 +2479,6 @@ update_action(isc_task_t *task, isc_event_t *event) {
 	update_event_t *uev = (update_event_t *) event;
 	dns_zone_t *zone = uev->zone;
 	ns_client_t *client = (ns_client_t *)event->ev_arg;
-
 	isc_result_t result;
 	dns_db_t *db = NULL;
 	dns_dbversion_t *oldver = NULL;
@@ -2451,11 +2494,14 @@ update_action(isc_task_t *task, isc_event_t *event) {
 	dns_ssutable_t *ssutable = NULL;
 	dns_fixedname_t tmpnamefixed;
 	dns_name_t *tmpname = NULL;
-	unsigned int options;
+	unsigned int options, options2;
 	dns_difftuple_t *tuple;
 	dns_rdata_dnskey_t dnskey;
 	isc_boolean_t had_dnskey;
 	dns_rdatatype_t privatetype = dns_zone_getprivatetype(zone);
+	dns_ttl_t maxttl = 0;
+	isc_uint32_t maxrecords;
+	isc_uint64_t records;
 
 	INSIST(event->ev_type == DNS_EVENT_UPDATE);
 
@@ -2586,8 +2632,7 @@ update_action(isc_task_t *task, isc_event_t *event) {
 			FAILC(result, "'RRset exists (value dependent)' "
 			      "prerequisite not satisfied");
 
-		dns_fixedname_init(&tmpnamefixed);
-		tmpname = dns_fixedname_name(&tmpnamefixed);
+		tmpname = dns_fixedname_initname(&tmpnamefixed);
 		result = temp_check(mctx, &temp, db, ver, tmpname, &type);
 		if (result != ISC_R_SUCCESS)
 			FAILNT(result, tmpname, type,
@@ -2685,38 +2730,33 @@ update_action(isc_task_t *task, isc_event_t *event) {
 		}
 
 		if (ssutable != NULL) {
-			isc_netaddr_t *tcpaddr, netaddr;
+			isc_netaddr_t netaddr;
 			dst_key_t *tsigkey = NULL;
-			/*
-			 * If this is a TCP connection then pass the
-			 * address of the client through for tcp-self
-			 * and 6to4-self otherwise pass NULL.  This
-			 * provides weak address based authentication.
-			 */
-			if (TCPCLIENT(client)) {
-				isc_netaddr_fromsockaddr(&netaddr,
-							 &client->peeraddr);
-				tcpaddr = &netaddr;
-			} else
-				tcpaddr = NULL;
+			isc_netaddr_fromsockaddr(&netaddr, &client->peeraddr);
 
 			if (client->message->tsigkey != NULL)
 				tsigkey = client->message->tsigkey->key;
 
 			if (rdata.type != dns_rdatatype_any) {
-				if (!dns_ssutable_checkrules(ssutable,
-							     client->signer,
-							     name, tcpaddr,
-							     rdata.type,
-							     tsigkey))
+				if (!dns_ssutable_checkrules2
+				    (ssutable, client->signer, name, &netaddr,
+				     ISC_TF(TCPCLIENT(client)),
+				     &ns_g_server->aclenv,
+				     rdata.type, tsigkey))
+				{
 					FAILC(DNS_R_REFUSED,
 					      "rejected by secure update");
+				}
 			} else {
 				if (!ssu_checkall(db, ver, name, ssutable,
-						  client->signer, tcpaddr,
+						  client->signer,
+						  &netaddr,
+						  ISC_TF(TCPCLIENT(client)),
 						  tsigkey))
+				{
 					FAILC(DNS_R_REFUSED,
 					      "rejected by secure update");
+				}
 			}
 		}
 	}
@@ -2731,6 +2771,7 @@ update_action(isc_task_t *task, isc_event_t *event) {
 	 */
 
 	options = dns_zone_getoptions(zone);
+	options2 = dns_zone_getoptions2(zone);
 	for (result = dns_message_firstname(request, DNS_SECTION_UPDATE);
 	     result == ISC_R_SUCCESS;
 	     result = dns_message_nextname(request, DNS_SECTION_UPDATE))
@@ -2747,7 +2788,8 @@ update_action(isc_task_t *task, isc_event_t *event) {
 		if (update_class == zoneclass) {
 
 			/*
-			 * RFC1123 doesn't allow MF and MD in master zones.				 */
+			 * RFC1123 doesn't allow MF and MD in master zones.
+			 */
 			if (rdata.type == dns_rdatatype_md ||
 			    rdata.type == dns_rdatatype_mf) {
 				char typebuf[DNS_RDATATYPE_FORMATSIZE];
@@ -2836,7 +2878,9 @@ update_action(isc_task_t *task, isc_event_t *event) {
 				 * Ignore attempts to add NSEC3PARAM records
 				 * with any flags other than OPTOUT.
 				 */
-				if ((rdata.data[1] & ~DNS_NSEC3FLAG_OPTOUT) != 0) {
+				if ((rdata.data[1] &
+				     ~DNS_NSEC3FLAG_OPTOUT) != 0)
+				{
 					update_log(client, zone,
 						   LOGLEVEL_PROTOCOL,
 						   "attempt to add NSEC3PARAM "
@@ -2856,16 +2900,45 @@ update_action(isc_task_t *task, isc_event_t *event) {
 					   "a non-terminal wildcard", namestr);
 			}
 
+			if ((options2 & DNS_ZONEOPT2_CHECKTTL) != 0) {
+				maxttl = dns_zone_getmaxttl(zone);
+				if (ttl > maxttl) {
+					ttl = maxttl;
+					update_log(client, zone,
+						   LOGLEVEL_PROTOCOL,
+						   "reducing TTL to the "
+						   "configured max-zone-ttl %d",
+						   maxttl);
+				}
+			}
+
 			if (isc_log_wouldlog(ns_g_lctx, LOGLEVEL_PROTOCOL)) {
 				char namestr[DNS_NAME_FORMATSIZE];
 				char typestr[DNS_RDATATYPE_FORMATSIZE];
-				dns_name_format(name, namestr,
-						sizeof(namestr));
+				char rdstr[2048];
+				isc_buffer_t buf;
+				int len = 0;
+				const char *truncated = "";
+
+				dns_name_format(name, namestr, sizeof(namestr));
 				dns_rdatatype_format(rdata.type, typestr,
 						     sizeof(typestr));
+				isc_buffer_init(&buf, rdstr, sizeof(rdstr));
+				result = dns_rdata_totext(&rdata, NULL, &buf);
+				if (result == ISC_R_NOSPACE) {
+					len = (int)isc_buffer_usedlength(&buf);
+					truncated = " [TRUNCATED]";
+				} else if (result != ISC_R_SUCCESS) {
+					snprintf(rdstr, sizeof(rdstr), "[dns_"
+						 "rdata_totext failed: %s]",
+						 dns_result_totext(result));
+					len = strlen(rdstr);
+				} else
+					len = (int)isc_buffer_usedlength(&buf);
 				update_log(client, zone, LOGLEVEL_PROTOCOL,
-					   "adding an RR at '%s' %s",
-					   namestr, typestr);
+					   "adding an RR at '%s' %s %.*s%s",
+					   namestr, typestr, len, rdstr,
+					   truncated);
 			}
 
 			/* Prepare the affected RRset for the addition. */
@@ -2875,6 +2948,7 @@ update_action(isc_task_t *task, isc_event_t *event) {
 				ctx.ver = ver;
 				ctx.diff = &diff;
 				ctx.name = name;
+				ctx.oldname = name;
 				ctx.update_rr = &rdata;
 				ctx.update_rr_ttl = ttl;
 				ctx.ignore_add = ISC_FALSE;
@@ -2888,10 +2962,18 @@ update_action(isc_task_t *task, isc_event_t *event) {
 					dns_diff_clear(&ctx.del_diff);
 					dns_diff_clear(&ctx.add_diff);
 				} else {
-					CHECK(do_diff(&ctx.del_diff, db, ver,
-						      &diff));
-					CHECK(do_diff(&ctx.add_diff, db, ver,
-						      &diff));
+					result = do_diff(&ctx.del_diff, db, ver,
+							 &diff);
+					if (result == ISC_R_SUCCESS) {
+						result = do_diff(&ctx.add_diff,
+								 db, ver,
+								 &diff);
+					}
+					if (result != ISC_R_SUCCESS) {
+						dns_diff_clear(&ctx.del_diff);
+						dns_diff_clear(&ctx.add_diff);
+						goto failure;
+					}
 					CHECK(update_one_rr(db, ver, &diff,
 							    DNS_DIFFOP_ADD,
 							    name, ttl, &rdata));
@@ -3010,6 +3092,19 @@ update_action(isc_task_t *task, isc_event_t *event) {
 			goto failure;
 		}
 	}
+	if (! ISC_LIST_EMPTY(diff.tuples)) {
+		result = dns_zone_cdscheck(zone, db, ver);
+		if (result == DNS_R_BADCDS || result == DNS_R_BADCDNSKEY) {
+			update_log(client, zone, LOGLEVEL_PROTOCOL,
+				   "update rejected: bad %s RRset",
+				   result == DNS_R_BADCDS ? "CDS" : "CDNSKEY");
+			result = DNS_R_REFUSED;
+			goto failure;
+		}
+		if (result != ISC_R_SUCCESS)
+			goto failure;
+
+	}
 
 	/*
 	 * If any changes were made, increment the SOA serial number,
@@ -3040,10 +3135,9 @@ update_action(isc_task_t *task, isc_event_t *event) {
 #define ALLOW_SECURE_TO_INSECURE(zone) \
 	((dns_zone_getoptions(zone) & DNS_ZONEOPT_SECURETOINSECURE) != 0)
 
+		CHECK(rrset_exists(db, oldver, zonename, dns_rdatatype_dnskey,
+				   0, &had_dnskey));
 		if (!ALLOW_SECURE_TO_INSECURE(zone)) {
-			CHECK(rrset_exists(db, oldver, zonename,
-					   dns_rdatatype_dnskey, 0,
-					   &had_dnskey));
 			if (had_dnskey && !has_dnskey) {
 				update_log(client, zone, LOGLEVEL_PROTOCOL,
 					   "update rejected: all DNSKEY "
@@ -3085,6 +3179,20 @@ update_action(isc_task_t *task, isc_event_t *event) {
 					   ISC_LOG_ERROR,
 					   "RRSIG/NSEC/NSEC3 update failed: %s",
 					   isc_result_totext(result));
+				goto failure;
+			}
+		}
+
+		maxrecords = dns_zone_getmaxrecords(zone);
+		if (maxrecords != 0U) {
+			result = dns_db_getsize(db, ver, &records, NULL);
+			if (result == ISC_R_SUCCESS && records > maxrecords) {
+				update_log(client, zone, ISC_LOG_ERROR,
+					   "records in zone (%"
+					   ISC_PRINT_QUADFORMAT
+					   "u) exceeds max-records (%u)",
+					   records, maxrecords);
+				result = DNS_R_TOOMANYRECORDS;
 				goto failure;
 			}
 		}
@@ -3233,6 +3341,8 @@ update_action(isc_task_t *task, isc_event_t *event) {
 	uev->ev_type = DNS_EVENT_UPDATEDONE;
 	uev->ev_action = updatedone_action;
 	isc_task_send(client->task, &event);
+
+	INSIST(ver == NULL);
 	INSIST(event == NULL);
 }
 

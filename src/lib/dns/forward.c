@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000, 2001  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: forward.c,v 1.14 2009/09/02 23:48:02 tbox Exp $ */
 
 /*! \file */
 
@@ -24,7 +16,6 @@
 #include <isc/magic.h>
 #include <isc/mem.h>
 #include <isc/rwlock.h>
-#include <isc/sockaddr.h>
 #include <isc/util.h>
 
 #include <dns/forward.h>
@@ -84,12 +75,12 @@ dns_fwdtable_create(isc_mem_t *mctx, dns_fwdtable_t **fwdtablep) {
 }
 
 isc_result_t
-dns_fwdtable_add(dns_fwdtable_t *fwdtable, dns_name_t *name,
-		 isc_sockaddrlist_t *addrs, dns_fwdpolicy_t fwdpolicy)
+dns_fwdtable_addfwd(dns_fwdtable_t *fwdtable, dns_name_t *name,
+		    dns_forwarderlist_t *fwdrs, dns_fwdpolicy_t fwdpolicy)
 {
 	isc_result_t result;
 	dns_forwarders_t *forwarders;
-	isc_sockaddr_t *sa, *nsa;
+	dns_forwarder_t *fwd, *nfwd;
 
 	REQUIRE(VALID_FWDTABLE(fwdtable));
 
@@ -97,19 +88,19 @@ dns_fwdtable_add(dns_fwdtable_t *fwdtable, dns_name_t *name,
 	if (forwarders == NULL)
 		return (ISC_R_NOMEMORY);
 
-	ISC_LIST_INIT(forwarders->addrs);
-	for (sa = ISC_LIST_HEAD(*addrs);
-	     sa != NULL;
-	     sa = ISC_LIST_NEXT(sa, link))
+	ISC_LIST_INIT(forwarders->fwdrs);
+	for (fwd = ISC_LIST_HEAD(*fwdrs);
+	     fwd != NULL;
+	     fwd = ISC_LIST_NEXT(fwd, link))
 	{
-		nsa = isc_mem_get(fwdtable->mctx, sizeof(isc_sockaddr_t));
-		if (nsa == NULL) {
+		nfwd = isc_mem_get(fwdtable->mctx, sizeof(dns_forwarder_t));
+		if (nfwd == NULL) {
 			result = ISC_R_NOMEMORY;
 			goto cleanup;
 		}
-		*nsa = *sa;
-		ISC_LINK_INIT(nsa, link);
-		ISC_LIST_APPEND(forwarders->addrs, nsa, link);
+		*nfwd = *fwd;
+		ISC_LINK_INIT(nfwd, link);
+		ISC_LIST_APPEND(forwarders->fwdrs, nfwd, link);
 	}
 	forwarders->fwdpolicy = fwdpolicy;
 
@@ -123,10 +114,61 @@ dns_fwdtable_add(dns_fwdtable_t *fwdtable, dns_name_t *name,
 	return (ISC_R_SUCCESS);
 
  cleanup:
-	while (!ISC_LIST_EMPTY(forwarders->addrs)) {
-		sa = ISC_LIST_HEAD(forwarders->addrs);
-		ISC_LIST_UNLINK(forwarders->addrs, sa, link);
-		isc_mem_put(fwdtable->mctx, sa, sizeof(isc_sockaddr_t));
+	while (!ISC_LIST_EMPTY(forwarders->fwdrs)) {
+		fwd = ISC_LIST_HEAD(forwarders->fwdrs);
+		ISC_LIST_UNLINK(forwarders->fwdrs, fwd, link);
+		isc_mem_put(fwdtable->mctx, fwd, sizeof(isc_sockaddr_t));
+	}
+	isc_mem_put(fwdtable->mctx, forwarders, sizeof(dns_forwarders_t));
+	return (result);
+}
+
+isc_result_t
+dns_fwdtable_add(dns_fwdtable_t *fwdtable, dns_name_t *name,
+		 isc_sockaddrlist_t *addrs, dns_fwdpolicy_t fwdpolicy)
+{
+	isc_result_t result;
+	dns_forwarders_t *forwarders;
+	dns_forwarder_t *fwd;
+	isc_sockaddr_t *sa;
+
+	REQUIRE(VALID_FWDTABLE(fwdtable));
+
+	forwarders = isc_mem_get(fwdtable->mctx, sizeof(dns_forwarders_t));
+	if (forwarders == NULL)
+		return (ISC_R_NOMEMORY);
+
+	ISC_LIST_INIT(forwarders->fwdrs);
+	for (sa = ISC_LIST_HEAD(*addrs);
+	     sa != NULL;
+	     sa = ISC_LIST_NEXT(sa, link))
+	{
+		fwd = isc_mem_get(fwdtable->mctx, sizeof(dns_forwarder_t));
+		if (fwd == NULL) {
+			result = ISC_R_NOMEMORY;
+			goto cleanup;
+		}
+		fwd->addr = *sa;
+		fwd->dscp = -1;
+		ISC_LINK_INIT(fwd, link);
+		ISC_LIST_APPEND(forwarders->fwdrs, fwd, link);
+	}
+	forwarders->fwdpolicy = fwdpolicy;
+
+	RWLOCK(&fwdtable->rwlock, isc_rwlocktype_write);
+	result = dns_rbt_addname(fwdtable->table, name, forwarders);
+	RWUNLOCK(&fwdtable->rwlock, isc_rwlocktype_write);
+
+	if (result != ISC_R_SUCCESS)
+		goto cleanup;
+
+	return (ISC_R_SUCCESS);
+
+ cleanup:
+	while (!ISC_LIST_EMPTY(forwarders->fwdrs)) {
+		fwd = ISC_LIST_HEAD(forwarders->fwdrs);
+		ISC_LIST_UNLINK(forwarders->fwdrs, fwd, link);
+		isc_mem_put(fwdtable->mctx, fwd, sizeof(dns_forwarder_t));
 	}
 	isc_mem_put(fwdtable->mctx, forwarders, sizeof(dns_forwarders_t));
 	return (result);
@@ -202,14 +244,14 @@ static void
 auto_detach(void *data, void *arg) {
 	dns_forwarders_t *forwarders = data;
 	dns_fwdtable_t *fwdtable = arg;
-	isc_sockaddr_t *sa;
+	dns_forwarder_t *fwd;
 
 	UNUSED(arg);
 
-	while (!ISC_LIST_EMPTY(forwarders->addrs)) {
-		sa = ISC_LIST_HEAD(forwarders->addrs);
-		ISC_LIST_UNLINK(forwarders->addrs, sa, link);
-		isc_mem_put(fwdtable->mctx, sa, sizeof(isc_sockaddr_t));
+	while (!ISC_LIST_EMPTY(forwarders->fwdrs)) {
+		fwd = ISC_LIST_HEAD(forwarders->fwdrs);
+		ISC_LIST_UNLINK(forwarders->fwdrs, fwd, link);
+		isc_mem_put(fwdtable->mctx, fwd, sizeof(dns_forwarder_t));
 	}
 	isc_mem_put(fwdtable->mctx, forwarders, sizeof(dns_forwarders_t));
 }

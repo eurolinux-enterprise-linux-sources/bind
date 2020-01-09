@@ -1,18 +1,12 @@
 /*
- * Copyright (C) 2004-2009, 2012, 2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1998-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /*! \file */
@@ -23,9 +17,11 @@
  */
 #define _CRT_SECURE_NO_DEPRECATE 1
 /*
- * We use snprintf.
+ * We use snprintf which was defined late in Windows even it is in C99.
  */
+#if _MSC_VER < 1900
 #define snprintf _snprintf
+#endif
 #endif
 
 #include <sys/types.h>
@@ -112,20 +108,11 @@
 
 static const char copyright[] =
 "/*\n"
-" * Copyright (C) 2004%s Internet Systems Consortium, Inc. (\"ISC\")\n"
-" * Copyright (C) 1998-2003 Internet Software Consortium.\n"
+" * Copyright (C) 1998%s  Internet Systems Consortium, Inc. (\"ISC\")\n"
 " *\n"
-" * Permission to use, copy, modify, and distribute this software for any\n"
-" * purpose with or without fee is hereby granted, provided that the above\n"
-" * copyright notice and this permission notice appear in all copies.\n"
-" *\n"
-" * THE SOFTWARE IS PROVIDED \"AS IS\" AND ISC DISCLAIMS ALL WARRANTIES WITH\n"
-" * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY\n"
-" * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,\n"
-" * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM\n"
-" * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE\n"
-" * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR\n"
-" * PERFORMANCE OF THIS SOFTWARE.\n"
+" * This Source Code Form is subject to the terms of the Mozilla Public\n"
+" * License, v. 2.0. If a copy of the MPL was not distributed with this\n"
+" * file, You can obtain one at http://mozilla.org/MPL/2.0/.\n"
 " */\n"
 "\n"
 "/***************\n"
@@ -309,7 +296,8 @@ find_typename(int type) {
 static void
 insert_into_typenames(int type, const char *typename, const char *attr) {
 	struct ttnam *ttn = NULL;
-	int c, i, n;
+	size_t c;
+	int i, n;
 	char tmp[256];
 
 	INSIST(strlen(typename) < TYPECLASSBUF);
@@ -330,15 +318,20 @@ insert_into_typenames(int type, const char *typename, const char *attr) {
 		exit(1);
 	}
 
+	/* XXXMUKS: This is redundant due to the INSIST above. */
 	if (strlen(typename) > sizeof(ttn->typename) - 1) {
 		fprintf(stderr, "Error:  type name %s is too long\n",
 			typename);
 		exit(1);
 	}
+
 	strncpy(ttn->typename, typename, sizeof(ttn->typename));
-	ttn->type = type;
+	ttn->typename[sizeof(ttn->typename) - 1] = '\0';
 
 	strncpy(ttn->macroname, ttn->typename, sizeof(ttn->macroname));
+	ttn->macroname[sizeof(ttn->macroname) - 1] = '\0';
+
+	ttn->type = type;
 	c = strlen(ttn->macroname);
 	while (c > 0) {
 		if (ttn->macroname[c - 1] == '-')
@@ -364,7 +357,10 @@ insert_into_typenames(int type, const char *typename, const char *attr) {
 			attr, typename);
 		exit(1);
 	}
+
 	strncpy(ttn->attr, attr, sizeof(ttn->attr));
+	ttn->attr[sizeof(ttn->attr) - 1] = '\0';
+
 	ttn->sorted = 0;
 	if (maxtype < type)
 		maxtype = type;
@@ -393,11 +389,17 @@ add(int rdclass, const char *classname, int type, const char *typename,
 	newtt->next = NULL;
 	newtt->rdclass = rdclass;
 	newtt->type = type;
+
 	strncpy(newtt->classname, classname, sizeof(newtt->classname));
+	newtt->classname[sizeof(newtt->classname) - 1] = '\0';
+
 	strncpy(newtt->typename, typename, sizeof(newtt->typename));
+	newtt->typename[sizeof(newtt->typename) - 1] = '\0';
+
 	if (strncmp(dirname, "./", 2) == 0)
 		dirname += 2;
 	strncpy(newtt->dirname, dirname, sizeof(newtt->dirname));
+	newtt->dirname[sizeof(newtt->dirname) - 1] = '\0';
 
 	tt = types;
 	oldtt = NULL;
@@ -436,6 +438,7 @@ add(int rdclass, const char *classname, int type, const char *typename,
 	}
 	newcc->rdclass = rdclass;
 	strncpy(newcc->classname, classname, sizeof(newcc->classname));
+	newcc->classname[sizeof(newcc->classname) - 1] = '\0';
 	cc = classes;
 	oldcc = NULL;
 
@@ -485,7 +488,7 @@ sd(int rdclass, const char *classname, const char *dirname, char filetype) {
 
 static unsigned int
 HASH(char *string) {
-	unsigned int n;
+	size_t n;
 	unsigned char a, b;
 
 	n = strlen(string);
@@ -530,7 +533,7 @@ main(int argc, char **argv) {
 	for (i = 0; i < TYPENAMES; i++)
 		memset(&typenames[i], 0, sizeof(typenames[i]));
 
-	strcpy(srcdir, "");
+	srcdir[0] = '\0';
 	while ((c = isc_commandline_parse(argc, argv, "cdits:F:P:S:")) != -1)
 		switch (c) {
 		case 'c':
@@ -620,12 +623,15 @@ main(int argc, char **argv) {
 			n = snprintf(year, sizeof(year), "-%d",
 				     tm->tm_year + 1900);
 			INSIST(n > 0 && (unsigned)n < sizeof(year));
-		} else
-			year[0] = 0;
-	} else
-		year[0] = 0;
+		} else {
+			snprintf(year, sizeof(year), "-2016");
+		}
+	} else {
+		snprintf(year, sizeof(year), "-2016");
+	}
 
-	if (!depend) fprintf(stdout, copyright, year);
+	if (!depend)
+		fprintf(stdout, copyright, year);
 
 	if (code) {
 		fputs("#ifndef DNS_CODE_H\n", stdout);
@@ -752,7 +758,7 @@ main(int argc, char **argv) {
 					continue;
 				if (hash == HASH(ttn2->typename)) {
 					fprintf(stdout, "\t\t\tRDATATYPE_COMPARE"
-					       "(\"%s\", %u, "
+					       "(\"%s\", %d, "
 					       "_typename, _length, _typep); \\\n",
 					       ttn2->typename, ttn2->type);
 					ttn2->sorted = 1;
@@ -768,7 +774,7 @@ main(int argc, char **argv) {
 			ttn = find_typename(i);
 			if (ttn == NULL)
 				continue;
-			fprintf(stdout, "\tcase %u: return (%s); \\\n",
+			fprintf(stdout, "\tcase %d: return (%s); \\\n",
 				i, upper(ttn->attr));
 		}
 		fprintf(stdout, "\t}\n");
@@ -779,7 +785,15 @@ main(int argc, char **argv) {
 			ttn = find_typename(i);
 			if (ttn == NULL)
 				continue;
-			fprintf(stdout, "\tcase %u: return "
+			/*
+			 * Remove KEYDATA (65533) from the type to memonic
+			 * translation as it is internal use only.  This
+			 * stops the tools from displaying KEYDATA instead
+			 * of TYPE65533.
+			 */
+			if (i == 65533U)
+				continue;
+			fprintf(stdout, "\tcase %d: return "
 				"(str_totext(\"%s\", target)); \\\n",
 				i, upper(ttn->typename));
 		}

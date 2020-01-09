@@ -1,0 +1,303 @@
+From fb4271f5881a83c2cfb639587597b9a80c536a6d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20Men=C5=A1=C3=ADk?= <pemensik@redhat.com>
+Date: Tue, 29 Jan 2019 20:59:57 +0100
+Subject: [PATCH] Replace libidn2 support with libidn
+
+They should be more or less compatible. Try to maintain original
+behaviour of old 9.11 libidn patch, ignore any in output filter.
+---
+ bin/dig/Makefile.in |  6 ++---
+ bin/dig/dighost.c   | 64 ++++++++++++++++++++++++++++++---------------
+ config.h.in         |  4 +--
+ configure.in        | 56 +++++++++++++++++++--------------------
+ 4 files changed, 76 insertions(+), 54 deletions(-)
+
+diff --git a/bin/dig/Makefile.in b/bin/dig/Makefile.in
+index 3edd951..75441b0 100644
+--- a/bin/dig/Makefile.in
++++ b/bin/dig/Makefile.in
+@@ -19,7 +19,7 @@ READLINE_LIB = @READLINE_LIB@
+ 
+ CINCLUDES =	-I${srcdir}/include ${DNS_INCLUDES} \
+ 		${BIND9_INCLUDES} ${ISC_INCLUDES} \
+-		${LWRES_INCLUDES} ${ISCCFG_INCLUDES} @LIBIDN2_CFLAGS@ @DST_OPENSSL_INC@
++		${LWRES_INCLUDES} ${ISCCFG_INCLUDES} @LIBIDN_CFLAGS@ @DST_OPENSSL_INC@
+ 
+ CDEFINES =	-DVERSION=\"${VERSION}\" @CRYPTO@
+ CWARNINGS =
+@@ -41,10 +41,10 @@ DEPLIBS =	${DNSDEPLIBS} ${BIND9DEPLIBS} ${ISCDEPLIBS} \
+ 		${ISCCFGDEPLIBS} ${LWRESDEPLIBS}
+ 
+ LIBS =		${LWRESLIBS} ${BIND9LIBS} ${ISCCFGLIBS} \
+-		${ISCLIBS} @IDNKIT_LIBS@ @LIBIDN2_LIBS@ @LIBS@
++		${ISCLIBS} @IDNKIT_LIBS@ @LIBIDN_LIBS@ @LIBS@
+ 
+ NOSYMLIBS =	${LWRESLIBS} ${BIND9LIBS} ${ISCCFGLIBS} \
+-		${ISCNOSYMLIBS} @IDNKIT_LIBS@ @LIBIDN2_LIBS@ @LIBS@
++		${ISCNOSYMLIBS} @IDNKIT_LIBS@ @LIBIDN_LIBS@ @LIBS@
+ 
+ SUBDIRS =
+ 
+diff --git a/bin/dig/dighost.c b/bin/dig/dighost.c
+index ffc16c4..a345a21 100644
+--- a/bin/dig/dighost.c
++++ b/bin/dig/dighost.c
+@@ -38,8 +38,9 @@
+ #include <idn/api.h>
+ #endif
+ 
+-#ifdef WITH_LIBIDN2
+-#include <idn2.h>
++#ifdef WITH_LIBIDN
++#include <stringprep.h>
++#include <idna.h>
+ #endif
+ #endif /* WITH_IDN_SUPPORT */
+ 
+@@ -4761,7 +4762,7 @@ idn_ace_to_locale(const char *from, char *to, size_t tolen) {
+ }
+ #endif /* WITH_IDNKIT */
+ 
+-#ifdef WITH_LIBIDN2
++#ifdef WITH_LIBIDN
+ static void
+ idn_initialize(void) {
+ }
+@@ -4769,16 +4770,25 @@ idn_initialize(void) {
+ static isc_result_t
+ idn_locale_to_ace(const char *from, char *to, size_t tolen) {
+ 	int res;
++	char *utf8_str;
+ 	char *tmp_str = NULL;
+ 
+-	res = idn2_to_ascii_lz(from, &tmp_str, IDN2_NONTRANSITIONAL|IDN2_NFC_INPUT);
+-	if (res == IDN2_DISALLOWED) {
+-		res = idn2_to_ascii_lz(from, &tmp_str, IDN2_TRANSITIONAL|IDN2_NFC_INPUT);
++	debug ("libidn_locale_to_utf8");
++	utf8_str = stringprep_locale_to_utf8 (from);
++	if (utf8_str == NULL) {
++		debug ("libidn stringprep_locale_to_utf8 failure");
++		return ISC_R_FAILURE;
+ 	}
+ 
+-	if (res == IDN2_OK) {
++	int iresult;
++
++	debug ("libidn_utf8_to_ascii");
++	res = idna_to_ascii_8z (utf8_str, &tmp_str, 0);
++	free (utf8_str);
++
++	if (res == IDNA_SUCCESS) {
+ 		/*
+-		 * idn2_to_ascii_lz() normalizes all strings to lowerl case,
++		 * idna_to_ascii_8z() normalizes all strings to lowerl case,
+ 		 * but we generally don't want to lowercase all input strings;
+ 		 * make sure to return the original case if the two strings
+ 		 * differ only in case
+@@ -4786,26 +4796,26 @@ idn_locale_to_ace(const char *from, char *to, size_t tolen) {
+ 		if (!strcasecmp(from, tmp_str)) {
+ 			if (strlen(from) >= tolen) {
+ 				debug("from string is too long");
+-				idn2_free(tmp_str);
++				free(tmp_str);
+ 				return ISC_R_NOSPACE;
+ 			}
+-			idn2_free(tmp_str);
++			free(tmp_str);
+ 			(void) strlcpy(to, from, tolen);
+ 			return ISC_R_SUCCESS;
+ 		}
+ 		/* check the length */
+ 		if (strlen(tmp_str) >= tolen) {
+ 			debug("ACE string is too long");
+-			idn2_free(tmp_str);
++			free(tmp_str);
+ 			return ISC_R_NOSPACE;
+ 		}
+ 
+ 		(void) strlcpy(to, tmp_str, tolen);
+-		idn2_free(tmp_str);
++		free(tmp_str);
+ 		return ISC_R_SUCCESS;
+ 	}
+ 
+-	fatal("'%s' is not a legal IDN name (%s), use +noidnin", from, idn2_strerror(res));
++	fatal("'%s' is not a legal IDN name (%s), use +noidnin", from, idna_strerror (res));
+ 	return ISC_R_FAILURE;
+ }
+ 
+@@ -4813,29 +4823,41 @@ idn_locale_to_ace(const char *from, char *to, size_t tolen) {
+ static isc_result_t
+ idn_ace_to_locale(const char *from, char *to, size_t tolen) {
+ 	int res;
++	char *tmp2 = NULL;
+ 	char *tmp_str = NULL;
+ 
+-	res = idn2_to_unicode_8zlz(from, &tmp_str,
+-				   IDN2_NONTRANSITIONAL|IDN2_NFC_INPUT);
++	res = idna_to_unicode_8z8z (from, &tmp2, 0);
++	if (res != IDNA_SUCCESS) {
++		debug ("output_filter: %s", idna_strerror (res));
++		return ISC_R_SUCCESS;
++	}
++
++	tmp_str = stringprep_utf8_to_locale (tmp2);
++	if (tmp_str == NULL) {
++		debug ("output_filter: stringprep_utf8_to_locale failed");
++		res = idna_to_ascii_8z(tmp2, &tmp_str, 0);
++	}
++
++	free(tmp2);
+ 
+-	if (res == IDN2_OK) {
++	if (res == IDNA_SUCCESS) {
+ 		/* check the length */
+ 		if (strlen(tmp_str) >= tolen) {
+ 			debug("encoded ASC string is too long");
+-			idn2_free(tmp_str);
++			free(tmp_str);
+ 			return ISC_R_FAILURE;
+ 		}
+ 
+ 		(void) strlcpy(to, tmp_str, tolen);
+-		idn2_free(tmp_str);
++		free(tmp_str);
+ 		return ISC_R_SUCCESS;
+ 	}
+-
+-	fatal("'%s' is not a legal IDN name (%s), use +noidnout", from, idn2_strerror(res));
++	// fatal("'%s' is not a legal IDN name (%s), use +noidnout", from, idna_strerror(res));
++	free(tmp_str);
+ 	return ISC_R_FAILURE;
+ }
+ #endif /* WITH_IDN_OUT_SUPPORT */
+-#endif /* WITH_LIBIDN2 */
++#endif /* WITH_LIBIDN */
+ #endif /* WITH_IDN_SUPPORT */
+ 
+ #ifdef DIG_SIGCHASE
+diff --git a/config.h.in b/config.h.in
+index 1dc65cf..9eb8a16 100644
+--- a/config.h.in
++++ b/config.h.in
+@@ -615,8 +615,8 @@ int sigwait(const unsigned int *set, int *sig);
+ /* define if IDN input support is to be included. */
+ #undef WITH_IDN_SUPPORT
+ 
+-/* define if libidn2 support is to be included. */
+-#undef WITH_LIBIDN2
++/* define if libidn support is to be included. */
++#undef WITH_LIBIDN
+ 
+ /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
+    significant byte first (like Motorola and SPARC, unlike Intel). */
+diff --git a/configure.in b/configure.in
+index 9a1d16d..1397c50 100644
+--- a/configure.in
++++ b/configure.in
+@@ -4864,36 +4864,36 @@ fi
+ AC_SUBST(IDNKIT_LIBS)
+ 
+ #
+-# IDN support using libidn2
++# IDN support using libidn
+ #
+ 
+-LIBIDN2_CFLAGS=
+-LIBIDN2_LDFLAGS=
+-LIBIDN2_LIBS=
+-AC_ARG_WITH(libidn2,
+-	AS_HELP_STRING([--with-libidn2[=PATH]], [enable IDN support using GNU libidn2 [yes|no|path]]),
+-	use_libidn2="$withval", use_libidn2="no")
+-AS_CASE([$use_libidn2],
++LIBIDN_CFLAGS=
++LIBIDN_LDFLAGS=
++LIBIDN_LIBS=
++AC_ARG_WITH(libidn,
++	AS_HELP_STRING([--with-libidn[=PATH]], [enable IDN support using GNU libidn [yes|no|path]]),
++	use_libidn="$withval", use_libidn="no")
++AS_CASE([$use_libidn],
+ 	[no],[:],
+ 	[yes],[:],
+ 	[*],[
+-	    LIBIDN2_CFLAGS="-I$use_libidn2/include"
+-	    LIBIDN2_LDFLAGS="-L$use_libidn2/lib"
++	    LIBIDN_CFLAGS="-I$use_libidn/include"
++	    LIBIDN_LDFLAGS="-L$use_libidn/lib"
+ 	])
+ 
+-AS_IF([test "$use_libidn2" != "no"],
++AS_IF([test "$use_libidn" != "no"],
+       [save_CFLAGS="$CFLAGS"
+        save_LIBS="$LIBS"
+        save_LDFLAGS="$LDFLAGS"
+-       CFLAGS="$LIBIDN2_CFLAGS $CFLAGS"
+-       LDFLAGS="$LIBIDN2_LDFLAGS $LDFLAGS"
+-       AC_SEARCH_LIBS([idn2_to_ascii_8z], [idn2],
++       CFLAGS="$LIBIDN_CFLAGS $CFLAGS"
++       LDFLAGS="$LIBIDN_LDFLAGS $LDFLAGS"
++       AC_SEARCH_LIBS([idna_to_ascii_8z], [idn],
+ 		      [AC_DEFINE(WITH_IDN_SUPPORT, 1, [define if IDN input support is to be included.])
+-                       AC_DEFINE(WITH_LIBIDN2, 1, [define if libidn2 support is to be included.])
+-                       LIBIDN2_LIBS="$LIBIDN2_LDFLAGS -lidn2"],
+-		      [AC_MSG_ERROR([libidn2 requested, but not found])])
+-       AC_TRY_LINK([#include <idn2.h>],
+-		   [idn2_to_unicode_8zlz(".", NULL, IDN2_NONTRANSITIONAL|IDN2_NFC_INPUT);],
++                       AC_DEFINE(WITH_LIBIDN, 1, [define if libidn support is to be included.])
++                       LIBIDN_LIBS="$LIBIDN_LDFLAGS -lidn"],
++		      [AC_MSG_ERROR([libidn requested, but not found])])
++       AC_TRY_LINK([#include <idna.h>],
++		   [idna_to_unicode_8zlz(".", NULL, 0);],
+ 		   [AC_MSG_RESULT(yes)
+ 		    AC_DEFINE(WITH_IDN_OUT_SUPPORT, 1, [define if IDN output support is to be included.])],
+ 		   [AC_MSG_RESULT([no])])
+@@ -4901,21 +4901,21 @@ AS_IF([test "$use_libidn2" != "no"],
+        LIBS="$save_LIBS"
+        LDFLAGS="$save_LDFLAGS"
+       ])
+-AC_SUBST([LIBIDN2_CFLAGS])
+-AC_SUBST([LIBIDN2_LIBS])
++AC_SUBST([LIBIDN_CFLAGS])
++AC_SUBST([LIBIDN_LIBS])
+ 
+ #
+ # IDN support in general
+ #
+ 
+-# check if idnkit and libidn2 are not used at the same time
+-if test "$use_idnkit" != no && test "$use_libidn2" != no; then
+-    AC_MSG_ERROR([idnkit and libidn2 cannot be used at the same time.])
++# check if idnkit and libidn are not used at the same time
++if test "$use_idnkit" != no && test "$use_libidn" != no; then
++    AC_MSG_ERROR([idnkit and libidn cannot be used at the same time.])
+ fi
+ # the IDN support is on
+-if test "$use_idnkit" != no || test "$use_libidn2" != no; then
++if test "$use_idnkit" != no || test "$use_libidn" != no; then
+ 	AC_DEFINE(WITH_IDN_SUPPORT, 1, [define if IDN input support is to be included.])
+-	if test "$use_libidn2" = no || test "$use_libidn2_out" != no; then
++	if test "$use_libidn" = no || test "$use_libidn_out" != no; then
+ 		AC_DEFINE(WITH_IDN_OUT_SUPPORT, 1, [define if IDN output support is to be included.])
+ 	fi
+ fi
+@@ -5618,7 +5618,7 @@ report() {
+ 	test "X$JSONSTATS" = "X" || echo "    JSON statistics (--with-libjson)"
+ 	test "X$ZLIB" = "X" || echo "    HTTP zlib compression (--with-zlib)"
+ 	test "X$NZD_TOOLS" = "X" || echo "    LMDB database to store configuration for 'addzone' zones (--with-lmdb)"
+-	test "no" = "$use_libidn2" || echo "    IDN support (--with-libidn2)"
++	test "no" = "$use_libidn" || echo "    IDN support (--with-libidn)"
+     fi
+ 
+     if test "no" != "$use_pkcs11"; then
+@@ -5716,7 +5716,7 @@ report() {
+     test "X$JSONSTATS" = "X" && echo "    JSON statistics (--with-libjson)"
+     test "X$ZLIB" = "X" && echo "    HTTP zlib compression (--with-zlib)"
+     test "X$NZD_TOOLS" = "X" && echo "    LMDB database to store configuration for 'addzone' zones (--with-lmdb)"
+-    test "no" = "$use_libidn2" && echo "    IDN support (--with-libidn2)"
++    test "no" = "$use_libidn" && echo "    IDN support (--with-libidn)"
+ 
+     echo "-------------------------------------------------------------------------------"
+     echo "Configured paths:"
+-- 
+2.20.1
+

@@ -1,18 +1,12 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2008, 2012, 2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /* $Id$ */
@@ -105,6 +99,10 @@
  * a variable
  */
 #undef interface
+
+#ifndef INADDR_ANY
+#define INADDR_ANY 0x00000000UL
+#endif
 
 #ifndef INADDR_LOOPBACK
 #define INADDR_LOOPBACK 0x7f000001UL
@@ -341,6 +339,20 @@ isc_net_probeunix(void);
  *	ISC_R_NOTFOUND
  */
 
+#define ISC_NET_DSCPRECVV4      0x01    /* Can receive sent DSCP value IPv4 */
+#define ISC_NET_DSCPRECVV6      0x02    /* Can receive sent DSCP value IPv6 */
+#define ISC_NET_DSCPSETV4       0x04    /* Can set DSCP on socket IPv4 */
+#define ISC_NET_DSCPSETV6       0x08    /* Can set DSCP on socket IPv6 */
+#define ISC_NET_DSCPPKTV4       0x10    /* Can set DSCP on per packet IPv4 */
+#define ISC_NET_DSCPPKTV6       0x20    /* Can set DSCP on per packet IPv6 */
+#define ISC_NET_DSCPALL         0x3f    /* All valid flags */
+
+unsigned int
+isc_net_probedscp(void);
+/*%<
+ * Probe the level of DSCP support.
+ */
+
 isc_result_t
 isc_net_probe_ipv6only(void);
 /*
@@ -398,6 +410,7 @@ isc_net_getudpportrange(int af, in_port_t *low, in_port_t *high);
 #ifdef ISC_PLATFORM_NEEDNTOP
 const char *
 isc_net_ntop(int af, const void *src, char *dst, size_t size);
+#undef inet_ntop
 #define inet_ntop isc_net_ntop
 #endif
 

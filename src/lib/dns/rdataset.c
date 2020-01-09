@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004-2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id$ */
 
 /*! \file */
 
@@ -29,11 +21,12 @@
 #include <isc/serial.h>
 #include <isc/util.h>
 
+#include <dns/compress.h>
+#include <dns/fixedname.h>
 #include <dns/name.h>
 #include <dns/ncache.h>
 #include <dns/rdata.h>
 #include <dns/rdataset.h>
-#include <dns/compress.h>
 
 static const char *trustnames[] = {
 	"none",
@@ -80,6 +73,7 @@ dns_rdataset_init(dns_rdataset_t *rdataset) {
 	rdataset->privateuint4 = 0;
 	rdataset->private5 = NULL;
 	rdataset->private6 = NULL;
+	rdataset->private7 = NULL;
 	rdataset->resign = 0;
 }
 
@@ -197,6 +191,9 @@ static dns_rdatasetmethods_t question_methods = {
 	question_current,
 	question_clone,
 	question_count,
+	NULL,
+	NULL,
+	NULL,
 	NULL,
 	NULL,
 	NULL,
@@ -325,8 +322,10 @@ towiresorted(dns_rdataset_t *rdataset, const dns_name_t *owner_name,
 	unsigned int headlen;
 	isc_boolean_t question = ISC_FALSE;
 	isc_boolean_t shuffle = ISC_FALSE;
-	dns_rdata_t *shuffled = NULL, shuffled_fixed[MAX_SHUFFLE];
-	struct towire_sort *sorted = NULL, sorted_fixed[MAX_SHUFFLE];
+	dns_rdata_t *in = NULL, in_fixed[MAX_SHUFFLE];
+	struct towire_sort *out = NULL, out_fixed[MAX_SHUFFLE];
+	dns_fixedname_t fixed;
+	dns_name_t *name;
 
 	UNUSED(state);
 
@@ -336,6 +335,7 @@ towiresorted(dns_rdataset_t *rdataset, const dns_name_t *owner_name,
 	 */
 
 	REQUIRE(DNS_RDATASET_VALID(rdataset));
+	REQUIRE(rdataset->methods != NULL);
 	REQUIRE(countp != NULL);
 	REQUIRE((order == NULL) == (order_arg == NULL));
 	REQUIRE(cctx != NULL && cctx->mctx != NULL);
@@ -372,13 +372,13 @@ towiresorted(dns_rdataset_t *rdataset, const dns_name_t *owner_name,
 		shuffle = ISC_TRUE;
 
 	if (shuffle && count > MAX_SHUFFLE) {
-		shuffled = isc_mem_get(cctx->mctx, count * sizeof(*shuffled));
-		sorted = isc_mem_get(cctx->mctx, count * sizeof(*sorted));
-		if (shuffled == NULL || sorted == NULL)
+		in = isc_mem_get(cctx->mctx, count * sizeof(*in));
+		out = isc_mem_get(cctx->mctx, count * sizeof(*out));
+		if (in == NULL || out == NULL)
 			shuffle = ISC_FALSE;
 	} else {
-		shuffled = shuffled_fixed;
-		sorted = sorted_fixed;
+		in = in_fixed;
+		out = out_fixed;
 	}
 
 	if (shuffle) {
@@ -388,8 +388,8 @@ towiresorted(dns_rdataset_t *rdataset, const dns_name_t *owner_name,
 		i = 0;
 		do {
 			INSIST(i < count);
-			dns_rdata_init(&shuffled[i]);
-			dns_rdataset_current(rdataset, &shuffled[i]);
+			dns_rdata_init(&in[i]);
+			dns_rdataset_current(rdataset, &in[i]);
 			i++;
 			result = dns_rdataset_next(rdataset);
 		} while (result == ISC_R_SUCCESS);
@@ -406,29 +406,27 @@ towiresorted(dns_rdataset_t *rdataset, const dns_name_t *owner_name,
 			 */
 			INSIST(order != NULL);
 			for (i = 0; i < count; i++) {
-				sorted[i].key = (*order)(&shuffled[i],
-							 order_arg);
-				sorted[i].rdata = &shuffled[i];
+				out[i].key = (*order)(&in[i], order_arg);
+				out[i].rdata = &in[i];
 			}
 		} else if (WANT_RANDOM(rdataset)) {
 			/*
 			 * 'Random' order.
 			 */
 			for (i = 0; i < count; i++) {
-				dns_rdata_t rdata;
 				isc_uint32_t val;
 
 				isc_random_get(&val);
 				choice = i + (val % (count - i));
-				rdata = shuffled[i];
-				shuffled[i] = shuffled[choice];
-				shuffled[choice] = rdata;
+				rdata = in[i];
+				in[i] = in[choice];
+				in[choice] = rdata;
 				if (order != NULL)
-					sorted[i].key = (*order)(&shuffled[i],
-								 order_arg);
+					out[i].key = (*order)(&in[i],
+							      order_arg);
 				else
-					sorted[i].key = 0; /* Unused */
-				sorted[i].rdata = &shuffled[i];
+					out[i].key = 0; /* Unused */
+				out[i].rdata = &in[i];
 			}
 		} else {
 			/*
@@ -443,11 +441,11 @@ towiresorted(dns_rdataset_t *rdataset, const dns_name_t *owner_name,
 			j = val % count;
 			for (i = 0; i < count; i++) {
 				if (order != NULL)
-					sorted[i].key = (*order)(&shuffled[j],
-								 order_arg);
+					out[i].key = (*order)(&in[j],
+							      order_arg);
 				else
-					sorted[i].key = 0; /* Unused */
-				sorted[i].rdata = &shuffled[j];
+					out[i].key = 0; /* Unused */
+				out[i].rdata = &in[j];
 				j++;
 				if (j == count)
 					j = 0; /* Wrap around. */
@@ -458,13 +456,19 @@ towiresorted(dns_rdataset_t *rdataset, const dns_name_t *owner_name,
 		 * Sorted order.
 		 */
 		if (order != NULL)
-			qsort(sorted, count, sizeof(sorted[0]),
-			      towire_compare);
+			qsort(out, count, sizeof(out[0]), towire_compare);
 	}
 
 	savedbuffer = *target;
 	i = 0;
 	added = 0;
+
+	name = dns_fixedname_initname(&fixed);
+	dns_name_copy(owner_name, name, NULL);
+	dns_rdataset_getownercase(rdataset, name);
+
+	name->attributes |= owner_name->attributes &
+		DNS_NAMEATTR_NOCOMPRESS;
 
 	do {
 		/*
@@ -473,7 +477,7 @@ towiresorted(dns_rdataset_t *rdataset, const dns_name_t *owner_name,
 
 		rrbuffer = *target;
 		dns_compress_setmethods(cctx, DNS_COMPRESS_GLOBAL14);
-		result = dns_name_towire(owner_name, cctx, target);
+		result = dns_name_towire(name, cctx, target);
 		if (result != ISC_R_SUCCESS)
 			goto rollback;
 		headlen = sizeof(dns_rdataclass_t) + sizeof(dns_rdatatype_t);
@@ -500,7 +504,7 @@ towiresorted(dns_rdataset_t *rdataset, const dns_name_t *owner_name,
 			 * Copy out the rdata
 			 */
 			if (shuffle)
-				rdata = *(sorted[i].rdata);
+				rdata = *(out[i].rdata);
 			else {
 				dns_rdata_reset(&rdata);
 				dns_rdataset_current(rdataset, &rdata);
@@ -549,10 +553,10 @@ towiresorted(dns_rdataset_t *rdataset, const dns_name_t *owner_name,
 	*target = savedbuffer;
 
  cleanup:
-	if (sorted != NULL && sorted != sorted_fixed)
-		isc_mem_put(cctx->mctx, sorted, count * sizeof(*sorted));
-	if (shuffled != NULL && shuffled != shuffled_fixed)
-		isc_mem_put(cctx->mctx, shuffled, count * sizeof(*shuffled));
+	if (out != NULL && out != out_fixed)
+		isc_mem_put(cctx->mctx, out, count * sizeof(*out));
+	if (in != NULL && in != in_fixed)
+		isc_mem_put(cctx->mctx, in, count * sizeof(*in));
 	return (result);
 }
 
@@ -772,6 +776,33 @@ dns_rdataset_expire(dns_rdataset_t *rdataset) {
 
 	if (rdataset->methods->expire != NULL)
 		(rdataset->methods->expire)(rdataset);
+}
+
+void
+dns_rdataset_clearprefetch(dns_rdataset_t *rdataset) {
+	REQUIRE(DNS_RDATASET_VALID(rdataset));
+	REQUIRE(rdataset->methods != NULL);
+
+	if (rdataset->methods->clearprefetch != NULL)
+		(rdataset->methods->clearprefetch)(rdataset);
+}
+
+void
+dns_rdataset_setownercase(dns_rdataset_t *rdataset, const dns_name_t *name) {
+	REQUIRE(DNS_RDATASET_VALID(rdataset));
+	REQUIRE(rdataset->methods != NULL);
+
+	if (rdataset->methods->setownercase != NULL)
+		(rdataset->methods->setownercase)(rdataset, name);
+}
+
+void
+dns_rdataset_getownercase(const dns_rdataset_t *rdataset, dns_name_t *name) {
+	REQUIRE(DNS_RDATASET_VALID(rdataset));
+	REQUIRE(rdataset->methods != NULL);
+
+	if (rdataset->methods->getownercase != NULL)
+		(rdataset->methods->getownercase)(rdataset, name);
 }
 
 void

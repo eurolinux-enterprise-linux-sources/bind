@@ -1,18 +1,12 @@
 /*
- * Copyright (C) 2004, 2005, 2007  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /* $Id: lwres_gnba.c,v 1.28 2007/09/24 17:18:25 each Exp $ */
@@ -29,7 +23,7 @@
    structure. Another render function converts the getnamebyaddr
    response structure -- lwres_gnbaresponse_t to the canonical format.
    This is complemented by a parse function which converts a packet in
-   canonical format to a getnamebyaddr response structure.       
+   canonical format to a getnamebyaddr response structure.
 
    These structures are defined in \link lwres.h <lwres/lwres.h.>\endlink They are shown
    below.
@@ -38,19 +32,19 @@
 #define LWRES_OPCODE_GETNAMEBYADDR      0x00010002U
 
 typedef struct {
-        lwres_uint32_t  flags;
-        lwres_addr_t    addr;
+	lwres_uint32_t  flags;
+	lwres_addr_t    addr;
 } lwres_gnbarequest_t;
 
 typedef struct {
-        lwres_uint32_t  flags;
-        lwres_uint16_t  naliases;
-        char           *realname;
-        char          **aliases;
-        lwres_uint16_t  realnamelen;
-        lwres_uint16_t *aliaslen;
-        void           *base;
-        size_t          baselen;
+	lwres_uint32_t  flags;
+	lwres_uint16_t  naliases;
+	char           *realname;
+	char          **aliases;
+	lwres_uint16_t  realnamelen;
+	lwres_uint16_t *aliaslen;
+	void           *base;
+	size_t          baselen;
 } lwres_gnbaresponse_t;
 \endcode
 
@@ -66,14 +60,14 @@ typedef struct {
    of packet pkt to a lwres_gnbarequest_t structure. Buffer b provides
    space to be used for storing this structure. When the function
    succeeds, the resulting lwres_gnbarequest_t is made available
-   through *structp. lwres_gnbaresponse_parse() offers the same   
-semantics as lwres_gnbarequest_parse() except it yields a    
+   through *structp. lwres_gnbaresponse_parse() offers the same
+semantics as lwres_gnbarequest_parse() except it yields a
    lwres_gnbaresponse_t structure.
 
    lwres_gnbaresponse_free() and lwres_gnbarequest_free() release the
-   memory in resolver context ctx that was allocated to the     
-   lwres_gnbaresponse_t or lwres_gnbarequest_t structures referenced  
-   via structp. Any memory associated with ancillary buffers and      
+   memory in resolver context ctx that was allocated to the
+   lwres_gnbaresponse_t or lwres_gnbarequest_t structures referenced
+   via structp. Any memory associated with ancillary buffers and
    strings for those structures is also discarded.
 
 \section lwres_gbna_return Return Values
@@ -135,9 +129,9 @@ lwres_gnbarequest_render(lwres_context_t *ctx, lwres_gnbarequest_t *req,
 	buf = CTXMALLOC(buflen);
 	if (buf == NULL)
 		return (LWRES_R_NOMEMORY);
-	lwres_buffer_init(b, buf, buflen);
+	lwres_buffer_init(b, buf, (unsigned int)buflen);
 
-	pkt->length = buflen;
+	pkt->length = (lwres_uint32_t)buflen;
 	pkt->version = LWRES_LWPACKETVERSION_0;
 	pkt->pktflags &= ~LWRES_LWPACKETFLAG_RESPONSE;
 	pkt->opcode = LWRES_OPCODE_GETNAMEBYADDR;
@@ -199,9 +193,9 @@ lwres_gnbaresponse_render(lwres_context_t *ctx, lwres_gnbaresponse_t *req,
 	buf = CTXMALLOC(buflen);
 	if (buf == NULL)
 		return (LWRES_R_NOMEMORY);
-	lwres_buffer_init(b, buf, buflen);
+	lwres_buffer_init(b, buf, (unsigned int)buflen);
 
-	pkt->length = buflen;
+	pkt->length = (lwres_uint32_t)buflen;
 	pkt->version = LWRES_LWPACKETVERSION_0;
 	pkt->pktflags |= LWRES_LWPACKETFLAG_RESPONSE;
 	pkt->opcode = LWRES_OPCODE_GETNAMEBYADDR;

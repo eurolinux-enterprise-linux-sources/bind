@@ -1,18 +1,12 @@
 /*
- * Copyright (C) 2004, 2005, 2007-2009, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000, 2001, 2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /* $Id: context.c,v 1.55 2009/09/02 23:48:03 tbox Exp $ */
@@ -181,7 +175,11 @@ lwres_context_create(lwres_context_t **contextp, void *arg,
 	ctx->sock = -1;
 
 	ctx->timeout = LWRES_DEFAULT_TIMEOUT;
+#ifndef WIN32
 	ctx->serial = time(NULL); /* XXXMLG or BEW */
+#else
+	ctx->serial = _time32(NULL);
+#endif
 
 	ctx->use_ipv4 = 1;
 	ctx->use_ipv6 = 1;
@@ -286,7 +284,11 @@ lwres_free(void *arg, void *mem, size_t len) {
 
 static lwres_result_t
 context_connect(lwres_context_t *ctx) {
+#ifndef WIN32
 	int s;
+#else
+	SOCKET s;
+#endif
 	int ret;
 	struct sockaddr_in sin;
 	struct sockaddr_in6 sin6;
@@ -295,8 +297,8 @@ context_connect(lwres_context_t *ctx) {
 	int domain;
 
 	if (ctx->confdata.lwnext != 0) {
-		memcpy(&ctx->address, &ctx->confdata.lwservers[0],
-		       sizeof(lwres_addr_t));
+		memmove(&ctx->address, &ctx->confdata.lwservers[0],
+			sizeof(lwres_addr_t));
 		LWRES_LINK_INIT(&ctx->address, link);
 	} else {
 		/* The default is the IPv4 loopback address 127.0.0.1. */
@@ -310,16 +312,16 @@ context_connect(lwres_context_t *ctx) {
 	}
 
 	if (ctx->address.family == LWRES_ADDRTYPE_V4) {
-		memcpy(&sin.sin_addr, ctx->address.address,
-		       sizeof(sin.sin_addr));
+		memmove(&sin.sin_addr, ctx->address.address,
+			sizeof(sin.sin_addr));
 		sin.sin_port = htons(lwres_udp_port);
 		sin.sin_family = AF_INET;
 		sa = (struct sockaddr *)&sin;
 		salen = sizeof(sin);
 		domain = PF_INET;
 	} else if (ctx->address.family == LWRES_ADDRTYPE_V6) {
-		memcpy(&sin6.sin6_addr, ctx->address.address,
-		       sizeof(sin6.sin6_addr));
+		memmove(&sin6.sin6_addr, ctx->address.address,
+			sizeof(sin6.sin6_addr));
 		sin6.sin6_port = htons(lwres_udp_port);
 		sin6.sin6_family = AF_INET6;
 		sa = (struct sockaddr *)&sin6;
@@ -332,12 +334,16 @@ context_connect(lwres_context_t *ctx) {
 	InitSockets();
 #endif
 	s = socket(domain, SOCK_DGRAM, IPPROTO_UDP);
+#ifndef WIN32
 	if (s < 0) {
-#ifdef WIN32
-		DestroySockets();
-#endif
 		return (LWRES_R_IOERROR);
 	}
+#else
+	if (s == INVALID_SOCKET) {
+		DestroySockets();
+		return (LWRES_R_IOERROR);
+	}
+#endif
 
 	ret = connect(s, sa, salen);
 	if (ret != 0) {
@@ -357,7 +363,7 @@ context_connect(lwres_context_t *ctx) {
 		return (LWRES_R_IOERROR);
 	}
 
-	ctx->sock = s;
+	ctx->sock = (int)s;
 
 	return (LWRES_R_SUCCESS);
 }

@@ -1,7 +1,4 @@
-/*
- * Automated Testing Framework (atf)
- *
- * Copyright (c) 2007, 2008, 2009 The NetBSD Foundation, Inc.
+/* Copyright (c) 2007 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,8 +21,9 @@
  * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
  * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+ * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
+
+#include "atf-c/detail/user.h"
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -36,8 +34,7 @@
 
 #include <atf-c.h>
 
-#include "test_helpers.h"
-#include "user.h"
+#include "atf-c/detail/test_helpers.h"
 
 /* ---------------------------------------------------------------------
  * Test cases for the free functions.
@@ -64,6 +61,7 @@ ATF_TC_BODY(is_member_of_group, tc)
     gid_t gids[NGROUPS_MAX];
     gid_t g, maxgid;
     int ngids;
+    const gid_t maxgid_limit = 1 << 16;
 
     {
         int i;
@@ -73,11 +71,18 @@ ATF_TC_BODY(is_member_of_group, tc)
             atf_tc_fail("Call to getgroups failed");
         maxgid = 0;
         for (i = 0; i < ngids; i++) {
+            printf("User group %d is %u\n", i, gids[i]);
             if (maxgid < gids[i])
                 maxgid = gids[i];
         }
         printf("User belongs to %d groups\n", ngids);
-        printf("Last GID is %d\n", maxgid);
+        printf("Last GID is %u\n", maxgid);
+    }
+
+    if (maxgid > maxgid_limit) {
+        printf("Test truncated from %u groups to %u to keep the run time "
+               "reasonable enough\n", maxgid, maxgid_limit);
+        maxgid = maxgid_limit;
     }
 
     for (g = 0; g < maxgid; g++) {

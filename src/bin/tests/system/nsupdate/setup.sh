@@ -1,24 +1,26 @@
 #!/bin/sh
 #
-# Copyright (C) 2004, 2007, 2009-2012  Internet Systems Consortium, Inc. ("ISC")
-# Copyright (C) 2000, 2001  Internet Software Consortium.
+# Copyright (C) Internet Systems Consortium, Inc. ("ISC")
 #
-# Permission to use, copy, modify, and/or distribute this software for any
-# purpose with or without fee is hereby granted, provided that the above
-# copyright notice and this permission notice appear in all copies.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
-# THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
-# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-# AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
-# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
-# OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-# PERFORMANCE OF THIS SOFTWARE.
-
-# $Id: setup.sh,v 1.19 2011/07/01 02:25:47 marka Exp $
+# See the COPYRIGHT file distributed with this work for additional
+# information regarding copyright ownership.
 
 SYSTEMTESTTOP=..
 . $SYSTEMTESTTOP/conf.sh
+
+test -r $RANDFILE || $GENRANDOM 400 $RANDFILE
+
+$SHELL clean.sh
+copy_setports ns1/named.conf.in ns1/named.conf
+copy_setports ns2/named.conf.in ns2/named.conf
+copy_setports ns3/named.conf.in ns3/named.conf
+copy_setports ns5/named.conf.in ns5/named.conf
+
+copy_setports verylarge.in verylarge
 
 #
 # jnl and database files MUST be removed before we start
@@ -27,12 +29,15 @@ SYSTEMTESTTOP=..
 rm -f ns1/*.jnl ns1/example.db ns2/*.jnl ns2/example.bk
 rm -f ns2/update.bk ns2/update.alt.bk
 rm -f ns3/example.db.jnl
+rm -f ns3/too-big.test.db.jnl
 
 cp -f ns1/example1.db ns1/example.db
 sed 's/example.nil/other.nil/g' ns1/example1.db > ns1/other.db
 sed 's/example.nil/unixtime.nil/g' ns1/example1.db > ns1/unixtime.db
+sed 's/example.nil/yyyymmddvv.nil/g' ns1/example1.db > ns1/yyyymmddvv.db
 sed 's/example.nil/keytests.nil/g' ns1/example1.db > ns1/keytests.db
 cp -f ns3/example.db.in ns3/example.db
+cp -f ns3/too-big.test.db.in ns3/too-big.test.db
 
 # update_test.pl has its own zone file because it
 # requires a specific NS record set.
@@ -51,14 +56,21 @@ ns1.update.nil.         A       10.53.0.2
 ns2.update.nil.		AAAA	::1
 EOF
 
-../../../tools/genrandom 400 random.data
-$DDNSCONFGEN -q -r random.data -z example.nil > ns1/ddns.key
+$DDNSCONFGEN -q -r $RANDFILE -z example.nil > ns1/ddns.key
 
-$DDNSCONFGEN -q -r random.data -a hmac-md5 -k md5-key -z keytests.nil > ns1/md5.key
-$DDNSCONFGEN -q -r random.data -a hmac-sha1 -k sha1-key -z keytests.nil > ns1/sha1.key
-$DDNSCONFGEN -q -r random.data -a hmac-sha224 -k sha224-key -z keytests.nil > ns1/sha224.key
-$DDNSCONFGEN -q -r random.data -a hmac-sha256 -k sha256-key -z keytests.nil > ns1/sha256.key
-$DDNSCONFGEN -q -r random.data -a hmac-sha384 -k sha384-key -z keytests.nil > ns1/sha384.key
-$DDNSCONFGEN -q -r random.data -a hmac-sha512 -k sha512-key -z keytests.nil > ns1/sha512.key
+$DDNSCONFGEN -q -r $RANDFILE -a hmac-md5 -k md5-key -z keytests.nil > ns1/md5.key
+$DDNSCONFGEN -q -r $RANDFILE -a hmac-sha1 -k sha1-key -z keytests.nil > ns1/sha1.key
+$DDNSCONFGEN -q -r $RANDFILE -a hmac-sha224 -k sha224-key -z keytests.nil > ns1/sha224.key
+$DDNSCONFGEN -q -r $RANDFILE -a hmac-sha256 -k sha256-key -z keytests.nil > ns1/sha256.key
+$DDNSCONFGEN -q -r $RANDFILE -a hmac-sha384 -k sha384-key -z keytests.nil > ns1/sha384.key
+$DDNSCONFGEN -q -r $RANDFILE -a hmac-sha512 -k sha512-key -z keytests.nil > ns1/sha512.key
 
-(cd ns3; sh -e sign.sh)
+(cd ns3; $SHELL -e sign.sh)
+
+cp -f ns1/many.test.db.in ns1/many.test.db
+rm -f ns1/many.test.db.jnl
+
+cp ns1/sample.db.in ns1/sample.db
+cp ns2/sample.db.in ns2/sample.db
+
+cp -f ns5/local.db.in ns5/local.db

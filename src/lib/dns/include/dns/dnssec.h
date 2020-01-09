@@ -1,21 +1,14 @@
 /*
- * Copyright (C) 2004-2007, 2009-2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2002  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
-/* $Id$ */
 
 #ifndef DNS_DNSSEC_H
 #define DNS_DNSSEC_H 1
@@ -174,17 +167,40 @@ dns_dnssec_findzonekeys(dns_db_t *db, dns_dbversion_t *ver, dns_dbnode_t *node,
 			dns_name_t *name, isc_mem_t *mctx,
 			unsigned int maxkeys, dst_key_t **keys,
 			unsigned int *nkeys);
+
 isc_result_t
 dns_dnssec_findzonekeys2(dns_db_t *db, dns_dbversion_t *ver,
 			 dns_dbnode_t *node, dns_name_t *name,
 			 const char *directory, isc_mem_t *mctx,
 			 unsigned int maxkeys, dst_key_t **keys,
 			 unsigned int *nkeys);
+
+isc_result_t
+dns_dnssec_findzonekeys3(dns_db_t *db, dns_dbversion_t *ver,
+			 dns_dbnode_t *node, dns_name_t *name,
+			 const char *directory, isc_stdtime_t now,
+			 isc_mem_t *mctx, unsigned int maxkeys,
+			 dst_key_t **keys, unsigned int *nkeys);
+
 /*%<
  * 	Finds a set of zone keys.
  * 	XXX temporary - this should be handled in dns_zone_t.
  */
 /*@}*/
+
+isc_boolean_t
+dns_dnssec_keyactive(dst_key_t *key, isc_stdtime_t now);
+/*%<
+ *
+ * 	Returns ISC_TRUE if 'key' is active as of the time specified
+ * 	in 'now' (i.e., if the activation date has passed, inactivation or
+ * 	deletion date has not yet been reached, and the key is not revoked
+ * 	-- or if it is a legacy key without metadata). Otherwise returns
+ * 	ISC_FALSE.
+ *
+ *	Requires:
+ *\li		'key' is a valid key
+ */
 
 isc_result_t
 dns_dnssec_signmessage(dns_message_t *msg, dst_key_t *key);
@@ -275,6 +291,11 @@ dns_dnsseckey_destroy(isc_mem_t *mctx, dns_dnsseckey_t **dkp);
 isc_result_t
 dns_dnssec_findmatchingkeys(dns_name_t *origin, const char *directory,
 			    isc_mem_t *mctx, dns_dnsseckeylist_t *keylist);
+
+isc_result_t
+dns_dnssec_findmatchingkeys2(dns_name_t *origin, const char *directory,
+			     isc_stdtime_t now, isc_mem_t *mctx,
+			     dns_dnsseckeylist_t *keylist);
 /*%<
  * Search 'directory' for K* key files matching the name in 'origin'.
  * Append all such keys, along with use hints gleaned from their
@@ -299,11 +320,11 @@ dns_dnssec_keylistfromrdataset(dns_name_t *origin,
 			       const char *directory, isc_mem_t *mctx,
 			       dns_rdataset_t *keyset, dns_rdataset_t *keysigs,
 			       dns_rdataset_t *soasigs, isc_boolean_t savekeys,
-			       isc_boolean_t public,
+			       isc_boolean_t publickey,
 			       dns_dnsseckeylist_t *keylist);
 /*%<
  * Append the contents of a DNSKEY rdataset 'keyset' to 'keylist'.
- * Omit duplicates.  If 'public' is ISC_FALSE, search 'directory' for
+ * Omit duplicates.  If 'publickey' is ISC_FALSE, search 'directory' for
  * matching key files, and load the private keys that go with
  * the public ones.  If 'savekeys' is ISC_TRUE, mark the keys so
  * they will not be deleted or inactivated regardless of metadata.
@@ -345,6 +366,16 @@ dns_dnssec_updatekeys(dns_dnsseckeylist_t *keys, dns_dnsseckeylist_t *newkeys,
  *
  * On completion, any remaining keys in 'newkeys' are freed.
  */
+
+isc_result_t
+dns_dnssec_syncupdate(dns_dnsseckeylist_t *keys, dns_dnsseckeylist_t *rmkeys,
+		      dns_rdataset_t *cds, dns_rdataset_t *cdnskey,
+		      isc_stdtime_t now, dns_ttl_t hint_ttl, dns_diff_t *diff,
+		      isc_mem_t *mctx);
+/*%<
+ * Update the CDS and CDNSKEY RRsets, adding and removing keys as needed.
+ */
+
 ISC_LANG_ENDDECLS
 
 #endif /* DNS_DNSSEC_H */

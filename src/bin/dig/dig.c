@@ -1,21 +1,13 @@
 /*
- * Copyright (C) 2004-2013  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 2000-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
-
-/* $Id: dig.c,v 1.245 2011/12/07 17:23:28 each Exp $ */
 
 /*! \file */
 
@@ -27,16 +19,20 @@
 #include <isc/app.h>
 #include <isc/netaddr.h>
 #include <isc/parseint.h>
+#include <isc/platform.h>
 #include <isc/print.h>
 #include <isc/string.h>
-#include <isc/util.h>
 #include <isc/task.h>
+#include <isc/util.h>
+
+#include <pk11/site.h>
 
 #include <dns/byaddr.h>
 #include <dns/fixedname.h>
 #include <dns/masterdump.h>
 #include <dns/message.h>
 #include <dns/name.h>
+#include <dns/rcode.h>
 #include <dns/rdata.h>
 #include <dns/rdataset.h>
 #include <dns/rdatatype.h>
@@ -63,12 +59,18 @@ static char *argv0;
 static int addresscount = 0;
 
 static char domainopt[DNS_NAME_MAXTEXT];
+static char hexcookie[81];
 
 static isc_boolean_t short_form = ISC_FALSE, printcmd = ISC_TRUE,
 	ip6_int = ISC_FALSE, plusquest = ISC_FALSE, pluscomm = ISC_FALSE,
 	multiline = ISC_FALSE, nottl = ISC_FALSE, noclass = ISC_FALSE,
-	onesoa = ISC_FALSE, rrcomments = ISC_FALSE;
+	onesoa = ISC_FALSE, use_usec = ISC_FALSE,
+	nocrypto = ISC_FALSE, ttlunits = ISC_FALSE,
+	ipv4only = ISC_FALSE, ipv6only = ISC_FALSE;
 static isc_uint32_t splitwidth = 0xffffffff;
+
+/*% rrcomments are neither explicitly enabled nor disabled by default */
+static int rrcomments = 0;
 
 /*% opcode text */
 static const char * const opcodetext[] = {
@@ -90,43 +92,21 @@ static const char * const opcodetext[] = {
 	"RESERVED15"
 };
 
-/*% return code text */
-static const char * const rcodetext[] = {
-	"NOERROR",
-	"FORMERR",
-	"SERVFAIL",
-	"NXDOMAIN",
-	"NOTIMP",
-	"REFUSED",
-	"YXDOMAIN",
-	"YXRRSET",
-	"NXRRSET",
-	"NOTAUTH",
-	"NOTZONE",
-	"RESERVED11",
-	"RESERVED12",
-	"RESERVED13",
-	"RESERVED14",
-	"RESERVED15",
-	"BADVERS"
-};
+static const char *
+rcode_totext(dns_rcode_t rcode) {
+	static char buf[64];
+	isc_buffer_t b;
+	isc_result_t result;
 
-/*% safe rcodetext[] */
-static char *
-rcode_totext(dns_rcode_t rcode)
-{
-	static char buf[sizeof("?65535")];
-	union {
-		const char *consttext;
-		char *deconsttext;
-	} totext;
-
-	if (rcode >= (sizeof(rcodetext)/sizeof(rcodetext[0]))) {
-		snprintf(buf, sizeof(buf), "?%u", rcode);
-		totext.deconsttext = buf;
-	} else
-		totext.consttext = rcodetext[rcode];
-	return totext.deconsttext;
+	memset(buf, 0, sizeof(buf));
+	isc_buffer_init(&b, buf + 1, sizeof(buf) - 2);
+	result = dns_rcode_totext(rcode, &b);
+	RUNTIME_CHECK(result == ISC_R_SUCCESS);
+	if (strspn(buf + 1, "0123456789") == strlen(buf + 1)) {
+		buf[0] = '?';
+		return(buf);
+	}
+	return (buf + 1);
 }
 
 /*% print usage */
@@ -165,70 +145,94 @@ help(void) {
 "        q-type   is one of (a,any,mx,ns,soa,hinfo,axfr,txt,...) [default:a]\n"
 "                 (Use ixfr=version for type ixfr)\n"
 "        q-opt    is one of:\n"
-"                 -x dot-notation     (shortcut for reverse lookups)\n"
-"                 -i                  (use IP6.INT for IPv6 reverse lookups)\n"
-"                 -f filename         (batch mode)\n"
+"                 -4                  (use IPv4 query transport only)\n"
+"                 -6                  (use IPv6 query transport only)\n"
 "                 -b address[#port]   (bind to source address/port)\n"
+"                 -c class            (specify query class)\n"
+"                 -f filename         (batch mode)\n"
+"                 -i                  (use IP6.INT for IPv6 reverse lookups)\n"
+"                 -k keyfile          (specify tsig key file)\n"
+"                 -m                  (enable memory usage debugging)\n"
 "                 -p port             (specify port number)\n"
 "                 -q name             (specify query name)\n"
 "                 -t type             (specify query type)\n"
-"                 -c class            (specify query class)\n"
-"                 -k keyfile          (specify tsig key file)\n"
+"                 -u                  (display times in usec instead of msec)\n"
+"                 -x dot-notation     (shortcut for reverse lookups)\n"
 "                 -y [hmac:]name:key  (specify named base64 tsig key)\n"
-"                 -4                  (use IPv4 query transport only)\n"
-"                 -6                  (use IPv6 query transport only)\n"
-"                 -m                  (enable memory usage debugging)\n"
 "        d-opt    is of the form +keyword[=value], where keyword is:\n"
-"                 +[no]vc             (TCP mode)\n"
-"                 +[no]tcp            (TCP mode, alternate syntax)\n"
-"                 +time=###           (Set query timeout) [5]\n"
-"                 +tries=###          (Set number of UDP attempts) [3]\n"
-"                 +retry=###          (Set number of UDP retries) [2]\n"
-"                 +domain=###         (Set default domainname)\n"
-"                 +bufsize=###        (Set EDNS0 Max UDP packet size)\n"
-"                 +ndots=###          (Set NDOTS value)\n"
-"                 +[no]edns[=###]     (Set EDNS version) [0]\n"
-"                 +[no]search         (Set whether to use searchlist)\n"
-"                 +[no]showsearch     (Search with intermediate results)\n"
-"                 +[no]defname        (Ditto)\n"
-"                 +[no]recurse        (Recursive mode)\n"
-"                 +[no]ignore         (Don't revert to TCP for TC responses.)"
-"\n"
-"                 +[no]fail           (Don't try next server on SERVFAIL)\n"
-"                 +[no]besteffort     (Try to parse even illegal messages)\n"
+"                 +[no]aaflag         (Set AA flag in query (+[no]aaflag))\n"
 "                 +[no]aaonly         (Set AA flag in query (+[no]aaflag))\n"
-"                 +[no]adflag         (Set AD flag in query)\n"
-"                 +[no]cdflag         (Set CD flag in query)\n"
-"                 +[no]cl             (Control display of class in records)\n"
+"                 +[no]additional     (Control display of additional section)\n"
+"                 +[no]adflag         (Set AD flag in query (default on))\n"
+"                 +[no]all            (Set or clear all display flags)\n"
+"                 +[no]answer         (Control display of answer section)\n"
+"                 +[no]authority      (Control display of authority section)\n"
+"                 +[no]badcookie      (Retry BADCOOKIE responses)\n"
+"                 +[no]besteffort     (Try to parse even illegal messages)\n"
+"                 +bufsize=###        (Set EDNS0 Max UDP packet size)\n"
+"                 +[no]cdflag         (Set checking disabled flag in query)\n"
+"                 +[no]class          (Control display of class in records)\n"
 "                 +[no]cmd            (Control display of command line)\n"
 "                 +[no]comments       (Control display of comment lines)\n"
-"                 +[no]rrcomments     (Control display of per-record "
-				       "comments)\n"
-"                 +[no]question       (Control display of question)\n"
-"                 +[no]answer         (Control display of answer)\n"
-"                 +[no]authority      (Control display of authority)\n"
-"                 +[no]additional     (Control display of additional)\n"
-"                 +[no]stats          (Control display of statistics)\n"
-"                 +[no]short          (Disable everything except short\n"
-"                                      form of answer)\n"
-"                 +[no]ttlid          (Control display of ttls in records)\n"
-"                 +[no]all            (Set or clear all display flags)\n"
-"                 +[no]qr             (Print question before sending)\n"
-"                 +[no]nssearch       (Search all authoritative nameservers)\n"
-"                 +[no]identify       (ID responders in short answers)\n"
-"                 +[no]trace          (Trace delegation down from root [+dnssec])\n"
+"                 +[no]cookie         (Add a COOKIE option to the request)\n"
+"                 +[no]crypto         (Control display of cryptographic "
+				       "fields in records)\n"
+"                 +[no]defname        (Use search list (+[no]search))\n"
 "                 +[no]dnssec         (Request DNSSEC records)\n"
+"                 +domain=###         (Set default domainname)\n"
+"                 +[no]dscp[=###]     (Set the DSCP value to ### [0..63])\n"
+"                 +[no]edns[=###]     (Set EDNS version) [0]\n"
+"                 +ednsflags=###      (Set EDNS flag bits)\n"
+"                 +[no]ednsnegotiation (Set EDNS version negotiation)\n"
+"                 +ednsopt=###[:value] (Send specified EDNS option)\n"
+"                 +noednsopt          (Clear list of +ednsopt options)\n"
+"                 +[no]expire         (Request time to expire)\n"
+"                 +[no]fail           (Don't try next server on SERVFAIL)\n"
+"                 +[no]header-only    (Send query without a question section)\n"
+"                 +[no]identify       (ID responders in short answers)\n"
+"                 +[no]idnin          (Parse IDN names)\n"
+"                 +[no]idnout         (Convert IDN response)\n"
+"                 +[no]ignore         (Don't revert to TCP for TC responses.)\n"
+"                 +[no]keepopen       (Keep the TCP socket open between queries)\n"
+"                 +[no]mapped         (Allow mapped IPv4 over IPv6)\n"
+"                 +[no]multiline      (Print records in an expanded format)\n"
+"                 +ndots=###          (Set search NDOTS value)\n"
 "                 +[no]nsid           (Request Name Server ID)\n"
+"                 +[no]nssearch       (Search all authoritative nameservers)\n"
+"                 +[no]onesoa         (AXFR prints only one soa record)\n"
+"                 +[no]opcode=###     (Set the opcode of the request)\n"
+"                 +[no]qr             (Print question before sending)\n"
+"                 +[no]question       (Control display of question section)\n"
+"                 +[no]rdflag         (Recursive mode (+[no]recurse))\n"
+"                 +[no]recurse        (Recursive mode (+[no]rdflag))\n"
+"                 +retry=###          (Set number of UDP retries) [2]\n"
+"                 +[no]rrcomments     (Control display of per-record "
+					"comments)\n"
+"                 +[no]search         (Set whether to use searchlist)\n"
+"                 +[no]short          (Display nothing except short\n"
+"                                      form of answer)\n"
+"                 +[no]showsearch     (Search with intermediate results)\n"
 #ifdef DIG_SIGCHASE
 "                 +[no]sigchase       (Chase DNSSEC signatures)\n"
-"                 +trusted-key=####   (Trusted Key when chasing DNSSEC sigs)\n"
-#if DIG_SIGCHASE_TD
-"                 +[no]topdown        (Do DNSSEC validation top down mode)\n"
-#endif
 #endif
 "                 +[no]split=##       (Split hex/base64 fields into chunks)\n"
-"                 +[no]multiline      (Print records in an expanded format)\n"
-"                 +[no]onesoa         (AXFR prints only one soa record)\n"
+"                 +[no]stats          (Control display of statistics)\n"
+"                 +subnet=addr        (Set edns-client-subnet option)\n"
+"                 +[no]tcp            (TCP mode (+[no]vc))\n"
+"                 +timeout=###        (Set query timeout) [5]\n"
+#if defined(DIG_SIGCHASE) && DIG_SIGCHASE_TD
+"                 +[no]topdown        (Do +sigchase in top-down mode)\n"
+#endif
+"                 +[no]trace          (Trace delegation down from root [+dnssec])\n"
+#ifdef DIG_SIGCHASE
+"                 +trusted-key=####   (Trusted Key to use with +sigchase)\n"
+#endif
+"                 +tries=###          (Set number of UDP attempts) [3]\n"
+"                 +[no]ttlid          (Control display of ttls in records)\n"
+"                 +[no]ttlunits       (Display TTLs in human-readable units)\n"
+"                 +[no]unknownformat  (Print RDATA in RFC 3597 \"unknown\" format)\n"
+"                 +[no]vc             (TCP mode (+[no]tcp))\n"
+"                 +[no]zflag          (Set Z flag in query)\n"
 "        global d-opts and servers (before host name) affect all queries.\n"
 "        local d-opts and servers (after host name) affect only that lookup.\n"
 "        -h                           (print help and exit)\n"
@@ -239,28 +243,47 @@ help(void) {
 /*%
  * Callback from dighost.c to print the received message.
  */
-void
-received(int bytes, isc_sockaddr_t *from, dig_query_t *query) {
+static void
+received(unsigned int bytes, isc_sockaddr_t *from, dig_query_t *query) {
 	isc_uint64_t diff;
-	isc_time_t now;
 	time_t tnow;
 	struct tm tmnow;
+#ifdef WIN32
+	wchar_t time_str[100];
+#else
 	char time_str[100];
+#endif
 	char fromtext[ISC_SOCKADDR_FORMATSIZE];
 
 	isc_sockaddr_format(from, fromtext, sizeof(fromtext));
 
-	TIME_NOW(&now);
-
 	if (query->lookup->stats && !short_form) {
-		diff = isc_time_microdiff(&now, &query->time_sent);
-		printf(";; Query time: %ld msec\n", (long int)diff/1000);
+		diff = isc_time_microdiff(&query->time_recv, &query->time_sent);
+		if (use_usec)
+			printf(";; Query time: %ld usec\n", (long) diff);
+		else
+			printf(";; Query time: %ld msec\n", (long) diff / 1000);
 		printf(";; SERVER: %s(%s)\n", fromtext, query->servname);
 		time(&tnow);
+#if defined(ISC_PLATFORM_USETHREADS) && !defined(WIN32)
+		(void)localtime_r(&tnow, &tmnow);
+#else
 		tmnow  = *localtime(&tnow);
+#endif
+
+#ifdef WIN32
+		/*
+		 * On Windows, time zone name ("%Z") may be a localized
+		 * wide-character string, which strftime() handles incorrectly.
+		 */
+		if (wcsftime(time_str, sizeof(time_str)/sizeof(time_str[0]),
+			     L"%a %b %d %H:%M:%S %Z %Y", &tmnow) > 0U)
+			printf(";; WHEN: %ls\n", time_str);
+#else
 		if (strftime(time_str, sizeof(time_str),
 			     "%a %b %d %H:%M:%S %Z %Y", &tmnow) > 0U)
 			printf(";; WHEN: %s\n", time_str);
+#endif
 		if (query->lookup->doing_xfr) {
 			printf(";; XFR size: %u records (messages %u, "
 			       "bytes %" ISC_PRINT_QUADFORMAT "u)\n",
@@ -269,23 +292,31 @@ received(int bytes, isc_sockaddr_t *from, dig_query_t *query) {
 		} else {
 			printf(";; MSG SIZE  rcvd: %u\n", bytes);
 		}
-		if (key != NULL) {
+		if (tsigkey != NULL) {
 			if (!validated)
 				puts(";; WARNING -- Some TSIG could not "
 				     "be validated");
 		}
-		if ((key == NULL) && (keysecret[0] != 0)) {
+		if ((tsigkey == NULL) && (keysecret[0] != 0)) {
 			puts(";; WARNING -- TSIG key was not used.");
 		}
 		puts("");
 	} else if (query->lookup->identify && !short_form) {
-		diff = isc_time_microdiff(&now, &query->time_sent);
-		printf(";; Received %" ISC_PRINT_QUADFORMAT "u bytes "
-		       "from %s(%s) in %d ms\n\n",
-		       query->lookup->doing_xfr ?
-				query->byte_count : (isc_uint64_t)bytes,
-		       fromtext, query->userarg,
-		       (int)diff/1000);
+		diff = isc_time_microdiff(&query->time_recv, &query->time_sent);
+		if (use_usec)
+			printf(";; Received %" ISC_PRINT_QUADFORMAT "u bytes "
+			       "from %s(%s) in %ld us\n\n",
+			       query->lookup->doing_xfr
+				 ? query->byte_count
+				 : (isc_uint64_t)bytes,
+			       fromtext, query->userarg, (long) diff);
+		else
+			printf(";; Received %" ISC_PRINT_QUADFORMAT "u bytes "
+			       "from %s(%s) in %ld ms\n\n",
+			       query->lookup->doing_xfr
+				 ?  query->byte_count
+				 : (isc_uint64_t)bytes,
+			       fromtext, query->userarg, (long) diff / 1000);
 	}
 }
 
@@ -294,7 +325,7 @@ received(int bytes, isc_sockaddr_t *from, dig_query_t *query) {
  * Not used in dig.
  * XXX print_trying
  */
-void
+static void
 trying(char *frm, dig_lookup_t *lookup) {
 	UNUSED(frm);
 	UNUSED(lookup);
@@ -307,8 +338,8 @@ static isc_result_t
 say_message(dns_rdata_t *rdata, dig_query_t *query, isc_buffer_t *buf) {
 	isc_result_t result;
 	isc_uint64_t diff;
-	isc_time_t now;
-	char store[sizeof("12345678901234567890")];
+	char store[sizeof(" in 18446744073709551616 us.")];
+	unsigned int styleflags = 0;
 
 	if (query->lookup->trace || query->lookup->ns_search_only) {
 		result = dns_rdatatype_totext(rdata->type, buf);
@@ -316,16 +347,28 @@ say_message(dns_rdata_t *rdata, dig_query_t *query, isc_buffer_t *buf) {
 			return (result);
 		ADD_STRING(buf, " ");
 	}
-	result = dns_rdata_totext(rdata, NULL, buf);
+
+	/* Turn on rrcomments if explicitly enabled */
+	if (rrcomments > 0)
+		styleflags |= DNS_STYLEFLAG_RRCOMMENT;
+	if (nocrypto)
+		styleflags |= DNS_STYLEFLAG_NOCRYPTO;
+	if (query->lookup->print_unknown_format)
+		styleflags |= DNS_STYLEFLAG_UNKNOWNFORMAT;
+	result = dns_rdata_tofmttext(rdata, NULL, styleflags, 0,
+				     splitwidth, " ", buf);
 	if (result == ISC_R_NOSPACE)
 		return (result);
 	check_result(result, "dns_rdata_totext");
 	if (query->lookup->identify) {
-		TIME_NOW(&now);
-		diff = isc_time_microdiff(&now, &query->time_sent);
+
+		diff = isc_time_microdiff(&query->time_recv, &query->time_sent);
 		ADD_STRING(buf, " from server ");
 		ADD_STRING(buf, query->servname);
-		snprintf(store, 19, " in %d ms.", (int)diff/1000);
+		if (use_usec)
+			snprintf(store, sizeof(store), " in %" ISC_PLATFORM_QUADFORMAT "u us.", diff);
+		else
+			snprintf(store, sizeof(store), " in %" ISC_PLATFORM_QUADFORMAT "u ms.", diff / 1000);
 		ADD_STRING(buf, store);
 	}
 	ADD_STRING(buf, "\n");
@@ -383,7 +426,7 @@ short_answer(dns_message_t *msg, dns_messagetextflag_t flags,
 	return (ISC_R_SUCCESS);
 }
 #ifdef DIG_SIGCHASE
-isc_result_t
+static isc_result_t
 printrdataset(dns_name_t *owner_name, dns_rdataset_t *rdataset,
 	      isc_buffer_t *target)
 {
@@ -395,11 +438,16 @@ printrdataset(dns_name_t *owner_name, dns_rdataset_t *rdataset,
 		return(ISC_FALSE);
 
 	styleflags |= DNS_STYLEFLAG_REL_OWNER;
+	if (ttlunits)
+		styleflags |= DNS_STYLEFLAG_TTL_UNITS;
 	if (nottl)
 		styleflags |= DNS_STYLEFLAG_NO_TTL;
 	if (noclass)
 		styleflags |= DNS_STYLEFLAG_NO_CLASS;
-	if (rrcomments)
+	if (nocrypto)
+		styleflags |= DNS_STYLEFLAG_NOCRYPTO;
+	/* Turn on rrcomments if explicitly enabled */
+	if (rrcomments > 0)
 		styleflags |= DNS_STYLEFLAG_RRCOMMENT;
 	if (multiline) {
 		styleflags |= DNS_STYLEFLAG_OMIT_OWNER;
@@ -409,7 +457,9 @@ printrdataset(dns_name_t *owner_name, dns_rdataset_t *rdataset,
 		styleflags |= DNS_STYLEFLAG_TTL;
 		styleflags |= DNS_STYLEFLAG_MULTILINE;
 		styleflags |= DNS_STYLEFLAG_COMMENT;
-		styleflags |= DNS_STYLEFLAG_RRCOMMENT;
+		/* Turn on rrcomments if not explicitly disabled */
+		if (rrcomments >= 0)
+			styleflags |= DNS_STYLEFLAG_RRCOMMENT;
 	}
 
 	if (multiline || (nottl && noclass))
@@ -435,10 +485,30 @@ printrdataset(dns_name_t *owner_name, dns_rdataset_t *rdataset,
 }
 #endif
 
+static isc_boolean_t
+isdotlocal(dns_message_t *msg) {
+	isc_result_t result;
+	static unsigned char local_ndata[] = { "\005local\0" };
+	static unsigned char local_offsets[] = { 0, 6 };
+	static dns_name_t local =
+		DNS_NAME_INITABSOLUTE(local_ndata, local_offsets);
+
+	for (result = dns_message_firstname(msg, DNS_SECTION_QUESTION);
+	     result == ISC_R_SUCCESS;
+	     result = dns_message_nextname(msg, DNS_SECTION_QUESTION))
+	{
+		dns_name_t *name = NULL;
+		dns_message_currentname(msg, DNS_SECTION_QUESTION, &name);
+		if (dns_name_issubdomain(name, &local))
+			return (ISC_TRUE);
+	}
+	return (ISC_FALSE);
+}
+
 /*
  * Callback from dighost.c to print the reply from a server
  */
-isc_result_t
+static isc_result_t
 printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 	isc_result_t result;
 	dns_messagetextflag_t flags;
@@ -450,12 +520,19 @@ printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 	styleflags |= DNS_STYLEFLAG_REL_OWNER;
 	if (query->lookup->comments)
 		styleflags |= DNS_STYLEFLAG_COMMENT;
-	if (rrcomments)
+	if (query->lookup->print_unknown_format)
+		styleflags |= DNS_STYLEFLAG_UNKNOWNFORMAT;
+	/* Turn on rrcomments if explicitly enabled */
+	if (rrcomments > 0)
 		styleflags |= DNS_STYLEFLAG_RRCOMMENT;
+	if (ttlunits)
+		styleflags |= DNS_STYLEFLAG_TTL_UNITS;
 	if (nottl)
 		styleflags |= DNS_STYLEFLAG_NO_TTL;
 	if (noclass)
 		styleflags |= DNS_STYLEFLAG_NO_CLASS;
+	if (nocrypto)
+		styleflags |= DNS_STYLEFLAG_NOCRYPTO;
 	if (multiline) {
 		styleflags |= DNS_STYLEFLAG_OMIT_OWNER;
 		styleflags |= DNS_STYLEFLAG_OMIT_CLASS;
@@ -463,7 +540,9 @@ printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 		styleflags |= DNS_STYLEFLAG_OMIT_TTL;
 		styleflags |= DNS_STYLEFLAG_TTL;
 		styleflags |= DNS_STYLEFLAG_MULTILINE;
-		styleflags |= DNS_STYLEFLAG_RRCOMMENT;
+		/* Turn on rrcomments unless explicitly disabled */
+		if (rrcomments >= 0)
+			styleflags |= DNS_STYLEFLAG_RRCOMMENT;
 	}
 	if (multiline || (nottl && noclass))
 		result = dns_master_stylecreate2(&style, styleflags,
@@ -511,6 +590,12 @@ printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 			printf(";; Got answer:\n");
 
 		if (headers) {
+			if (isdotlocal(msg)) {
+				printf(";; WARNING: .local is reserved for "
+				       "Multicast DNS\n;; You are currently "
+				       "testing what happens when an mDNS "
+				       "query is leaked to DNS\n");
+			}
 			printf(";; ->>HEADER<<- opcode: %s, status: %s, "
 			       "id: %u\n",
 			       opcodetext[msg->opcode],
@@ -552,8 +637,9 @@ printmessage(dig_query_t *query, dns_message_t *msg, isc_boolean_t headers) {
 		    (msg->rcode == dns_rcode_formerr ||
 		     msg->rcode == dns_rcode_notimp))
 			printf("\n;; WARNING: EDNS query returned status "
-			       "%s - retry with '+noedns'\n",
-			       rcode_totext(msg->rcode));
+			       "%s - retry with '%s+noedns'\n",
+			       rcode_totext(msg->rcode),
+			       query->lookup->dnssec ? "+nodnssec ": "");
 		if (msg != query->lookup->sendmsg && extrabytes != 0U)
 			printf(";; WARNING: Message has %u extra byte%s at "
 			       "end\n", extrabytes, extrabytes != 0 ? "s" : "");
@@ -665,33 +751,27 @@ cleanup:
 static void
 printgreeting(int argc, char **argv, dig_lookup_t *lookup) {
 	int i;
-	int remaining;
 	static isc_boolean_t first = ISC_TRUE;
 	char append[MXNAME];
 
 	if (printcmd) {
-		lookup->cmdline[sizeof(lookup->cmdline) - 1] = 0;
 		snprintf(lookup->cmdline, sizeof(lookup->cmdline),
 			 "%s; <<>> DiG " VERSION " <<>>",
 			 first?"\n":"");
 		i = 1;
 		while (i < argc) {
 			snprintf(append, sizeof(append), " %s", argv[i++]);
-			remaining = sizeof(lookup->cmdline) -
-				    strlen(lookup->cmdline) - 1;
-			strncat(lookup->cmdline, append, remaining);
+			strlcat(lookup->cmdline, append,
+				sizeof(lookup->cmdline));
 		}
-		remaining = sizeof(lookup->cmdline) -
-			    strlen(lookup->cmdline) - 1;
-		strncat(lookup->cmdline, "\n", remaining);
+		strlcat(lookup->cmdline, "\n", sizeof(lookup->cmdline));
 		if (first && addresscount != 0) {
 			snprintf(append, sizeof(append),
 				 "; (%d server%s found)\n",
 				 addresscount,
 				 addresscount > 1 ? "s" : "");
-			remaining = sizeof(lookup->cmdline) -
-				    strlen(lookup->cmdline) - 1;
-			strncat(lookup->cmdline, append, remaining);
+			strlcat(lookup->cmdline, append,
+				sizeof(lookup->cmdline));
 		}
 		if (first) {
 			snprintf(append, sizeof(append),
@@ -699,9 +779,8 @@ printgreeting(int argc, char **argv, dig_lookup_t *lookup) {
 				 short_form ? " +short" : "",
 				 printcmd ? " +cmd" : "");
 			first = ISC_FALSE;
-			remaining = sizeof(lookup->cmdline) -
-				    strlen(lookup->cmdline) - 1;
-			strncat(lookup->cmdline, append, remaining);
+			strlcat(lookup->cmdline, append,
+				sizeof(lookup->cmdline));
 		}
 	}
 }
@@ -714,22 +793,19 @@ printgreeting(int argc, char **argv, dig_lookup_t *lookup) {
  */
 
 static void
-plus_option(char *option, isc_boolean_t is_batchfile,
+plus_option(const char *option, isc_boolean_t is_batchfile,
 	    dig_lookup_t *lookup)
 {
 	isc_result_t result;
 	char option_store[256];
-	char *cmd, *value, *ptr;
+	char *cmd, *value, *ptr, *code;
 	isc_uint32_t num;
 	isc_boolean_t state = ISC_TRUE;
-#ifdef DIG_SIGCHASE
 	size_t n;
-#endif
 
-	strncpy(option_store, option, sizeof(option_store));
-	option_store[sizeof(option_store)-1]=0;
+	strlcpy(option_store, option, sizeof(option_store));
 	ptr = option_store;
-	cmd = next_token(&ptr,"=");
+	cmd = next_token(&ptr, "=");
 	if (cmd == NULL) {
 		printf(";; Invalid option %s\n", option_store);
 		return;
@@ -783,7 +859,6 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 			lookup->section_answer = state;
 			lookup->section_additional = state;
 			lookup->comments = state;
-			rrcomments = state;
 			lookup->stats = state;
 			printcmd = state;
 			break;
@@ -801,6 +876,10 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 		break;
 	case 'b':
 		switch (cmd[1]) {
+		case 'a':/* badcookie */
+			FULLCHECK("badcookie");
+			lookup->badcookie = state;
+			break;
 		case 'e':/* besteffort */
 			FULLCHECK("besteffort");
 			lookup->besteffort = state;
@@ -834,8 +913,9 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 				goto invalid_option;
 			}
 			break;
-		case 'l': /* cl */
-			FULLCHECK("cl");
+		case 'l': /* class */
+			/* keep +cl for backwards compatibility */
+			FULLCHECK2("cl", "class");
 			noclass = ISC_TF(!state);
 			break;
 		case 'm': /* cmd */
@@ -843,10 +923,34 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 			printcmd = state;
 			break;
 		case 'o': /* comments */
-			FULLCHECK("comments");
-			lookup->comments = state;
-			if (lookup == default_lookup)
-				pluscomm = state;
+			switch (cmd[2]) {
+			case 'm':
+				FULLCHECK("comments");
+				lookup->comments = state;
+				if (lookup == default_lookup)
+					pluscomm = state;
+				break;
+			case 'o': /* cookie */
+				FULLCHECK("cookie");
+				if (state && lookup->edns == -1)
+					lookup->edns = 0;
+				lookup->sendcookie = state;
+				if (value != NULL) {
+					n = strlcpy(hexcookie, value,
+						    sizeof(hexcookie));
+					if (n >= sizeof(hexcookie))
+						fatal("COOKIE data too large");
+					lookup->cookie = hexcookie;
+				} else
+					lookup->cookie = NULL;
+				break;
+			default:
+				goto invalid_option;
+			}
+			break;
+		case 'r':
+			FULLCHECK("crypto");
+			nocrypto = ISC_TF(!state);
 			break;
 		default:
 			goto invalid_option;
@@ -872,47 +976,177 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 				goto need_value;
 			if (!state)
 				goto invalid_option;
-			strncpy(domainopt, value, sizeof(domainopt));
-			domainopt[sizeof(domainopt)-1] = '\0';
+			strlcpy(domainopt, value, sizeof(domainopt));
+			break;
+		case 's': /* dscp */
+			FULLCHECK("dscp");
+			if (!state) {
+				lookup->dscp = -1;
+				break;
+			}
+			if (value == NULL)
+				goto need_value;
+			result = parse_uint(&num, value, 0x3f, "DSCP");
+			if (result != ISC_R_SUCCESS)
+				fatal("Couldn't parse DSCP value");
+			lookup->dscp = num;
 			break;
 		default:
 			goto invalid_option;
 		}
 		break;
 	case 'e':
-		FULLCHECK("edns");
-		if (!state) {
-			lookup->edns = -1;
+		switch (cmd[1]) {
+		case 'd':
+			switch(cmd[2]) {
+			case 'n':
+				switch (cmd[3]) {
+				case 's':
+					switch (cmd[4]) {
+					case 0:
+						FULLCHECK("edns");
+						if (!state) {
+							lookup->edns = -1;
+							break;
+						}
+						if (value == NULL) {
+							lookup->edns = 0;
+							break;
+						}
+						result = parse_uint(&num,
+								    value,
+								    255,
+								    "edns");
+						if (result != ISC_R_SUCCESS)
+							fatal("Couldn't parse "
+							      "edns");
+						lookup->edns = num;
+						break;
+					case 'f':
+						FULLCHECK("ednsflags");
+						if (!state) {
+							lookup->ednsflags = 0;
+							break;
+						}
+						if (value == NULL) {
+							lookup->ednsflags = 0;
+							break;
+						}
+						result = parse_xint(&num,
+								    value,
+								    0xffff,
+								  "ednsflags");
+						if (result != ISC_R_SUCCESS)
+							fatal("Couldn't parse "
+							      "ednsflags");
+						lookup->ednsflags = num;
+						break;
+					case 'n':
+						FULLCHECK("ednsnegotiation");
+						lookup->ednsneg = state;
+						break;
+					case 'o':
+						FULLCHECK("ednsopt");
+						if (!state) {
+							lookup->ednsoptscnt = 0;
+							break;
+						}
+						if (value == NULL)
+							fatal("ednsopt no "
+							      "code point "
+							      "specified");
+						code = next_token(&value, ":");
+						save_opt(lookup, code, value);
+						break;
+					default:
+						goto invalid_option;
+					}
+					break;
+				default:
+					goto invalid_option;
+				}
+				break;
+			default:
+				goto invalid_option;
+			}
 			break;
-		}
-		if (value == NULL) {
-			lookup->edns = 0;
+		case 'x':
+			FULLCHECK("expire");
+			lookup->expire = state;
 			break;
+		default:
+			goto invalid_option;
 		}
-		result = parse_uint(&num, value, 255, "edns");
-		if (result != ISC_R_SUCCESS)
-			fatal("Couldn't parse edns");
-		lookup->edns = num;
 		break;
 	case 'f': /* fail */
 		FULLCHECK("fail");
 		lookup->servfail_stops = state;
 		break;
+	case 'h':
+		FULLCHECK("header-only");
+		lookup->header_only = state;
+		break;
 	case 'i':
 		switch (cmd[1]) {
 		case 'd': /* identify */
-			FULLCHECK("identify");
-			lookup->identify = state;
+			switch (cmd[2]) {
+			case 'e':
+				FULLCHECK("identify");
+				lookup->identify = state;
+				break;
+			case 'n':
+				switch (cmd[3]) {
+				case 'i':
+					FULLCHECK("idnin");
+#ifndef WITH_IDN_SUPPORT
+					fprintf(stderr, ";; IDN input support"
+						" not enabled\n");
+#else
+					lookup->idnin = state;
+#endif
+				break;
+				case 'o':
+					FULLCHECK("idnout");
+#ifndef WITH_IDN_OUT_SUPPORT
+					fprintf(stderr, ";; IDN output support"
+						" not enabled\n");
+#else
+					lookup->idnout = state;
+#endif
+					break;
+				default:
+					goto invalid_option;
+				}
+				break;
+			default:
+				goto invalid_option;
+			}
 			break;
 		case 'g': /* ignore */
-		default: /* Inherits default for compatibility */
+		default: /*
+			  * Inherits default for compatibility (+[no]i*).
+			  */
 			FULLCHECK("ignore");
-			lookup->ignore = ISC_TRUE;
+			lookup->ignore = state;
 		}
 		break;
+	case 'k':
+		FULLCHECK("keepopen");
+		keep_open = state;
+		break;
 	case 'm': /* multiline */
-		FULLCHECK("multiline");
-		multiline = state;
+		switch (cmd[1]) {
+		case 'a':
+			FULLCHECK("mapped");
+			lookup->mapped = state;
+			break;
+		case 'u':
+			FULLCHECK("multiline");
+			multiline = state;
+			break;
+		default:
+			goto invalid_option;
+		}
 		break;
 	case 'n':
 		switch (cmd[1]) {
@@ -944,13 +1178,13 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 					lookup->identify = ISC_TRUE;
 					lookup->stats = ISC_FALSE;
 					lookup->comments = ISC_FALSE;
-					rrcomments = ISC_FALSE;
 					lookup->section_additional = ISC_FALSE;
 					lookup->section_authority = ISC_FALSE;
 					lookup->section_question = ISC_FALSE;
 					lookup->rdtype = dns_rdatatype_ns;
 					lookup->rdtypeset = ISC_TRUE;
 					short_form = ISC_TRUE;
+					rrcomments = 0;
 				}
 				break;
 			default:
@@ -962,8 +1196,37 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 		}
 		break;
 	case 'o':
-		FULLCHECK("onesoa");
-		onesoa = state;
+		switch (cmd[1]) {
+		case 'n':
+			FULLCHECK("onesoa");
+			onesoa = state;
+			break;
+		case 'p':
+			FULLCHECK("opcode");
+			if (!state) {
+				lookup->opcode = 0;	/* default - query */
+				break;
+			}
+			if (value == NULL)
+				goto need_value;
+			for (num = 0;
+			     num < sizeof(opcodetext)/sizeof(opcodetext[0]);
+			     num++) {
+				if (strcasecmp(opcodetext[num], value) == 0)
+					break;
+			}
+			if (num < 16) {
+				lookup->opcode = (dns_opcode_t)num;
+				break;
+			}
+			result = parse_uint(&num, value, 15, "opcode");
+			if (result != ISC_R_SUCCESS)
+				fatal("Couldn't parse opcode");
+			lookup->opcode = (dns_opcode_t)num;
+			break;
+		default:
+			goto invalid_option;
+		}
 		break;
 	case 'q':
 		switch (cmd[1]) {
@@ -983,6 +1246,10 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 		break;
 	case 'r':
 		switch (cmd[1]) {
+		case 'd': /* rdflag */
+			FULLCHECK("rdflag");
+			lookup->recurse = state;
+			break;
 		case 'e':
 			switch (cmd[2]) {
 			case 'c': /* recurse */
@@ -1007,7 +1274,7 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 			break;
 		case 'r': /* rrcomments */
 			FULLCHECK("rrcomments");
-			rrcomments = state;
+			rrcomments = state ? 1 : -1;
 			break;
 		default:
 			goto invalid_option;
@@ -1035,8 +1302,8 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 					lookup->section_authority = ISC_FALSE;
 					lookup->section_question = ISC_FALSE;
 					lookup->comments = ISC_FALSE;
-					rrcomments = ISC_FALSE;
 					lookup->stats = ISC_FALSE;
+					rrcomments = -1;
 				}
 				break;
 			case 'w': /* showsearch */
@@ -1070,11 +1337,11 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 
 			result = parse_uint(&splitwidth, value,
 					    1023, "split");
-			if (splitwidth % 4 != 0) {
+			if ((splitwidth % 4) != 0U) {
 				splitwidth = ((splitwidth + 3) / 4) * 4;
 				fprintf(stderr, ";; Warning, split must be "
 						"a multiple of 4; adjusting "
-						"to %d\n", splitwidth);
+						"to %u\n", splitwidth);
 			}
 			/*
 			 * There is an adjustment done in the
@@ -1086,11 +1353,32 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 			if (splitwidth)
 				splitwidth += 3;
 			if (result != ISC_R_SUCCESS)
-				fatal("Couldn't parse retries");
+				fatal("Couldn't parse split");
 			break;
 		case 't': /* stats */
 			FULLCHECK("stats");
 			lookup->stats = state;
+			break;
+		case 'u': /* subnet */
+			FULLCHECK("subnet");
+			if (state && value == NULL)
+				goto need_value;
+			if (!state) {
+				if (lookup->ecs_addr != NULL) {
+					isc_mem_free(mctx, lookup->ecs_addr);
+					lookup->ecs_addr = NULL;
+				}
+				break;
+			}
+			if (lookup->edns == -1)
+				lookup->edns = 0;
+			if (lookup->ecs_addr != NULL) {
+				isc_mem_free(mctx, lookup->ecs_addr);
+				lookup->ecs_addr = NULL;
+			}
+			result = parse_netprefix(&lookup->ecs_addr, value);
+			if (result != ISC_R_SUCCESS)
+				fatal("Couldn't parse client");
 			break;
 		default:
 			goto invalid_option;
@@ -1100,8 +1388,10 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 		switch (cmd[1]) {
 		case 'c': /* tcp */
 			FULLCHECK("tcp");
-			if (!is_batchfile)
+			if (!is_batchfile) {
 				lookup->tcp_mode = state;
+				lookup->tcp_mode_set = ISC_TRUE;
+			}
 			break;
 		case 'i': /* timeout */
 			FULLCHECK("timeout");
@@ -1132,12 +1422,13 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 					lookup->recurse = ISC_FALSE;
 					lookup->identify = ISC_TRUE;
 					lookup->comments = ISC_FALSE;
-					rrcomments = ISC_FALSE;
+					rrcomments = 0;
 					lookup->stats = ISC_FALSE;
 					lookup->section_additional = ISC_FALSE;
 					lookup->section_authority = ISC_TRUE;
 					lookup->section_question = ISC_FALSE;
 					lookup->dnssec = ISC_TRUE;
+					lookup->sendcookie = ISC_TRUE;
 					usesearch = ISC_FALSE;
 				}
 				break;
@@ -1171,24 +1462,52 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 				goto invalid_option;
 			}
 			break;
-		case 't': /* ttlid */
-			FULLCHECK("ttlid");
-			nottl = ISC_TF(!state);
+		case 't':
+			switch (cmd[2]) {
+			case 'l':
+				switch (cmd[3]) {
+				case 0:
+				case 'i': /* ttlid */
+					FULLCHECK2("ttl", "ttlid");
+					nottl = ISC_TF(!state);
+					break;
+				case 'u': /* ttlunits */
+					FULLCHECK("ttlunits");
+					nottl = ISC_FALSE;
+					ttlunits = ISC_TF(state);
+					break;
+				default:
+					goto invalid_option;
+				}
+				break;
+			default:
+				goto invalid_option;
+			}
 			break;
 		default:
 			goto invalid_option;
 		}
 		break;
+	case 'u':
+		FULLCHECK("unknownformat");
+		lookup->print_unknown_format = state;
+		break;
 	case 'v':
 		FULLCHECK("vc");
-		if (!is_batchfile)
+		if (!is_batchfile) {
 			lookup->tcp_mode = state;
+			lookup->tcp_mode_set = ISC_TRUE;
+		}
+		break;
+	case 'z': /* zflag */
+		FULLCHECK("zflag");
+		lookup->zflag = state;
 		break;
 	default:
 	invalid_option:
 	need_value:
 		fprintf(stderr, "Invalid option: +%s\n",
-			 option);
+			option);
 		usage();
 	}
 	return;
@@ -1197,7 +1516,7 @@ plus_option(char *option, isc_boolean_t is_batchfile,
 /*%
  * #ISC_TRUE returned if value was used
  */
-static const char *single_dash_opts = "46dhimnv";
+static const char *single_dash_opts = "46dhimnuv";
 static const char *dash_opts = "46bcdfhikmnptvyx";
 static isc_boolean_t
 dash_option(char *option, char *next, dig_lookup_t **lookup,
@@ -1220,7 +1539,7 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 
 	while (strpbrk(option, single_dash_opts) == &option[0]) {
 		/*
-		 * Since the -[46dhimnv] options do not take an argument,
+		 * Since the -[46dhimnuv] options do not take an argument,
 		 * account for them (in any number and/or combination)
 		 * if they appear as the first character(s) of a q-opt.
 		 */
@@ -1268,6 +1587,9 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 			break;
 		case 'n':
 			/* deprecated */
+			break;
+		case 'u':
+			use_usec = ISC_TRUE;
 			break;
 		case 'v':
 			version();
@@ -1322,7 +1644,7 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 		}
 		*open_type_class = ISC_FALSE;
 		tr.base = value;
-		tr.length = strlen(value);
+		tr.length = (unsigned int) strlen(value);
 		result = dns_rdataclass_fromtext(&rdclass,
 						 (isc_textregion_t *)&tr);
 		if (result == ISC_R_SUCCESS) {
@@ -1337,8 +1659,7 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 		batchname = value;
 		return (value_from_next);
 	case 'k':
-		strncpy(keyfile, value, sizeof(keyfile));
-		keyfile[sizeof(keyfile)-1]=0;
+		strlcpy(keyfile, value, sizeof(keyfile));
 		return (value_from_next);
 	case 'p':
 		result = parse_uint(&num, value, MAXPORT, "port number");
@@ -1352,9 +1673,8 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 				(*lookup) = clone_lookup(default_lookup,
 							 ISC_TRUE);
 			*need_clone = ISC_TRUE;
-			strncpy((*lookup)->textname, value,
+			strlcpy((*lookup)->textname, value,
 				sizeof((*lookup)->textname));
-			(*lookup)->textname[sizeof((*lookup)->textname)-1]=0;
 			(*lookup)->trace_root = ISC_TF((*lookup)->trace  ||
 						     (*lookup)->ns_search_only);
 			(*lookup)->new_search = ISC_TRUE;
@@ -1373,7 +1693,7 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 			result = ISC_R_SUCCESS;
 		} else {
 			tr.base = value;
-			tr.length = strlen(value);
+			tr.length = (unsigned int) strlen(value);
 			result = dns_rdatatype_fromtext(&rdtype,
 						(isc_textregion_t *)&tr);
 			if (result == ISC_R_SUCCESS &&
@@ -1397,13 +1717,18 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 				(*lookup)->ixfr_serial = serial;
 				(*lookup)->section_question = plusquest;
 				(*lookup)->comments = pluscomm;
-				(*lookup)->tcp_mode = ISC_TRUE;
+				if (!(*lookup)->tcp_mode_set)
+					(*lookup)->tcp_mode = ISC_TRUE;
 			} else {
 				(*lookup)->rdtype = rdtype;
-				(*lookup)->rdtypeset = ISC_TRUE;
+				if (!config_only)
+					(*lookup)->rdtypeset = ISC_TRUE;
 				if (rdtype == dns_rdatatype_axfr) {
 					(*lookup)->section_question = plusquest;
 					(*lookup)->comments = pluscomm;
+				} else if (rdtype == dns_rdatatype_any) {
+					if (!(*lookup)->tcp_mode_set)
+						(*lookup)->tcp_mode = ISC_TRUE;
 				}
 				(*lookup)->ixfr_serial = ISC_FALSE;
 			}
@@ -1413,26 +1738,28 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 				 value);
 		return (value_from_next);
 	case 'y':
-		ptr = next_token(&value,":");	/* hmac type or name */
+		ptr = next_token(&value, ":");	/* hmac type or name */
 		if (ptr == NULL) {
 			usage();
 		}
 		ptr2 = next_token(&value, ":");	/* name or secret */
 		if (ptr2 == NULL)
 			usage();
-		ptr3 = next_token(&value,":"); /* secret or NULL */
+		ptr3 = next_token(&value, ":"); /* secret or NULL */
 		if (ptr3 != NULL) {
 			parse_hmac(ptr);
 			ptr = ptr2;
 			ptr2 = ptr3;
 		} else  {
+#ifndef PK11_MD5_DISABLE
 			hmacname = DNS_TSIG_HMACMD5_NAME;
+#else
+			hmacname = DNS_TSIG_HMACSHA256_NAME;
+#endif
 			digestbits = 0;
 		}
-		strncpy(keynametext, ptr, sizeof(keynametext));
-		keynametext[sizeof(keynametext)-1]=0;
-		strncpy(keysecret, ptr2, sizeof(keysecret));
-		keysecret[sizeof(keysecret)-1]=0;
+		strlcpy(keynametext, ptr, sizeof(keynametext));
+		strlcpy(keysecret, ptr2, sizeof(keysecret));
 		return (value_from_next);
 	case 'x':
 		if (*need_clone)
@@ -1440,7 +1767,7 @@ dash_option(char *option, char *next, dig_lookup_t **lookup,
 		*need_clone = ISC_TRUE;
 		if (get_reverse(textname, sizeof(textname), value,
 				ip6_int, ISC_FALSE) == ISC_R_SUCCESS) {
-			strncpy((*lookup)->textname, textname,
+			strlcpy((*lookup)->textname, textname,
 				sizeof((*lookup)->textname));
 			debug("looking up %s", (*lookup)->textname);
 			(*lookup)->trace_root = ISC_TF((*lookup)->trace  ||
@@ -1492,11 +1819,22 @@ preparse_args(int argc, char **argv) {
 			continue;
 		option = &rv[0][1];
 		while (strpbrk(option, single_dash_opts) == &option[0]) {
-			if (option[0] == 'm') {
+			switch (option[0]) {
+			case 'm':
 				memdebugging = ISC_TRUE;
 				isc_mem_debugging = ISC_MEM_DEBUGTRACE |
 					ISC_MEM_DEBUGRECORD;
-				return;
+				break;
+			case '4':
+				if (ipv6only)
+					fatal("only one of -4 and -6 allowed");
+				ipv4only = ISC_TRUE;
+				break;
+			case '6':
+				if (ipv4only)
+					fatal("only one of -4 and -6 allowed");
+				ipv6only = ISC_TRUE;
+				break;
 			}
 			option = &option[1];
 		}
@@ -1505,7 +1843,8 @@ preparse_args(int argc, char **argv) {
 
 static void
 parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
-	   int argc, char **argv) {
+	   int argc, char **argv)
+{
 	isc_result_t result;
 	isc_textregion_t tr;
 	isc_boolean_t firstarg = ISC_TRUE;
@@ -1543,6 +1882,7 @@ parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
 		default_lookup = make_empty_lookup();
 		default_lookup->adflag = ISC_TRUE;
 		default_lookup->edns = 0;
+		default_lookup->sendcookie = ISC_TRUE;
 
 #ifndef NOPOSIX
 		/*
@@ -1564,8 +1904,7 @@ parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
 				bargc = 1;
 				input = batchline;
 				bargv[bargc] = next_token(&input, " \t\r\n");
-				while ((bargv[bargc] != NULL) &&
-				       (bargc < 62)) {
+				while ((bargc < 62) && (bargv[bargc] != NULL)) {
 					bargc++;
 					bargv[bargc] =
 						next_token(&input, " \t\r\n");
@@ -1598,8 +1937,29 @@ parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
 		debug("main parsing %s", rv[0]);
 		if (strncmp(rv[0], "%", 1) == 0)
 			break;
-		if (strncmp(rv[0], "@", 1) == 0) {
-			addresscount = getaddresses(lookup, &rv[0][1], NULL);
+		if (rv[0][0] == '@') {
+
+			if (is_batchfile && !config_only) {
+				addresscount = getaddresses(lookup, &rv[0][1],
+							     &result);
+				if (addresscount == 0) {
+					fprintf(stderr, "couldn't get address "
+						"for '%s': %s: skipping "
+						"lookup\n", &rv[0][1],
+						isc_result_totext(result));
+					if (ISC_LINK_LINKED(lookup, link))
+						ISC_LIST_DEQUEUE(lookup_list,
+								 lookup, link);
+					destroy_lookup(lookup);
+					return;
+				}
+			} else {
+				addresscount = getaddresses(lookup, &rv[0][1],
+							    NULL);
+				if (addresscount == 0)
+					fatal("no valid addresses for '%s'\n",
+					      &rv[0][1]);
+			}
 		} else if (rv[0][0] == '+') {
 			plus_option(&rv[0][1], is_batchfile,
 				    lookup);
@@ -1631,7 +1991,8 @@ parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
 					result = ISC_R_SUCCESS;
 				} else {
 					tr.base = rv[0];
-					tr.length = strlen(rv[0]);
+					tr.length =
+						(unsigned int) strlen(rv[0]);
 					result = dns_rdatatype_fromtext(&rdtype,
 						(isc_textregion_t *)&tr);
 					if (result == ISC_R_SUCCESS &&
@@ -1663,7 +2024,8 @@ parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
 						lookup->section_question =
 							plusquest;
 						lookup->comments = pluscomm;
-						lookup->tcp_mode = ISC_TRUE;
+						if (!lookup->tcp_mode_set)
+							lookup->tcp_mode = ISC_TRUE;
 					} else {
 						lookup->rdtype = rdtype;
 						lookup->rdtypeset = ISC_TRUE;
@@ -1673,6 +2035,10 @@ parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
 								plusquest;
 						    lookup->comments = pluscomm;
 						}
+						if (rdtype ==
+						    dns_rdatatype_any &&
+						    !lookup->tcp_mode_set)
+							lookup->tcp_mode = ISC_TRUE;
 						lookup->ixfr_serial = ISC_FALSE;
 					}
 					continue;
@@ -1695,9 +2061,8 @@ parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
 					lookup = clone_lookup(default_lookup,
 								      ISC_TRUE);
 				need_clone = ISC_TRUE;
-				strncpy(lookup->textname, rv[0],
+				strlcpy(lookup->textname, rv[0],
 					sizeof(lookup->textname));
-				lookup->textname[sizeof(lookup->textname)-1]=0;
 				lookup->trace_root = ISC_TF(lookup->trace  ||
 						     lookup->ns_search_only);
 				lookup->new_search = ISC_TRUE;
@@ -1738,7 +2103,7 @@ parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
 				goto next_line;
 			input = batchline;
 			bargv[bargc] = next_token(&input, " \t\r\n");
-			while ((bargv[bargc] != NULL) && (bargc < 14)) {
+			while ((bargc < 14) && (bargv[bargc] != NULL)) {
 				bargc++;
 				bargv[bargc] = next_token(&input, " \t\r\n");
 			}
@@ -1763,7 +2128,7 @@ parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
 		lookup->trace_root = ISC_TF(lookup->trace ||
 					    lookup->ns_search_only);
 		lookup->new_search = ISC_TRUE;
-		strcpy(lookup->textname, ".");
+		strlcpy(lookup->textname, ".", sizeof(lookup->textname));
 		lookup->rdtype = dns_rdatatype_ns;
 		lookup->rdtypeset = ISC_TRUE;
 		if (firstarg) {
@@ -1781,8 +2146,8 @@ parse_args(isc_boolean_t is_batchfile, isc_boolean_t config_only,
  * Here, we're possibly reading from a batch file, then shutting down
  * for real if there's nothing in the batch file to read.
  */
-void
-dighost_shutdown(void) {
+static void
+query_finished(void) {
 	char batchline[MXNAME];
 	int bargc;
 	char *bargv[16];
@@ -1808,7 +2173,7 @@ dighost_shutdown(void) {
 		bargc = 1;
 		input = batchline;
 		bargv[bargc] = next_token(&input, " \t\r\n");
-		while ((bargv[bargc] != NULL) && (bargc < 14)) {
+		while ((bargc < 14) && (bargv[bargc] != NULL)) {
 			bargc++;
 			bargv[bargc] = next_token(&input, " \t\r\n");
 		}
@@ -1828,41 +2193,92 @@ dighost_shutdown(void) {
 	}
 }
 
-/*% Main processing routine for dig */
-int
-main(int argc, char **argv) {
+void dig_setup(int argc, char **argv)
+{
 	isc_result_t result;
 
 	ISC_LIST_INIT(lookup_list);
 	ISC_LIST_INIT(server_list);
 	ISC_LIST_INIT(search_list);
 
-	debug("main()");
-	preparse_args(argc, argv);
+	debug("dig_setup()");
+
+	/* setup dighost callbacks */
+#ifdef DIG_SIGCHASE
+	dighost_printrdataset = printrdataset;
+#endif
+	dighost_printmessage = printmessage;
+	dighost_received = received;
+	dighost_trying = trying;
+	dighost_shutdown = query_finished;
+
 	progname = argv[0];
+	preparse_args(argc, argv);
+
 	result = isc_app_start();
 	check_result(result, "isc_app_start");
+
 	setup_libs();
-	parse_args(ISC_FALSE, ISC_FALSE, argc, argv);
-	setup_system();
+	setup_system(ipv4only, ipv6only);
+}
+
+void dig_query_setup(isc_boolean_t is_batchfile, isc_boolean_t config_only,
+		int argc, char **argv)
+{
+	debug("dig_query_setup");
+
+	parse_args(is_batchfile, config_only, argc, argv);
+	if (keyfile[0] != 0)
+		setup_file_key();
+	else if (keysecret[0] != 0)
+		setup_text_key();
 	if (domainopt[0] != '\0') {
 		set_search_domain(domainopt);
 		usesearch = ISC_TRUE;
 	}
+}
+
+void dig_startup() {
+	isc_result_t result;
+
+	debug("dig_startup()");
+
 	result = isc_app_onrun(mctx, global_task, onrun_callback, NULL);
 	check_result(result, "isc_app_onrun");
 	isc_app_run();
+}
+
+void dig_query_start()
+{
+	start_lookup();
+}
+
+void
+dig_shutdown() {
 	destroy_lookup(default_lookup);
 	if (batchname != NULL) {
 		if (batchfp != stdin)
 			fclose(batchfp);
 		batchname = NULL;
 	}
+
 #ifdef DIG_SIGCHASE
 	clean_trustedkey();
 #endif
+
 	cancel_all();
 	destroy_libs();
 	isc_app_finish();
+}
+
+/*% Main processing routine for dig */
+int
+main(int argc, char **argv) {
+
+	dig_setup(argc, argv);
+	dig_query_setup(ISC_FALSE, ISC_FALSE, argc, argv);
+	dig_startup();
+	dig_shutdown();
+
 	return (exitcode);
 }

@@ -1,18 +1,12 @@
 /*
- * Copyright (C) 2004, 2005, 2007, 2009, 2012  Internet Systems Consortium, Inc. ("ISC")
- * Copyright (C) 1999-2003  Internet Software Consortium.
+ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
- * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
- * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
- * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
- * OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * See the COPYRIGHT file distributed with this work for additional
+ * information regarding copyright ownership.
  */
 
 /* $Id: getipnode.c,v 1.47 2009/09/01 23:47:45 tbox Exp $ */
@@ -420,7 +414,7 @@ lwres_getipnodebyaddr(const void *src, size_t len, int af, int *error_num) {
 		/*
 		 * Restore original address.
 		 */
-		memcpy(he2->h_addr, src, len);
+		memmove(he2->h_addr, src, len);
 		return (he2);
 	}
 
@@ -595,7 +589,7 @@ scan_interfaces6(int *have_v4, int *have_v6) {
 	for (cp = buf;
 	     (*have_v4 == 0 || *have_v6 == 0) && cp < cplim;
 	     cp += cpsize) {
-		memcpy(&lifreq, cp, sizeof(lifreq));
+		memmove(&lifreq, cp, sizeof(lifreq));
 #ifdef LWRES_PLATFORM_HAVESALEN
 #ifdef FIX_ZERO_SA_LEN
 		if (lifreq.lifr_addr.sa_len == 0)
@@ -620,10 +614,10 @@ scan_interfaces6(int *have_v4, int *have_v6) {
 		switch (lifreq.lifr_addr.ss_family) {
 		case AF_INET:
 			if (*have_v4 == 0) {
-				memcpy(&in4,
-				       &((struct sockaddr_in *)
-				       &lifreq.lifr_addr)->sin_addr,
-				       sizeof(in4));
+				memmove(&in4,
+					&((struct sockaddr_in *)
+					  &lifreq.lifr_addr)->sin_addr,
+					sizeof(in4));
 				if (in4.s_addr == INADDR_ANY)
 					break;
 				n = ioctl(s, SIOCGLIFFLAGS, (char *)&lifreq);
@@ -636,10 +630,10 @@ scan_interfaces6(int *have_v4, int *have_v6) {
 			break;
 		case AF_INET6:
 			if (*have_v6 == 0) {
-				memcpy(&in6,
-				       &((struct sockaddr_in6 *)
-				       &lifreq.lifr_addr)->sin6_addr,
-				       sizeof(in6));
+				memmove(&in6,
+					&((struct sockaddr_in6 *)
+					  &lifreq.lifr_addr)->sin6_addr,
+					sizeof(in6));
 				if (memcmp(&in6, &in6addr_any,
 					   sizeof(in6)) == 0)
 					break;
@@ -760,7 +754,7 @@ scan_interfaces(int *have_v4, int *have_v6) {
 	for (cp = buf;
 	     (*have_v4 == 0 || *have_v6 == 0) && cp < cplim;
 	     cp += cpsize) {
-		memcpy(&u.ifreq, cp, sizeof(u.ifreq));
+		memmove(&u.ifreq, cp, sizeof(u.ifreq));
 #ifdef LWRES_PLATFORM_HAVESALEN
 #ifdef FIX_ZERO_SA_LEN
 		if (u.ifreq.ifr_addr.sa_len == 0)
@@ -775,7 +769,7 @@ scan_interfaces(int *have_v4, int *have_v6) {
 		cpsize = sizeof(u.ifreq.ifr_name) + u.ifreq.ifr_addr.sa_len;
 #endif /* HAVE_MINIMUM_IFREQ */
 		if (cpsize > sizeof(u.ifreq) && cpsize <= sizeof(u))
-			memcpy(&u.ifreq, cp, cpsize);
+			memmove(&u.ifreq, cp, cpsize);
 #elif defined SIOCGIFCONF_ADDR
 		cpsize = sizeof(u.ifreq);
 #else
@@ -787,10 +781,10 @@ scan_interfaces(int *have_v4, int *have_v6) {
 		switch (u.ifreq.ifr_addr.sa_family) {
 		case AF_INET:
 			if (*have_v4 == 0) {
-				memcpy(&in4,
-				       &((struct sockaddr_in *)
-				       &u.ifreq.ifr_addr)->sin_addr,
-				       sizeof(in4));
+				memmove(&in4,
+					&((struct sockaddr_in *)
+					  &u.ifreq.ifr_addr)->sin_addr,
+					sizeof(in4));
 				if (in4.s_addr == INADDR_ANY)
 					break;
 				n = ioctl(s, SIOCGIFFLAGS, (char *)&u.ifreq);
@@ -803,10 +797,10 @@ scan_interfaces(int *have_v4, int *have_v6) {
 			break;
 		case AF_INET6:
 			if (*have_v6 == 0) {
-				memcpy(&in6,
-				       &((struct sockaddr_in6 *)
-				       &u.ifreq.ifr_addr)->sin6_addr,
-				       sizeof(in6));
+				memmove(&in6,
+					&((struct sockaddr_in6 *)
+					  &u.ifreq.ifr_addr)->sin6_addr,
+					sizeof(in6));
 				if (memcmp(&in6, &in6addr_any,
 					   sizeof(in6)) == 0)
 					break;
@@ -908,13 +902,13 @@ copyandmerge(struct hostent *he1, struct hostent *he2, int af, int *error_num)
 			 * Convert to mapped if required.
 			 */
 			if (af == AF_INET6 && he1->h_addrtype == AF_INET) {
-				memcpy(*npp, in6addr_mapped,
-				       sizeof(in6addr_mapped));
-				memcpy(*npp + sizeof(in6addr_mapped), *cpp,
-				       INADDRSZ);
+				memmove(*npp, in6addr_mapped,
+					sizeof(in6addr_mapped));
+				memmove(*npp + sizeof(in6addr_mapped), *cpp,
+					INADDRSZ);
 			} else {
-				memcpy(*npp, *cpp,
-				       (af == AF_INET) ? INADDRSZ : IN6ADDRSZ);
+				memmove(*npp, *cpp,
+					(af == AF_INET) ? INADDRSZ : IN6ADDRSZ);
 			}
 			cpp++;
 			npp++;
@@ -931,13 +925,13 @@ copyandmerge(struct hostent *he1, struct hostent *he2, int af, int *error_num)
 			 * Convert to mapped if required.
 			 */
 			if (af == AF_INET6 && he2->h_addrtype == AF_INET) {
-				memcpy(*npp, in6addr_mapped,
-				       sizeof(in6addr_mapped));
-				memcpy(*npp + sizeof(in6addr_mapped), *cpp,
-				       INADDRSZ);
+				memmove(*npp, in6addr_mapped,
+					sizeof(in6addr_mapped));
+				memmove(*npp + sizeof(in6addr_mapped), *cpp,
+					INADDRSZ);
 			} else {
-				memcpy(*npp, *cpp,
-				       (af == AF_INET) ? INADDRSZ : IN6ADDRSZ);
+				memmove(*npp, *cpp,
+					(af == AF_INET) ? INADDRSZ : IN6ADDRSZ);
 			}
 			cpp++;
 			npp++;
@@ -1060,7 +1054,7 @@ hostfromaddr(lwres_gnbaresponse_t *addr, int af, const void *src) {
 	he->h_addr_list[0] = malloc(he->h_length);
 	if (he->h_addr_list[0] == NULL)
 		goto cleanup;
-	memcpy(he->h_addr_list[0], src, he->h_length);
+	memmove(he->h_addr_list[0], src, he->h_length);
 	he->h_addr_list[1] = NULL;
 	return (he);
 
@@ -1140,7 +1134,7 @@ hostfromname(lwres_gabnresponse_t *name, int af) {
 		he->h_addr_list[i] = malloc(he->h_length);
 		if (he->h_addr_list[i] == NULL)
 			goto cleanup;
-		memcpy(he->h_addr_list[i], addr->address, he->h_length);
+		memmove(he->h_addr_list[i], addr->address, he->h_length);
 		addr = LWRES_LIST_NEXT(addr, link);
 		i++;
 	}
