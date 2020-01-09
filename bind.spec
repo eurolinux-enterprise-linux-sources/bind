@@ -4,9 +4,9 @@
 
 #%define PATCHVER P3
 %define PREVER rc1
-#%define VERSION %{version}
-#%define VERSION %{version}-%{PATCHVER}
-%define VERSION %{version}%{PREVER}
+#%define BINDVERSION %{version}
+#%define BINDVERSION %{version}-%{PATCHVER}
+%define BINDVERSION %{version}%{PREVER}
 
 %{?!SDB:       %define SDB       1}
 %{?!test:      %define test      0}
@@ -21,13 +21,13 @@ Summary:  The Berkeley Internet Name Domain (BIND) DNS (Domain Name System) serv
 Name:     bind
 License:  ISC
 Version:  9.8.2
-Release:  0.62.%{PREVER}%{?dist}.4
+Release:  0.62.%{PREVER}%{?dist}.5
 Epoch:    32
 Url:      http://www.isc.org/products/BIND/
 Buildroot:%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 Group:    System Environment/Daemons
 #
-Source:   ftp://ftp.isc.org/isc/bind9/%{VERSION}/bind-%{VERSION}.tar.gz
+Source:   ftp://ftp.isc.org/isc/bind9/%{BINDVERSION}/bind-%{BINDVERSION}.tar.gz
 Source1:  named.sysconfig
 Source2:  named.init
 Source3:  named.logrotate
@@ -142,6 +142,8 @@ Patch192:bind99-CVE-2017-3137.patch
 Patch193:bind99-rh1447407.patch
 # ISC 4643
 Patch194: bind99-CVE-2017-3142+3143.patch
+# ISC 4858
+Patch195: bind99-CVE-2017-3145.patch
 
 # SDB patches
 Patch11: bind-9.3.2b2-sdbsrc.patch
@@ -274,7 +276,7 @@ chroot(2) jail for the named(8) program from the BIND package.
 Based on the code from Jan "Yenya" Kasprzak <kas@fi.muni.cz>
 
 %prep
-%setup -q -n %{name}-%{VERSION}
+%setup -q -n %{name}-%{BINDVERSION}
 
 # Common patches
 %patch5 -p1 -b .nonexec
@@ -338,6 +340,7 @@ Based on the code from Jan "Yenya" Kasprzak <kas@fi.muni.cz>
 %patch192 -p1 -b .CVE-2017-3137
 %patch193 -p1 -b .rh1447407
 %patch194 -p1 -b .CVE-2017-3142+3143
+%patch195 -p1 -b .CVE-2017-3145
 
 # Override upstream builtin keys
 cp -fp %{SOURCE29} bind.keys
@@ -868,6 +871,9 @@ rm -rf ${RPM_BUILD_ROOT}
 %endif
 
 %changelog
+* Wed Jan 17 2018 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.62.rc1.5
+- Fix CVE-2017-3145
+
 * Thu Jun 29 2017 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.62.rc1.4
 - Fix CVE-2017-3142 and CVE-2017-3143
 
