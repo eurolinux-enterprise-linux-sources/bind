@@ -26,7 +26,7 @@ Summary:  The Berkeley Internet Name Domain (BIND) DNS (Domain Name System) serv
 Name:     bind
 License:  ISC
 Version:  9.9.4
-Release:  72%{?PATCHVER}%{?PREVER}%{?dist}
+Release:  73%{?PATCHVER}%{?PREVER}%{?dist}
 Epoch:    32
 Url:      http://www.isc.org/products/BIND/
 Buildroot:%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
@@ -173,6 +173,7 @@ Patch196: bind99-rh1549130.patch
 # commit cb735b3f902d4bb5f6e30328d5828d38efa63573
 Patch197: bind99-rh1549130-2.patch
 Patch198: bind99-CVE-2018-5740.patch
+Patch199: bind99-rh1647539.patch
 
 # Native PKCS#11 functionality from 9.10
 Patch150:bind-9.9-allow_external_dnskey.patch
@@ -498,6 +499,7 @@ tar -xf %{SOURCE48} -C bin/tests/system/geoip/data
 %patch196 -p1 -b .rh1549130
 %patch197 -p1 -b .rh1549130-2
 %patch198 -p1 -b .CVE-2018-5740
+%patch199 -p1 -b .rh1647539
 
 # Override upstream builtin keys
 cp -fp %{SOURCE29} bind.keys
@@ -1205,6 +1207,9 @@ rm -rf ${RPM_BUILD_ROOT}
 %endif
 
 %changelog
+* Fri Nov 23 2018 Petr Menšík <pemensik@redhat.com> - 32:9.9.4-73
+- Fixes debug level comments (#1647539)
+
 * Thu Sep 20 2018 Petr Menšík <pemensik@redhat.com> - 32:9.9.4-72
 - Fix automatic selinux boolean named_write_master_zones (#1569466)
 - Allow starting named with readonly home again
