@@ -26,7 +26,7 @@ Summary:  The Berkeley Internet Name Domain (BIND) DNS (Domain Name System) serv
 Name:     bind
 License:  ISC
 Version:  9.9.4
-Release:  74%{?PATCHVER}%{?PREVER}%{?dist}.1
+Release:  74%{?PATCHVER}%{?PREVER}%{?dist}.2
 Epoch:    32
 Url:      http://www.isc.org/products/BIND/
 Buildroot:%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
@@ -174,10 +174,9 @@ Patch196: bind99-rh1549130.patch
 Patch197: bind99-rh1549130-2.patch
 Patch198: bind99-CVE-2018-5740.patch
 Patch199: bind99-rh1647539.patch
-Patch200: bind-9.11-rt37039.patch
-Patch201: bind-9.11-rt37821.patch
-Patch202: bind-9.11-CVE-2018-5743.patch
-Patch203: bind-9.11-CVE-2018-5743-atomic.patch
+Patch200: bind99-CVE-2018-5743.patch
+# Accept keep-response-order support & warning
+Patch201: bind99-CVE-2018-5743-option.patch
 
 # Native PKCS#11 functionality from 9.10
 Patch150:bind-9.9-allow_external_dnskey.patch
@@ -504,10 +503,8 @@ tar -xf %{SOURCE48} -C bin/tests/system/geoip/data
 %patch197 -p1 -b .rh1549130-2
 %patch198 -p1 -b .CVE-2018-5740
 %patch199 -p1 -b .rh1647539
-%patch200 -p1 -b .tcp-share
-%patch201 -p1 -b .tcp-pipeline
-%patch202 -p1 -b .CVE-2018-5743
-%patch203 -p1 -b .CVE-2018-5743-atomic
+%patch200 -p1 -b .CVE-2018-5743
+%patch201 -p1 -b .keep-response-order
 
 # Override upstream builtin keys
 cp -fp %{SOURCE29} bind.keys
@@ -1215,6 +1212,10 @@ rm -rf ${RPM_BUILD_ROOT}
 %endif
 
 %changelog
+* Fri Jun 21 2019 Petr Menšík <pemensik@redhat.com> - 32:9.9.4-74.2
+- Fix unstable zone transfers (#1724071)
+- Understand keep-response-order for backward compatibility
+
 * Thu May 23 2019 Petr Menšík <pemensik@redhat.com> - 32:9.9.4-74.1
 - Remove again broken test (CVE-2018-5743)
 
