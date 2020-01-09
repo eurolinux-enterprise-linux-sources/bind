@@ -1,0 +1,232 @@
+From 4a0a86d84ff11337c363e0540947da136b296b70 Mon Sep 17 00:00:00 2001
+From: Evan Hunt <each@isc.org>
+Date: Fri, 29 Apr 2016 14:17:21 -0700
+Subject: [PATCH] [master] more python2/3 compatibility fixes; use setup.py to
+ install
+
+---
+ bin/python/Makefile.in     |  2 ++
+ bin/python/isc/Makefile.in | 28 +++-------------------------
+ bin/python/isc/__init__.py |  6 ++++--
+ bin/python/isc/checkds.py  |  5 +++--
+ bin/python/isc/coverage.py |  7 +++----
+ bin/python/isc/dnskey.py   |  4 ++--
+ bin/python/isc/keymgr.py   |  7 +++----
+ bin/python/isc/policy.py   |  6 +++++-
+ bin/python/setup.py        |  8 ++++++++
+ 9 files changed, 33 insertions(+), 40 deletions(-)
+ create mode 100644 bin/python/setup.py
+
+diff --git a/bin/python/Makefile.in b/bin/python/Makefile.in
+index 1e4af9c2e2..7ef32cc59b 100644
+--- a/bin/python/Makefile.in
++++ b/bin/python/Makefile.in
+@@ -55,9 +55,11 @@ install:: ${TARGETS} installdirs
+ 	${INSTALL_DATA} ${srcdir}/dnssec-checkds.8 ${DESTDIR}${mandir}/man8
+ 	${INSTALL_DATA} ${srcdir}/dnssec-coverage.8 ${DESTDIR}${mandir}/man8
+ 	${INSTALL_DATA} ${srcdir}/dnssec-keymgr.8 ${DESTDIR}${mandir}/man8
++	test -z "${PYTHON}" || ${PYTHON} setup.py install --prefix=${DESTDIR}${prefix}
+ 
+ clean distclean::
+ 	rm -f ${TARGETS}
++	rm -rf build
+ 
+ distclean::
+ 	rm -f dnssec-checkds.py dnssec-coverage.py dnssec-keymgr.py
+diff --git a/bin/python/isc/Makefile.in b/bin/python/isc/Makefile.in
+index 425d054cce..a72f6e4054 100644
+--- a/bin/python/isc/Makefile.in
++++ b/bin/python/isc/Makefile.in
+@@ -24,44 +24,22 @@ PYTHON	=	@PYTHON@
+ 
+ PYSRCS =	__init__.py dnskey.py eventlist.py keydict.py \
+ 		keyevent.py keyzone.py policy.py
+-TARGETS =	parsetab.py parsetab.pyc \
+-		__init__.pyc dnskey.pyc eventlist.py keydict.py \
+-		keyevent.pyc keyzone.pyc policy.pyc
++TARGETS =	parsetab.py
+ 
+ @BIND9_MAKE_RULES@
+ 
+ %.pyc: %.py
+ 	$(PYTHON) -m compileall .
+ 
+-parsetab.py parsetab.pyc: policy.py
++parsetab.py: policy.py
+ 	$(PYTHON) policy.py parse /dev/null > /dev/null
+ 	$(PYTHON) -m parsetab
+ 
+-installdirs:
+-	$(SHELL) ${top_srcdir}/mkinstalldirs ${DESTDIR}${libdir}/isc
+-
+-install:: ${PYSRCS} installdirs
+-	${INSTALL_SCRIPT} __init__.py ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} __init__.pyc ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} dnskey.py ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} dnskey.pyc ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} eventlist.py ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} eventlist.pyc ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} keydict.py ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} keydict.pyc ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} keyevent.py ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} keyevent.pyc ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} keyzone.py ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} keyzone.pyc ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} policy.py ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} policy.pyc ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} parsetab.py ${DESTDIR}${libdir}
+-	${INSTALL_SCRIPT} parsetab.pyc ${DESTDIR}${libdir}
+-
+ check test: subdirs
+ 
+ clean distclean::
+ 	rm -f *.pyc parser.out parsetab.py
++	rm -rf __pycache__ build
+ 
+ distclean::
+ 	rm -Rf utils.py
+\ No newline at end of file
+diff --git a/bin/python/isc/__init__.py b/bin/python/isc/__init__.py
+index 0d79f356fd..10b3c45cf1 100644
+--- a/bin/python/isc/__init__.py
++++ b/bin/python/isc/__init__.py
+@@ -13,8 +13,10 @@
+ # NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION
+ # WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ 
+-__all__ = ['dnskey', 'eventlist', 'keydict', 'keyevent', 'keyseries',
+-           'keyzone', 'policy', 'parsetab', 'utils']
++__all__ = ['checkds', 'coverage', 'keymgr', 'dnskey', 'eventlist',
++           'keydict', 'keyevent', 'keyseries', 'keyzone', 'policy',
++           'parsetab', 'utils']
++
+ from isc.dnskey import *
+ from isc.eventlist import *
+ from isc.keydict import *
+diff --git a/bin/python/isc/checkds.py b/bin/python/isc/checkds.py
+index 64ca12ebc6..2b7da39fc9 100644
+--- a/bin/python/isc/checkds.py
++++ b/bin/python/isc/checkds.py
+@@ -42,7 +42,7 @@ class SECRR:
+         if not rrtext:
+             raise Exception
+ 
+-        fields = rrtext.split()
++        fields = rrtext.decode('ascii').split()
+         if len(fields) < 7:
+             raise Exception
+ 
+@@ -75,7 +75,8 @@ class SECRR:
+             fields = fields[2:]
+ 
+         if fields[0].upper() != self.rrtype:
+-            raise Exception
++            raise Exception('%s does not match %s' %
++                            (fields[0].upper(), self.rrtype))
+ 
+         self.keyid, self.keyalg, self.hashalg = map(int, fields[1:4])
+         self.digest = ''.join(fields[4:]).upper()
+diff --git a/bin/python/isc/coverage.py b/bin/python/isc/coverage.py
+index c9e89596f7..bfe811bee8 100644
+--- a/bin/python/isc/coverage.py
++++ b/bin/python/isc/coverage.py
+@@ -27,9 +27,7 @@ from collections import defaultdict
+ 
+ prog = 'dnssec-coverage'
+ 
+-from isc import *
+-from isc.utils import prefix
+-
++from isc import dnskey, eventlist, keydict, keyevent, keyzone, utils
+ 
+ ############################################################################
+ # print a fatal error and exit
+@@ -139,7 +137,8 @@ def set_path(command, default=None):
+ def parse_args():
+     """Read command line arguments, set global 'args' structure"""
+     compilezone = set_path('named-compilezone',
+-                           os.path.join(prefix('sbin'), 'named-compilezone'))
++                           os.path.join(utils.prefix('sbin'),
++                           'named-compilezone'))
+ 
+     parser = argparse.ArgumentParser(description=prog + ': checks future ' +
+                                      'DNSKEY coverage for a zone')
+diff --git a/bin/python/isc/dnskey.py b/bin/python/isc/dnskey.py
+index f1559e7239..14079504b6 100644
+--- a/bin/python/isc/dnskey.py
++++ b/bin/python/isc/dnskey.py
+@@ -205,11 +205,11 @@ class dnskey:
+             raise Exception('unable to generate key: ' + str(stderr))
+ 
+         try:
+-            keystr = stdout.splitlines()[0]
++            keystr = stdout.splitlines()[0].decode('ascii')
+             newkey = dnskey(keystr, keys_dir, ttl)
+             return newkey
+         except Exception as e:
+-            raise Exception('unable to generate key: %s' % str(e))
++            raise Exception('unable to parse generated key: %s' % str(e))
+ 
+     def generate_successor(self, keygen_bin, **kwargs):
+         quiet = kwargs.get('quiet', False)
+diff --git a/bin/python/isc/keymgr.py b/bin/python/isc/keymgr.py
+index a3a9043965..cbe86ab65e 100644
+--- a/bin/python/isc/keymgr.py
++++ b/bin/python/isc/keymgr.py
+@@ -20,8 +20,7 @@ from collections import defaultdict
+ 
+ prog='dnssec-keymgr'
+ 
+-from isc import *
+-from isc.utils import prefix
++from isc import dnskey, keydict, keyseries, policy, parsetab, utils
+ 
+ ############################################################################
+ # print a fatal error and exit
+@@ -63,9 +62,9 @@ def parse_args():
+     """
+ 
+     keygen = set_path('dnssec-keygen',
+-                      os.path.join(prefix('sbin'), 'dnssec-keygen'))
++                      os.path.join(utils.prefix('sbin'), 'dnssec-keygen'))
+     settime = set_path('dnssec-settime',
+-                       os.path.join(prefix('sbin'), 'dnssec-settime'))
++                       os.path.join(utils.prefix('sbin'), 'dnssec-settime'))
+ 
+     parser = argparse.ArgumentParser(description=prog + ': schedule '
+                                      'DNSSEC key rollovers according to a '
+diff --git a/bin/python/isc/policy.py b/bin/python/isc/policy.py
+index ed106c6c92..dbb4abf010 100644
+--- a/bin/python/isc/policy.py
++++ b/bin/python/isc/policy.py
+@@ -104,8 +104,12 @@ class PolicyLex:
+         t.lexer.skip(1)
+ 
+     def __init__(self, **kwargs):
++        if 'maketrans' in dir(str):
++            trans = str.maketrans('_', '-')
++        else:
++            trans = maketrans('_', '-')
+         for r in self.reserved:
+-            self.reserved_map[r.lower().translate(maketrans('_', '-'))] = r
++            self.reserved_map[r.lower().translate(trans)] = r
+         self.lexer = lex.lex(object=self, **kwargs)
+ 
+     def test(self, text):
+diff --git a/bin/python/setup.py b/bin/python/setup.py
+new file mode 100644
+index 0000000000..d7ea4a4d41
+--- /dev/null
++++ b/bin/python/setup.py
+@@ -0,0 +1,8 @@
++from distutils.core import setup
++setup(name='isc',
++      version='2.0',
++      description='Python functions to support BIND utilities',
++      url='https://www.isc.org/bind',
++      author='Internet Systems Consortium, Inc',
++      license='ISC',
++      packages=['isc'])
+-- 
+2.14.3
+

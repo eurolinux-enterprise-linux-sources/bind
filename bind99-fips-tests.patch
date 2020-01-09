@@ -1,0 +1,1978 @@
+From 4a1bbbbe8ff1951dba9f5d6a69c42dcf274877d2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Petr=20Men=C5=A1=C3=ADk?= <pemensik@redhat.com>
+Date: Fri, 22 Jun 2018 14:05:43 +0200
+Subject: [PATCH 2/2] Squashed commit of the following:
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+commit d1de64d54126a9662b0f709adf1467f1ca3caa50
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Wed Jun 20 19:15:31 2018 +0200
+
+    Fix allow_query tests with hmac-256 keys
+
+commit 854606588f53ee403364461ad29dc1cfd29525a0
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Wed Mar 7 15:54:11 2018 +0100
+
+    Increase bitsize of DSA key to pass FIPS 140-2 mode.
+
+commit 98dae21d1f863fa26c125271392288730da52842
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Thu Apr 19 18:28:09 2018 +0200
+
+    Fix nsupdate, tsig and rndc tests.
+    Do not use md5 by default for rndc, skip gracefully md5 if not available.
+
+    Rename md5 keys to rndc*.conf, to pass util/merge_copyrights change.
+    Fix dynamic ports merge.
+
+commit 0ec5e2522aa32931cda5abd07a757035078840ea
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Wed Jun 20 19:34:20 2018 +0200
+
+    Use testcrypto for crypto detection. Generate random data per test into test directory.
+
+commit 0ca3c85fa6450ae8b347fa5585d0134ebe41682c
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Wed Mar 7 13:21:00 2018 +0100
+
+    Add md5 availability detection to featuretest
+
+commit c1b104ccf66a1ec37e941e303a56675c7dcccbaa
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Mon Jan 22 14:12:37 2018 +0100
+
+    Update system tests to detect MD5 disabled at runtime
+
+commit 743d24de87b6f022b99d14d3109958660b9ee07b
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Fri Feb 23 21:57:11 2018 +0100
+
+    Make testcrypto FIPS compatible
+
+    (cherry picked from commit 0e15cc7012c537a5d683c35534d33d23fcc4d942)
+
+commit 325dc1f4f37dc4b7133dd39d7780c10d183e4808
+Author: Evan Hunt <each@isc.org>
+Date:   Mon Oct 31 23:01:38 2016 -0700
+
+    [v9_9] 4496.   [func]          dig: add +idnout to control whether labels are
+                            display in punycode or not.  Requires idn support
+                            to be enabled at compile time. [RT #43398]
+
+    (cherry picked from commit 42470b0b87da24b18e0ff6ce78f3143e89df6d31)
+    (cherry picked from commit 6552f33198438390724c5823b8dbcf477ec9638c)
+    (cherry picked from commit 7aec46a5ef4074c3957d525643188257c7575841)
+
+    Skip IDN part and import only feature-test from system tests
+
+    (cherry picked from commit 61a01f48604ff6f5f84b64a5aaee722ebae8fadc)
+
+commit d435ac7bcf72117e75e534c23fca1852f4140eb8
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Wed Mar 7 10:44:23 2018 +0100
+
+    Use hmac-sha256 instead of default hmac-md5 for allow-query.
+    Do not use hmac-md5 in tests by default, make it pass with MD5 disabled.
+
+commit 067ca65156a9fadb191b7c9073904a43f57f1896
+Author: Evan Hunt <each@isc.org>
+Date:   Thu Feb 6 19:48:49 2014 -0800
+
+    [v9_9] add testcrypto.sh
+
+    (cherry picked from commit e9a2673e85173d93be168f561c5c77184d4e839d)
+
+commit 3fd542379fa381b54381e07d6625ce53f9f9b1f0
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Thu Jun 21 12:00:35 2018 +0200
+
+    Revert "4450.   [port]          Provide more nuanced HSM support which better matches"
+
+    This reverts commit f3b4d031c1f714ff6e862670663aa5a18650951e.
+
+    Revert PK11_MD5_DISABLED also from remaining files. Keep documentation
+    changes.
+
+commit f90934f734796595135cdd7a5008555a615dfe8e
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Wed Jun 20 19:31:19 2018 +0200
+
+    Fix rndc-confgen default algorithm, report true algorithm in usage.
+
+commit dd53212c12c6943a21a3c24d60995edd19e1d9f7
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Fri Feb 23 21:21:30 2018 +0100
+
+    Cleanup only if initialization was successful
+
+commit f163ea51c46bb22bf264a1ac983e2027e43845fa
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Mon Feb 5 12:19:28 2018 +0100
+
+    Ensure dst backend is initialized first even before hmac algorithms.
+
+commit 58751b60bd39168b7c8f817ede70473842432081
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Mon Feb 5 12:17:54 2018 +0100
+
+    Skip initialization of MD5 based algorithms if not available.
+
+commit 0572b98430d3c80f4a0b0c592b1e3bf7fde9b768
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Mon Feb 5 10:21:27 2018 +0100
+
+    Change secalgs skipping to be more safe
+
+commit 994f497a032930fce1370d507a265fbb293c66f4
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Wed Jan 31 18:26:11 2018 +0100
+
+    Skip MD5 algorithm also in case of NULL name
+
+commit abd82fbd2507c4b8f20e1ade202fd66d224fd646
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Wed Jan 31 16:54:29 2018 +0100
+
+    Revert part of commit 1b5c641416eb6de7fc232fc89d31a40a4d439f3d related
+    to SHA1.
+
+commit b3c832d53a14a0779f598869bb99685c8e4b2bc0
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Wed Jan 31 11:38:12 2018 +0100
+
+    Make MD5 behave like unknown algorithm in TSIG.
+
+commit a64a3d6962ee93d6f8699b29bd6507dba0c244ed
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Tue Nov 28 20:14:37 2017 +0100
+
+    Select token with most supported functions, instead of demanding it must support all functions
+
+    Initialize PKCS#11 always until successfully initialized
+
+commit db118c6368668099ea1b6e75860cc12e178afa3b
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Mon Jan 22 16:17:44 2018 +0100
+
+    Handle MD5 unavailability from DST
+
+commit 8f8824dca2f5b4d5a3a176d31ac3ee612321c4e3
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Mon Jan 22 14:11:16 2018 +0100
+
+    Check runtime flag from library and applications, fail gracefully.
+
+commit bd431384af7dcde8827e670c8749517ad677a967
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Mon Jan 22 08:39:08 2018 +0100
+
+    Modify libraries to use isc_md5_available() if PK11_MD5_DISABLE is not
+    defined.
+    TODO: pk11.c should accept slot without MD5 support.
+
+commit 160b13979ef3d0e92d2dd52d0987a3ec979be6cf
+Author: Petr Menšík <pemensik@redhat.com>
+Date:   Mon Jan 22 07:21:04 2018 +0100
+
+    Add runtime detection whether MD5 is useable.
+
+commit 23b27ce0f2ad496c331ae40349cc1074a1b11804
+Author: Mark Andrews <marka@isc.org>
+Date:   Fri Aug 19 08:25:54 2016 +1000
+
+    4450.   [port]          Provide more nuanced HSM support which better matches
+                            the specific PKCS11 providers capabilities. [RT #42458]
+
+    (cherry picked from commit 8ee6f289d87851a5b898b24a64587f0e6bc225bc)
+---
+ bin/tests/system/Makefile.in                  |  25 +++-
+ bin/tests/system/acl/ns2/named1.conf          |   4 +-
+ bin/tests/system/acl/ns2/named2.conf          |   4 +-
+ bin/tests/system/acl/ns2/named3.conf          |   6 +-
+ bin/tests/system/acl/ns2/named4.conf          |   4 +-
+ bin/tests/system/acl/ns2/named5.conf          |   4 +-
+ bin/tests/system/acl/tests.sh                 |  32 +++---
+ bin/tests/system/allow_query/ns2/named10.conf |   2 +-
+ bin/tests/system/allow_query/ns2/named11.conf |   4 +-
+ bin/tests/system/allow_query/ns2/named12.conf |   2 +-
+ bin/tests/system/allow_query/ns2/named30.conf |   2 +-
+ bin/tests/system/allow_query/ns2/named31.conf |   4 +-
+ bin/tests/system/allow_query/ns2/named32.conf |   2 +-
+ bin/tests/system/allow_query/ns2/named40.conf |   4 +-
+ bin/tests/system/allow_query/tests.sh         |  18 +--
+ bin/tests/system/checkconf/bad-tsig.conf      |   2 +-
+ bin/tests/system/conf.sh.in                   |   6 +-
+ bin/tests/system/digdelv/ns2/example.db       |  15 ++-
+ bin/tests/system/digdelv/tests.sh             |   4 +-
+ bin/tests/system/dlv/ns1/sign.sh              |   4 +-
+ bin/tests/system/dlv/ns2/sign.sh              |   4 +-
+ bin/tests/system/dlv/ns3/sign.sh              |  68 +++++------
+ bin/tests/system/dlv/ns6/sign.sh              |  64 +++++------
+ bin/tests/system/dnssec/ns2/sign.sh           |   8 +-
+ bin/tests/system/dnssec/prereq.sh             |  11 +-
+ bin/tests/system/feature-test.c               | 159 ++++++++++++++++++++++++++
+ bin/tests/system/filter-aaaa/ns1/sign.sh      |   4 +-
+ bin/tests/system/filter-aaaa/ns4/sign.sh      |   4 +-
+ bin/tests/system/keymgr/prereq.sh             |  15 +--
+ bin/tests/system/nsupdate/ns1/named.conf      |   2 +-
+ bin/tests/system/nsupdate/ns2/named.conf      |   2 +-
+ bin/tests/system/nsupdate/setup.sh            |   7 +-
+ bin/tests/system/nsupdate/tests.sh            |  11 +-
+ bin/tests/system/rndc/setup.sh                |   4 +-
+ bin/tests/system/rndc/tests.sh                |  22 ++--
+ bin/tests/system/testcrypto.sh                |  71 ++++++++++++
+ bin/tests/system/tkey/keycreate.c             |   3 +
+ bin/tests/system/tkey/keydelete.c             |  18 ++-
+ bin/tests/system/tkey/prereq.sh               |  11 +-
+ bin/tests/system/tsig/clean.sh                |   1 +
+ bin/tests/system/tsig/ns1/named.conf          |  12 +-
+ bin/tests/system/tsig/ns1/rndc5.conf.in       |  22 ++++
+ bin/tests/system/tsig/setup.sh                |  25 ++++
+ bin/tests/system/tsig/tests.sh                |  75 +++++++-----
+ bin/tests/system/tsiggss/setup.sh             |   2 +-
+ bin/tests/system/upforwd/ns1/named.conf       |   2 +-
+ bin/tests/system/upforwd/tests.sh             |   2 +-
+ 47 files changed, 547 insertions(+), 230 deletions(-)
+ create mode 100644 bin/tests/system/feature-test.c
+ create mode 100644 bin/tests/system/testcrypto.sh
+ create mode 100644 bin/tests/system/tsig/ns1/rndc5.conf.in
+ create mode 100644 bin/tests/system/tsig/setup.sh
+
+diff --git a/bin/tests/system/Makefile.in b/bin/tests/system/Makefile.in
+index 0c7fdffd01..afee71b2bb 100644
+--- a/bin/tests/system/Makefile.in
++++ b/bin/tests/system/Makefile.in
+@@ -23,10 +23,31 @@ top_srcdir =	@top_srcdir@
+ 
+ SUBDIRS =	dlzexternal dyndb filter-aaaa geoip lwresd rpz rrl \
+ 		rsabigexponent tkey tsiggss
+-TARGETS =
++CINCLUDES =	${ISC_INCLUDES} ${DNS_INCLUDES}
++
++CDEFINES =	@USE_GSSAPI@
++CWARNINGS =
++
++DNSLIBS =
++ISCLIBS =	../../../lib/isc/libisc.@A@
++
++DNSDEPLIBS =
++ISCDEPLIBS =
++
++DEPLIBS =
++
++LIBS =		@LIBS@
++
++OBJS =		feature-test.@O@
++SRCS =		feature-test.c
++
++TARGETS =	feature-test@EXEEXT@
+ 
+ @BIND9_MAKE_RULES@
+ 
++feature-test@EXEEXT@: feature-test.@O@
++	${LIBTOOL_MODE_LINK} ${PURIFY} ${CC} ${CFLAGS} ${LDFLAGS} -o $@ feature-test.@O@ ${ISCLIBS} ${LIBS}
++
+ # Running the scripts below is bypassed when a separate
+ # build directory is used.
+ 
+@@ -38,6 +59,8 @@ test: subdirs
+ testclean clean distclean::
+ 	if test -f ./cleanall.sh; then sh ./cleanall.sh; fi
+ 	rm -f systests.output
++	rm -f ${TARGETS}
++	rm -f ${OBJS}
+ 
+ distclean::
+ 	rm -f conf.sh
+diff --git a/bin/tests/system/acl/ns2/named1.conf b/bin/tests/system/acl/ns2/named1.conf
+index b70d1dd761..9037a15c9d 100644
+--- a/bin/tests/system/acl/ns2/named1.conf
++++ b/bin/tests/system/acl/ns2/named1.conf
+@@ -35,12 +35,12 @@ options {
+ include "../../common/controls.conf";
+ 
+ key one {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+ key two {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+diff --git a/bin/tests/system/acl/ns2/named2.conf b/bin/tests/system/acl/ns2/named2.conf
+index bcd7e0df19..648c5fdbdc 100644
+--- a/bin/tests/system/acl/ns2/named2.conf
++++ b/bin/tests/system/acl/ns2/named2.conf
+@@ -35,12 +35,12 @@ options {
+ include "../../common/controls.conf";
+ 
+ key one {
+-	algorithm hmac-md5;
++	algorithm hmac-sha256;
+ 	secret "1234abcd8765";
+ };
+ 
+ key two {
+-	algorithm hmac-md5;
++	algorithm hmac-sha256;
+ 	secret "1234abcd8765";
+ };
+ 
+diff --git a/bin/tests/system/acl/ns2/named3.conf b/bin/tests/system/acl/ns2/named3.conf
+index ea2cbcb44a..546ecf6af4 100644
+--- a/bin/tests/system/acl/ns2/named3.conf
++++ b/bin/tests/system/acl/ns2/named3.conf
+@@ -35,17 +35,17 @@ options {
+ include "../../common/controls.conf";
+ 
+ key one {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+ key two {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+ key three {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+diff --git a/bin/tests/system/acl/ns2/named4.conf b/bin/tests/system/acl/ns2/named4.conf
+index 99edf7ebe5..4c84d0f163 100644
+--- a/bin/tests/system/acl/ns2/named4.conf
++++ b/bin/tests/system/acl/ns2/named4.conf
+@@ -35,12 +35,12 @@ options {
+ include "../../common/controls.conf";
+ 
+ key one {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+ key two {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+diff --git a/bin/tests/system/acl/ns2/named5.conf b/bin/tests/system/acl/ns2/named5.conf
+index d17e1cf7b7..52ae56300e 100644
+--- a/bin/tests/system/acl/ns2/named5.conf
++++ b/bin/tests/system/acl/ns2/named5.conf
+@@ -36,12 +36,12 @@ options {
+ include "../../common/controls.conf";
+ 
+ key one {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+ key two {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+diff --git a/bin/tests/system/acl/tests.sh b/bin/tests/system/acl/tests.sh
+index 7207c5a1d3..753f9f6743 100644
+--- a/bin/tests/system/acl/tests.sh
++++ b/bin/tests/system/acl/tests.sh
+@@ -28,13 +28,13 @@ echo "I:testing basic ACL processing"
+ # key "one" should fail
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.1 axfr -y one:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.1 axfr -y hmac-sha256:one:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 || { echo "I:test $t failed" ; status=1; }
+ 
+ # any other key should be fine
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.1 axfr -y two:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.1 axfr -y hmac-sha256:two:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 && { echo "I:test $t failed" ; status=1; }
+ 
+ cp -f ns2/named2.conf ns2/named.conf
+@@ -44,18 +44,18 @@ sleep 5
+ # prefix 10/8 should fail
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.1 axfr -y one:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.1 axfr -y hmac-sha256:one:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 || { echo "I:test $t failed" ; status=1; }
+ 
+ # any other address should work, as long as it sends key "one"
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 127.0.0.1 axfr -y two:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 127.0.0.1 axfr -y hmac-sha256:two:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 || { echo "I:test $t failed" ; status=1; }
+ 
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 127.0.0.1 axfr -y one:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 127.0.0.1 axfr -y hmac-sha256:one:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 && { echo "I:test $t failed" ; status=1; }
+ 
+ echo "I:testing nested ACL processing"
+@@ -67,31 +67,31 @@ sleep 5
+ # should succeed
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.2 axfr -y two:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.2 axfr -y hmac-sha256:two:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 && { echo "I:test $t failed" ; status=1; }
+ 
+ # should succeed
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.2 axfr -y one:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.2 axfr -y hmac-sha256:one:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 && { echo "I:test $t failed" ; status=1; }
+ 
+ # should succeed
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.1 axfr -y two:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.1 axfr -y hmac-sha256:two:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 && { echo "I:test $t failed" ; status=1; }
+ 
+ # should succeed
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.1 axfr -y two:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.1 axfr -y hmac-sha256:two:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 && { echo "I:test $t failed" ; status=1; }
+ 
+ # but only one or the other should fail
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 127.0.0.1 axfr -y one:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 127.0.0.1 axfr -y hmac-sha256:one:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 || { echo "I:test $t failed" ; status=1; }
+ 
+ t=`expr $t + 1`
+@@ -102,7 +102,7 @@ grep "^;" dig.out > /dev/null 2>&1 || { echo "I:test $tt failed" ; status=1; }
+ # and other values? right out
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 127.0.0.1 axfr -y three:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 127.0.0.1 axfr -y hmac-sha256:three:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 || { echo "I:test $t failed" ; status=1; }
+ 
+ # now we only allow 10.53.0.1 *and* key one, or 10.53.0.2 *and* key two
+@@ -113,31 +113,31 @@ sleep 5
+ # should succeed
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.2 axfr -y two:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.2 axfr -y hmac-sha256:two:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 && { echo "I:test $t failed" ; status=1; }
+ 
+ # should succeed
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.1 axfr -y one:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.1 axfr -y hmac-sha256:one:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 && { echo "I:test $t failed" ; status=1; }
+ 
+ # should fail
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.2 axfr -y one:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.2 axfr -y hmac-sha256:one:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 || { echo "I:test $t failed" ; status=1; }
+ 
+ # should fail
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.1 axfr -y two:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.1 axfr -y hmac-sha256:two:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 || { echo "I:test $t failed" ; status=1; }
+ 
+ # should fail
+ t=`expr $t + 1`
+ $DIG $DIGOPTS tsigzone. \
+-    	@10.53.0.2 -b 10.53.0.3 axfr -y one:1234abcd8765 -p 5300 > dig.out
++    	@10.53.0.2 -b 10.53.0.3 axfr -y hmac-sha256:one:1234abcd8765 -p 5300 > dig.out
+ grep "^;" dig.out > /dev/null 2>&1 || { echo "I:test $t failed" ; status=1; }
+ 
+ echo "I:testing allow-query-on ACL processing"
+diff --git a/bin/tests/system/allow_query/ns2/named10.conf b/bin/tests/system/allow_query/ns2/named10.conf
+index 17786e6f87..918b185671 100644
+--- a/bin/tests/system/allow_query/ns2/named10.conf
++++ b/bin/tests/system/allow_query/ns2/named10.conf
+@@ -20,7 +20,7 @@
+ controls { /* empty */ };
+ 
+ key one {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+diff --git a/bin/tests/system/allow_query/ns2/named11.conf b/bin/tests/system/allow_query/ns2/named11.conf
+index 3d225bd9a2..2ccd8d4b3f 100644
+--- a/bin/tests/system/allow_query/ns2/named11.conf
++++ b/bin/tests/system/allow_query/ns2/named11.conf
+@@ -20,12 +20,12 @@
+ controls { /* empty */ };
+ 
+ key one {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+ key two {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234efgh8765";
+ };
+ 
+diff --git a/bin/tests/system/allow_query/ns2/named12.conf b/bin/tests/system/allow_query/ns2/named12.conf
+index e5e64184c8..fd322bb709 100644
+--- a/bin/tests/system/allow_query/ns2/named12.conf
++++ b/bin/tests/system/allow_query/ns2/named12.conf
+@@ -19,7 +19,7 @@
+ controls { /* empty */ };
+ 
+ key one {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+diff --git a/bin/tests/system/allow_query/ns2/named30.conf b/bin/tests/system/allow_query/ns2/named30.conf
+index 9182f21af3..585436f1d9 100644
+--- a/bin/tests/system/allow_query/ns2/named30.conf
++++ b/bin/tests/system/allow_query/ns2/named30.conf
+@@ -20,7 +20,7 @@
+ controls { /* empty */ };
+ 
+ key one {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+diff --git a/bin/tests/system/allow_query/ns2/named31.conf b/bin/tests/system/allow_query/ns2/named31.conf
+index 19efdf397e..d7f0e80616 100644
+--- a/bin/tests/system/allow_query/ns2/named31.conf
++++ b/bin/tests/system/allow_query/ns2/named31.conf
+@@ -20,12 +20,12 @@
+ controls { /* empty */ };
+ 
+ key one {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+ key two {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234efgh8765";
+ };
+ 
+diff --git a/bin/tests/system/allow_query/ns2/named32.conf b/bin/tests/system/allow_query/ns2/named32.conf
+index 3c207f3422..4d66a3812d 100644
+--- a/bin/tests/system/allow_query/ns2/named32.conf
++++ b/bin/tests/system/allow_query/ns2/named32.conf
+@@ -19,7 +19,7 @@
+ controls { /* empty */ };
+ 
+ key one {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+diff --git a/bin/tests/system/allow_query/ns2/named40.conf b/bin/tests/system/allow_query/ns2/named40.conf
+index cb81c79e5d..c581c5eefd 100644
+--- a/bin/tests/system/allow_query/ns2/named40.conf
++++ b/bin/tests/system/allow_query/ns2/named40.conf
+@@ -23,12 +23,12 @@ acl accept { 10.53.0.2; };
+ acl badaccept { 10.53.0.1; }; 
+ 
+ key one {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234abcd8765";
+ };
+ 
+ key two {
+-        algorithm hmac-md5;
++        algorithm hmac-sha256;
+         secret "1234efgh8765";
+ };
+ 
+diff --git a/bin/tests/system/allow_query/tests.sh b/bin/tests/system/allow_query/tests.sh
+index 0592c342d4..c5ef867451 100644
+--- a/bin/tests/system/allow_query/tests.sh
++++ b/bin/tests/system/allow_query/tests.sh
+@@ -195,7 +195,7 @@ sleep 5
+ 
+ echo "I:test $n: key allowed - query allowed"
+ ret=0
+-$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y one:1234abcd8765 a.normal.example a > dig.out.ns2.$n || ret=1
++$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y hmac-sha256:one:1234abcd8765 a.normal.example a > dig.out.ns2.$n || ret=1
+ grep 'status: NOERROR' dig.out.ns2.$n > /dev/null || ret=1
+ grep '^a.normal.example' dig.out.ns2.$n > /dev/null || ret=1
+ if [ $ret != 0 ]; then echo "I:failed"; fi
+@@ -209,7 +209,7 @@ sleep 5
+ 
+ echo "I:test $n: key not allowed - query refused"
+ ret=0
+-$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y two:1234efgh8765 a.normal.example a > dig.out.ns2.$n || ret=1
++$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y hmac-sha256:two:1234efgh8765 a.normal.example a > dig.out.ns2.$n || ret=1
+ grep 'status: REFUSED' dig.out.ns2.$n > /dev/null || ret=1
+ grep '^a.normal.example' dig.out.ns2.$n > /dev/null && ret=1
+ if [ $ret != 0 ]; then echo "I:failed"; fi
+@@ -223,7 +223,7 @@ sleep 5
+ 
+ echo "I:test $n: key disallowed - query refused"
+ ret=0
+-$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y one:1234abcd8765 a.normal.example a > dig.out.ns2.$n || ret=1
++$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y hmac-sha256:one:1234abcd8765 a.normal.example a > dig.out.ns2.$n || ret=1
+ grep 'status: REFUSED' dig.out.ns2.$n > /dev/null || ret=1
+ grep '^a.normal.example' dig.out.ns2.$n > /dev/null && ret=1
+ if [ $ret != 0 ]; then echo "I:failed"; fi
+@@ -366,7 +366,7 @@ sleep 5
+ 
+ echo "I:test $n: views key allowed - query allowed"
+ ret=0
+-$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y one:1234abcd8765 a.normal.example a > dig.out.ns2.$n || ret=1
++$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y hmac-sha256:one:1234abcd8765 a.normal.example a > dig.out.ns2.$n || ret=1
+ grep 'status: NOERROR' dig.out.ns2.$n > /dev/null || ret=1
+ grep '^a.normal.example' dig.out.ns2.$n > /dev/null || ret=1
+ if [ $ret != 0 ]; then echo "I:failed"; fi
+@@ -380,7 +380,7 @@ sleep 5
+ 
+ echo "I:test $n: views key not allowed - query refused"
+ ret=0
+-$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y two:1234efgh8765 a.normal.example a > dig.out.ns2.$n || ret=1
++$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y hmac-sha256:two:1234efgh8765 a.normal.example a > dig.out.ns2.$n || ret=1
+ grep 'status: REFUSED' dig.out.ns2.$n > /dev/null || ret=1
+ grep '^a.normal.example' dig.out.ns2.$n > /dev/null && ret=1
+ if [ $ret != 0 ]; then echo "I:failed"; fi
+@@ -394,7 +394,7 @@ sleep 5
+ 
+ echo "I:test $n: views key disallowed - query refused"
+ ret=0
+-$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y one:1234abcd8765 a.normal.example a > dig.out.ns2.$n || ret=1
++$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y hmac-sha256:one:1234abcd8765 a.normal.example a > dig.out.ns2.$n || ret=1
+ grep 'status: REFUSED' dig.out.ns2.$n > /dev/null || ret=1
+ grep '^a.normal.example' dig.out.ns2.$n > /dev/null && ret=1
+ if [ $ret != 0 ]; then echo "I:failed"; fi
+@@ -530,7 +530,7 @@ status=`expr $status + $ret`
+ n=`expr $n + 1`
+ echo "I:test $n: zone key allowed - query allowed"
+ ret=0
+-$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y one:1234abcd8765 a.keyallow.example a > dig.out.ns2.$n || ret=1
++$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y hmac-sha256:one:1234abcd8765 a.keyallow.example a > dig.out.ns2.$n || ret=1
+ grep 'status: NOERROR' dig.out.ns2.$n > /dev/null || ret=1
+ grep '^a.keyallow.example' dig.out.ns2.$n > /dev/null || ret=1
+ if [ $ret != 0 ]; then echo "I:failed"; fi
+@@ -540,7 +540,7 @@ status=`expr $status + $ret`
+ n=`expr $n + 1`
+ echo "I:test $n: zone key not allowed - query refused"
+ ret=0
+-$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y two:1234efgh8765 a.keyallow.example a > dig.out.ns2.$n || ret=1
++$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y hmac-sha256:two:1234efgh8765 a.keyallow.example a > dig.out.ns2.$n || ret=1
+ grep 'status: REFUSED' dig.out.ns2.$n > /dev/null || ret=1
+ grep '^a.keyallow.example' dig.out.ns2.$n > /dev/null && ret=1
+ if [ $ret != 0 ]; then echo "I:failed"; fi
+@@ -550,7 +550,7 @@ status=`expr $status + $ret`
+ n=`expr $n + 1`
+ echo "I:test $n: zone key disallowed - query refused"
+ ret=0
+-$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y one:1234abcd8765 a.keydisallow.example a > dig.out.ns2.$n || ret=1
++$DIG $DIGOPTS @10.53.0.2 -b 10.53.0.2 -y hmac-sha256:one:1234abcd8765 a.keydisallow.example a > dig.out.ns2.$n || ret=1
+ grep 'status: REFUSED' dig.out.ns2.$n > /dev/null || ret=1
+ grep '^a.keydisallow.example' dig.out.ns2.$n > /dev/null && ret=1
+ if [ $ret != 0 ]; then echo "I:failed"; fi
+diff --git a/bin/tests/system/checkconf/bad-tsig.conf b/bin/tests/system/checkconf/bad-tsig.conf
+index 8f0ecf7ea0..0e4718994f 100644
+--- a/bin/tests/system/checkconf/bad-tsig.conf
++++ b/bin/tests/system/checkconf/bad-tsig.conf
+@@ -18,7 +18,7 @@
+ 
+ /* Bad secret */
+ key "badtsig" {
+-	algorithm hmac-md5;
++	algorithm hmac-sha256;
+ 	secret "jEdD+BPKg==";
+ };
+ 
+diff --git a/bin/tests/system/conf.sh.in b/bin/tests/system/conf.sh.in
+index 930928b429..420320c737 100644
+--- a/bin/tests/system/conf.sh.in
++++ b/bin/tests/system/conf.sh.in
+@@ -56,6 +56,10 @@ JOURNALPRINT=$TOP/bin/tools/named-journalprint
+ VERIFY=$TOP/bin/dnssec/dnssec-verify
+ ARPANAME=$TOP/bin/tools/arpaname
+ SAMPLE=$TOP/lib/export/samples/sample
++GENRANDOM=$TOP/bin/tools/genrandom
++FEATURETEST=$TOP/bin/tests/system/feature-test
++
++RANDFILE=$TOP/bin/tests/system/random.data
+ 
+ # The "stress" test is not run by default since it creates enough
+ # load on the machine to make it unusable to other users.
+@@ -89,4 +93,4 @@ fi
+ 
+ export NAMED LWRESD DIG NSUPDATE KEYGEN KEYFRLAB SIGNER KEYSIGNER KEYSETTOOL \
+        PERL PYTHON SUBDIRS RNDC CHECKZONE PK11GEN PK11LIST PK11DEL TESTSOCK6 \
+-       JOURNALPRINT ARPANAME SAMPLE
++       JOURNALPRINT ARPANAME SAMPLE FEATURETEST
+diff --git a/bin/tests/system/digdelv/ns2/example.db b/bin/tests/system/digdelv/ns2/example.db
+index 0a1aa5d615..fd3ed3a045 100644
+--- a/bin/tests/system/digdelv/ns2/example.db
++++ b/bin/tests/system/digdelv/ns2/example.db
+@@ -41,10 +41,13 @@ foo			SSHFP	2 1 123456789abcdef67890123456789abcdef67890
+ ;;
+ ;; we are not testing DNSSEC behavior, so we don't care about the semantics
+ ;; of the following records.
+-dnskey                  300     DNSKEY  256 3 1 (
+-                                        AQPTpWyReB/e9Ii6mVGnakS8hX2zkh/iUYAg
+-                                        +Ge4noWROpTWOIBvm76zeJPWs4Zfqa1IsswD
+-                                        Ix5Mqeg0zwclz59uecKsKyx5w9IhtZ8plc4R
+-                                        b9VIE5x7KNHAYTvTO5d4S8M=
+-                                        )
++dnskey                  300     DNSKEY 256 3 8 (
++                    AwEAAaWmCoDpj2K59zcpqnmnQM7IC/XbjS6jIP7uTBR4X7p1bdQJzAeo
++                    EnMhnpnxPp0j+20eZm4847DB2U+HuHy79Mvqd3aozTmfBJvzjKs9qyba
++                    zY/ZHn6BDYxNJiFfjSS/VJ1KuQPDbpCzhm2hbvT5s9nSOaG0WyRk+d+R
++                    qEca11E7ZKkmmNiGlyzMAgfmTTBwgxWBAAhvd9nU1GqD6eQ6Z63hpTc/
++                    KDIHnFTo7pOcZ4z5urIKUMCMcFytedETlEoR5CIWGPdQq2eIEEMfn5ld
++                    QqdEZRHVErD9og8aluJ2s767HZb8LzjCfYgBFoT9/n48T75oZLEKtSkG
++                    /idCeeQlaLU=
++                    )
+ 
+diff --git a/bin/tests/system/digdelv/tests.sh b/bin/tests/system/digdelv/tests.sh
+index a19256cde3..bdfacf9fb4 100644
+--- a/bin/tests/system/digdelv/tests.sh
++++ b/bin/tests/system/digdelv/tests.sh
+@@ -59,7 +59,7 @@ if [ -x ${DIG} ] ; then
+   echo "I:checking dig +rrcomments works for DNSKEY($n)"
+   ret=0
+   $DIG $DIGOPTS +tcp @10.53.0.3 +rrcomments DNSKEY dnskey.example > dig.out.test$n || ret=1
+-  grep "; ZSK; alg = RSAMD5 *; key id = 30795" < dig.out.test$n > /dev/null || ret=1
++  grep "; ZSK; alg = RSASHA256 *; key id = 36895$" < dig.out.test$n > /dev/null || ret=1
+   if [ $ret != 0 ]; then echo "I:failed"; fi
+   status=`expr $status + $ret`
+ 
+@@ -146,7 +146,7 @@ if [ -n "${DELV}" -a -x "${DELV}" ] ; then
+   echo "I:checking delv +rrcomments works for DNSKEY($n)"
+   ret=0
+   $DELV $DELVOPTS @10.53.0.3 +rrcomments DNSKEY dnskey.example > delv.out.test$n || ret=1
+-  grep "; ZSK; alg = RSAMD5 *; key id = 30795" < delv.out.test$n > /dev/null || ret=1
++  grep "; ZSK; alg = RSASHA256 *; key id = 36895" < dig.out.test$n > /dev/null || ret=1
+   if [ $ret != 0 ]; then echo "I:failed"; fi
+   status=`expr $status + $ret`
+ 
+diff --git a/bin/tests/system/dlv/ns1/sign.sh b/bin/tests/system/dlv/ns1/sign.sh
+index 9854f5b7ce..cf261c136c 100755
+--- a/bin/tests/system/dlv/ns1/sign.sh
++++ b/bin/tests/system/dlv/ns1/sign.sh
+@@ -30,8 +30,8 @@ infile=root.db.in
+ zonefile=root.db
+ outfile=root.signed
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null` 
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null` 
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+diff --git a/bin/tests/system/dlv/ns2/sign.sh b/bin/tests/system/dlv/ns2/sign.sh
+index edcc8f21d4..4e142b00d8 100755
+--- a/bin/tests/system/dlv/ns2/sign.sh
++++ b/bin/tests/system/dlv/ns2/sign.sh
+@@ -31,8 +31,8 @@ zonefile=druz.db
+ outfile=druz.pre
+ dlvzone=utld.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null` 
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null` 
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+diff --git a/bin/tests/system/dlv/ns3/sign.sh b/bin/tests/system/dlv/ns3/sign.sh
+index 6bdc2f6cc5..64c5846f7d 100755
+--- a/bin/tests/system/dlv/ns3/sign.sh
++++ b/bin/tests/system/dlv/ns3/sign.sh
+@@ -34,8 +34,8 @@ zonefile=child1.utld.db
+ outfile=child1.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null` 
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null` 
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key ../ns6/dsset-grand.$zone >$zonefile
+ 
+@@ -49,8 +49,8 @@ zonefile=child3.utld.db
+ outfile=child3.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key ../ns6/dsset-grand.$zone >$zonefile
+ 
+@@ -64,8 +64,8 @@ zonefile=child4.utld.db
+ outfile=child4.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -79,8 +79,8 @@ zonefile=child5.utld.db
+ outfile=child5.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key ../ns6/dsset-grand.$zone >$zonefile
+ 
+@@ -93,8 +93,8 @@ infile=child.db.in
+ zonefile=child7.utld.db
+ outfile=child7.signed
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key ../ns6/dsset-grand.$zone >$zonefile
+ 
+@@ -107,8 +107,8 @@ infile=child.db.in
+ zonefile=child8.utld.db
+ outfile=child8.signed
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -122,8 +122,8 @@ zonefile=child9.utld.db
+ outfile=child9.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -136,8 +136,8 @@ zonefile=child10.utld.db
+ outfile=child10.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -151,8 +151,8 @@ outfile=child1.druz.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ dssets="$dssets dsset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null` 
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null` 
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key ../ns6/dsset-grand.$zone >$zonefile
+ 
+@@ -167,8 +167,8 @@ outfile=child3.druz.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ dssets="$dssets dsset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key ../ns6/dsset-grand.$zone >$zonefile
+ 
+@@ -183,8 +183,8 @@ outfile=child4.druz.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ dssets="$dssets dsset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -199,8 +199,8 @@ outfile=child5.druz.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ dssets="$dssets dsset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key ../ns6/dsset-grand.$zone >$zonefile
+ 
+@@ -214,8 +214,8 @@ zonefile=child7.druz.db
+ outfile=child7.druz.signed
+ dssets="$dssets dsset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key ../ns6/dsset-grand.$zone >$zonefile
+ 
+@@ -228,8 +228,8 @@ infile=child.db.in
+ zonefile=child8.druz.db
+ outfile=child8.druz.signed
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -243,8 +243,8 @@ zonefile=child9.druz.db
+ outfile=child9.druz.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -258,8 +258,8 @@ outfile=child10.druz.signed
+ dlvsets="$dlvsets dlvset-$zone"
+ dssets="$dssets dsset-$zone"
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -272,8 +272,8 @@ infile=dlv.db.in
+ zonefile=dlv.utld.db
+ outfile=dlv.signed
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $dlvsets $keyname1.key $keyname2.key >$zonefile
+ 
+diff --git a/bin/tests/system/dlv/ns6/sign.sh b/bin/tests/system/dlv/ns6/sign.sh
+index 2bc133e5d6..227c1cb69f 100755
+--- a/bin/tests/system/dlv/ns6/sign.sh
++++ b/bin/tests/system/dlv/ns6/sign.sh
+@@ -28,8 +28,8 @@ infile=child.db.in
+ zonefile=grand.child1.utld.db
+ outfile=grand.child1.signed
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -43,8 +43,8 @@ zonefile=grand.child3.utld.db
+ outfile=grand.child3.signed
+ dlvzone=dlv.utld.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -58,8 +58,8 @@ zonefile=grand.child4.utld.db
+ outfile=grand.child4.signed
+ dlvzone=dlv.utld.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -73,8 +73,8 @@ zonefile=grand.child5.utld.db
+ outfile=grand.child5.signed
+ dlvzone=dlv.utld.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -88,8 +88,8 @@ zonefile=grand.child7.utld.db
+ outfile=grand.child7.signed
+ dlvzone=dlv.utld.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -103,8 +103,8 @@ zonefile=grand.child8.utld.db
+ outfile=grand.child8.signed
+ dlvzone=dlv.utld.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -118,8 +118,8 @@ zonefile=grand.child9.utld.db
+ outfile=grand.child9.signed
+ dlvzone=dlv.utld.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -132,8 +132,8 @@ zonefile=grand.child10.utld.db
+ outfile=grand.child10.signed
+ dlvzone=dlv.utld.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -145,8 +145,8 @@ infile=child.db.in
+ zonefile=grand.child1.druz.db
+ outfile=grand.child1.druz.signed
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -160,8 +160,8 @@ zonefile=grand.child3.druz.db
+ outfile=grand.child3.druz.signed
+ dlvzone=dlv.druz.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -175,8 +175,8 @@ zonefile=grand.child4.druz.db
+ outfile=grand.child4.druz.signed
+ dlvzone=dlv.druz.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -190,8 +190,8 @@ zonefile=grand.child5.druz.db
+ outfile=grand.child5.druz.signed
+ dlvzone=dlv.druz.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -205,8 +205,8 @@ zonefile=grand.child7.druz.db
+ outfile=grand.child7.druz.signed
+ dlvzone=dlv.druz.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -220,8 +220,8 @@ zonefile=grand.child8.druz.db
+ outfile=grand.child8.druz.signed
+ dlvzone=dlv.druz.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -235,8 +235,8 @@ zonefile=grand.child9.druz.db
+ outfile=grand.child9.druz.signed
+ dlvzone=dlv.druz.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -249,8 +249,8 @@ zonefile=grand.child10.druz.db
+ outfile=grand.child10.druz.signed
+ dlvzone=dlv.druz.
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+diff --git a/bin/tests/system/dnssec/ns2/sign.sh b/bin/tests/system/dnssec/ns2/sign.sh
+index 118b8a6d6b..0c4dcb4b19 100644
+--- a/bin/tests/system/dnssec/ns2/sign.sh
++++ b/bin/tests/system/dnssec/ns2/sign.sh
+@@ -38,8 +38,8 @@ do
+ 	cp ../ns3/dsset-$subdomain.example. .
+ done
+ 
+-keyname1=`$KEYGEN -q -r $RANDFILE -a DSA -b 768 -n zone $zone`
+-keyname2=`$KEYGEN -q -r $RANDFILE -a DSA -b 768 -n zone $zone`
++keyname1=`$KEYGEN -q -r $RANDFILE -a DSA -b 1024 -n zone $zone`
++keyname2=`$KEYGEN -q -r $RANDFILE -a DSA -b 1024 -n zone $zone`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+@@ -98,7 +98,7 @@ privzone=private.secure.example.
+ privinfile=private.secure.example.db.in
+ privzonefile=private.secure.example.db
+ 
+-privkeyname=`$KEYGEN -q -r $RANDFILE -a RSAMD5 -b 768 -n zone $privzone`
++privkeyname=`$KEYGEN -q -r $RANDFILE -a RSAMD5 -b 1024 -n zone $privzone`
+ 
+ cat $privinfile $privkeyname.key >$privzonefile
+ 
+@@ -111,7 +111,7 @@ dlvzone=dlv.
+ dlvinfile=dlv.db.in
+ dlvzonefile=dlv.db
+ 
+-dlvkeyname=`$KEYGEN -q -r $RANDFILE -a RSAMD5 -b 768 -n zone $dlvzone`
++dlvkeyname=`$KEYGEN -q -r $RANDFILE -a RSAMD5 -b 1024 -n zone $dlvzone`
+ 
+ cat $dlvinfile $dlvkeyname.key dlvset-$privzone > $dlvzonefile
+ 
+diff --git a/bin/tests/system/dnssec/prereq.sh b/bin/tests/system/dnssec/prereq.sh
+index 113e372c28..84630d8abc 100644
+--- a/bin/tests/system/dnssec/prereq.sh
++++ b/bin/tests/system/dnssec/prereq.sh
+@@ -17,13 +17,4 @@
+ 
+ # $Id: prereq.sh,v 1.13 2009/10/28 00:27:10 marka Exp $
+ 
+-../../../tools/genrandom 400 random.data
+-
+-if $KEYGEN -q -a RSAMD5 -b 512 -n zone -r random.data foo > /dev/null 2>&1
+-then
+-    rm -f Kfoo*
+-else
+-    echo "I:This test requires cryptography" >&2
+-    echo "I:--with-openssl, or --with-pkcs11 and --enable-native-pkcs11" >&2
+-    exit 1
+-fi
++exec $SHELL ../testcrypto.sh
+diff --git a/bin/tests/system/feature-test.c b/bin/tests/system/feature-test.c
+new file mode 100644
+index 0000000000..495f46a32a
+--- /dev/null
++++ b/bin/tests/system/feature-test.c
+@@ -0,0 +1,159 @@
++/*
++ * Copyright (C) 2016  Internet Systems Consortium, Inc. ("ISC")
++ *
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
++ */
++
++#include <config.h>
++
++#include <unistd.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#include <isc/print.h>
++#include <isc/util.h>
++#include <isc/md5.h>
++
++#ifdef WIN32
++#include <Winsock2.h>
++#endif
++
++#ifndef MAXHOSTNAMELEN
++#ifdef HOST_NAME_MAX
++#define MAXHOSTNAMELEN HOST_NAME_MAX
++#else
++#define MAXHOSTNAMELEN 256
++#endif
++#endif
++
++static void
++usage() {
++	fprintf(stderr, "usage: feature-test <arg>\n");
++	fprintf(stderr, "args:\n");
++	fprintf(stderr, "	--enable-filter-aaaa\n");
++	fprintf(stderr, "	--gethostname\n");
++	fprintf(stderr, "	--gssapi\n");
++	fprintf(stderr, "	--have-dlopen\n");
++	fprintf(stderr, "	--have-geoip\n");
++	fprintf(stderr, "	--have-libxml2\n");
++	fprintf(stderr, "	--md5\n");
++	fprintf(stderr, "	--rpz-nsip\n");
++	fprintf(stderr, "	--rpz-nsdname\n");
++	fprintf(stderr, "	--with-idn\n");
++}
++
++int
++main(int argc, char **argv) {
++	if (argc != 2) {
++		usage();
++		return (1);
++	}
++
++	if (strcmp(argv[1], "--enable-filter-aaaa") == 0) {
++#ifdef ALLOW_FILTER_AAAA
++		return (0);
++#else
++		return (1);
++#endif
++	}
++
++	if (strcmp(argv[1], "--gethostname") == 0) {
++		char hostname[MAXHOSTNAMELEN];
++		int n;
++#ifdef WIN32
++		/* From lwres InitSocket() */
++		WORD wVersionRequested;
++		WSADATA wsaData;
++		int err;
++
++		wVersionRequested = MAKEWORD(2, 0);
++		err = WSAStartup( wVersionRequested, &wsaData );
++		if (err != 0) {
++			fprintf(stderr, "WSAStartup() failed: %d\n", err);
++			exit(1);
++		}
++#endif
++
++		n = gethostname(hostname, sizeof(hostname));
++		if (n == -1) {
++			perror("gethostname");
++			return(1);
++		}
++		fprintf(stdout, "%s\n", hostname);
++#ifdef WIN32
++		WSACleanup();
++#endif
++		return (0);
++	}
++
++	if (strcmp(argv[1], "--gssapi") == 0) {
++#if defined(GSSAPI)
++		return (0);
++#else
++		return (1);
++#endif
++	}
++
++	if (strcmp(argv[1], "--have-dlopen") == 0) {
++#if defined(HAVE_DLOPEN) && defined(ISC_DLZ_DLOPEN)
++		return (0);
++#else
++		return (1);
++#endif
++	}
++
++	if (strcmp(argv[1], "--have-geoip") == 0) {
++#ifdef HAVE_GEOIP
++		return (0);
++#else
++		return (1);
++#endif
++	}
++
++	if (strcmp(argv[1], "--have-libxml2") == 0) {
++#ifdef HAVE_LIBXML2
++		return (0);
++#else
++		return (1);
++#endif
++	}
++
++	if (strcmp(argv[1], "--md5") == 0) {
++		if (isc_md5_available()) {
++			return (0);
++		} else {
++			return (1);
++		}
++	}
++
++	if (strcmp(argv[1], "--rpz-nsip") == 0) {
++#ifdef ENABLE_RPZ_NSIP
++		return (0);
++#else
++		return (1);
++#endif
++	}
++
++	if (strcmp(argv[1], "--rpz-nsdname") == 0) {
++#ifdef ENABLE_RPZ_NSDNAME
++		return (0);
++#else
++		return (1);
++#endif
++	}
++
++	if (strcmp(argv[1], "--with-idn") == 0) {
++#ifdef WITH_IDN
++		return (0);
++#else
++		return (1);
++#endif
++	}
++
++	fprintf(stderr, "unknown arg: %s\n", argv[1]);
++	usage();
++	return (1);
++}
+diff --git a/bin/tests/system/filter-aaaa/ns1/sign.sh b/bin/tests/system/filter-aaaa/ns1/sign.sh
+index 203e37ebfb..e0c696b986 100755
+--- a/bin/tests/system/filter-aaaa/ns1/sign.sh
++++ b/bin/tests/system/filter-aaaa/ns1/sign.sh
+@@ -27,8 +27,8 @@ infile=signed.db.in
+ zonefile=signed.db.signed
+ outfile=signed.db.signed
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+diff --git a/bin/tests/system/filter-aaaa/ns4/sign.sh b/bin/tests/system/filter-aaaa/ns4/sign.sh
+index ff33b10a19..74d755763a 100755
+--- a/bin/tests/system/filter-aaaa/ns4/sign.sh
++++ b/bin/tests/system/filter-aaaa/ns4/sign.sh
+@@ -27,8 +27,8 @@ infile=signed.db.in
+ zonefile=signed.db.signed
+ outfile=signed.db.signed
+ 
+-keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
+-keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 768 -n zone $zone 2> /dev/null`
++keyname1=`$KEYGEN -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
++keyname2=`$KEYGEN -f KSK -r $RANDFILE -a DSA -b 1024 -n zone $zone 2> /dev/null`
+ 
+ cat $infile $keyname1.key $keyname2.key >$zonefile
+ 
+diff --git a/bin/tests/system/keymgr/prereq.sh b/bin/tests/system/keymgr/prereq.sh
+index be2546ec59..e71cc9f03a 100644
+--- a/bin/tests/system/keymgr/prereq.sh
++++ b/bin/tests/system/keymgr/prereq.sh
+@@ -14,17 +14,4 @@
+ # OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+ # PERFORMANCE OF THIS SOFTWARE.
+ 
+-SYSTEMTESTTOP=..
+-. $SYSTEMTESTTOP/conf.sh
+-
+-../../../tools/genrandom 400 random.data
+-
+-if $KEYGEN -q -a RSAMD5 -b 512 -n zone -r random.data foo > /dev/null 2>&1
+-then
+-    rm -f Kfoo*
+-else
+-    echo "I:This test requires cryptography" >&2
+-    echo "I:--with-openssl, or --with-pkcs11 and --enable-native-pkcs11" >&2
+-    exit 1
+-fi
+-#exec $SHELL ../testcrypto.sh
++exec $SHELL ../testcrypto.sh
+diff --git a/bin/tests/system/nsupdate/ns1/named.conf b/bin/tests/system/nsupdate/ns1/named.conf
+index 86fe91d070..c53da11685 100644
+--- a/bin/tests/system/nsupdate/ns1/named.conf
++++ b/bin/tests/system/nsupdate/ns1/named.conf
+@@ -42,7 +42,7 @@ controls {
+ };
+ 
+ key altkey {
+-        algorithm hmac-md5;
++        algorithm hmac-sha512;
+         secret "1234abcd8765";
+ };
+ 
+diff --git a/bin/tests/system/nsupdate/ns2/named.conf b/bin/tests/system/nsupdate/ns2/named.conf
+index 6db32202ff..68022656ec 100644
+--- a/bin/tests/system/nsupdate/ns2/named.conf
++++ b/bin/tests/system/nsupdate/ns2/named.conf
+@@ -33,7 +33,7 @@ options {
+ };
+ 
+ key altkey {
+-        algorithm hmac-md5;
++        algorithm hmac-sha512;
+         secret "1234abcd8765";
+ };
+ 
+diff --git a/bin/tests/system/nsupdate/setup.sh b/bin/tests/system/nsupdate/setup.sh
+index bb015142da..e97406956a 100644
+--- a/bin/tests/system/nsupdate/setup.sh
++++ b/bin/tests/system/nsupdate/setup.sh
+@@ -53,8 +53,13 @@ EOF
+ 
+ ../../../tools/genrandom 400 random.data
+ $DDNSCONFGEN -q -r random.data -z example.nil > ns1/ddns.key
++if $FEATURETEST --md5; then
++	$DDNSCONFGEN -q -r random.data -a hmac-md5 -k md5-key -z keytests.nil > ns1/md5.key
++else
++	echo -n > ns1/md5.key
++fi
++
+ 
+-$DDNSCONFGEN -q -r random.data -a hmac-md5 -k md5-key -z keytests.nil > ns1/md5.key
+ $DDNSCONFGEN -q -r random.data -a hmac-sha1 -k sha1-key -z keytests.nil > ns1/sha1.key
+ $DDNSCONFGEN -q -r random.data -a hmac-sha224 -k sha224-key -z keytests.nil > ns1/sha224.key
+ $DDNSCONFGEN -q -r random.data -a hmac-sha256 -k sha256-key -z keytests.nil > ns1/sha256.key
+diff --git a/bin/tests/system/nsupdate/tests.sh b/bin/tests/system/nsupdate/tests.sh
+index b9a1c90536..821d7a65e2 100644
+--- a/bin/tests/system/nsupdate/tests.sh
++++ b/bin/tests/system/nsupdate/tests.sh
+@@ -516,7 +516,14 @@ fi
+ n=`expr $n + 1`
+ ret=0
+ echo "I:check TSIG key algorithms ($n)"
+-for alg in md5 sha1 sha224 sha256 sha384 sha512; do
++if $FEATURETEST --md5
++then
++	ALGS="md5 sha1 sha224 sha256 sha384 sha512"
++else
++	ALGS="sha1 sha224 sha256 sha384 sha512"
++	echo_i "skipping disabled md5 algorithm"
++fi
++for alg in $ALGS; do
+     $NSUPDATE -k ns1/${alg}.key <<END > /dev/null || ret=1
+ server 10.53.0.1 5300
+ update add ${alg}.keytests.nil. 600 A 10.10.10.3
+@@ -524,7 +531,7 @@ send
+ END
+ done
+ sleep 2
+-for alg in md5 sha1 sha224 sha256 sha384 sha512; do
++for alg in $ALGS; do
+     $DIG +short @10.53.0.1 -p 5300 ${alg}.keytests.nil | grep 10.10.10.3 > /dev/null 2>&1 || ret=1
+ done
+ if [ $ret -ne 0 ]; then
+diff --git a/bin/tests/system/rndc/setup.sh b/bin/tests/system/rndc/setup.sh
+index ce80005faf..a7c66841cc 100644
+--- a/bin/tests/system/rndc/setup.sh
++++ b/bin/tests/system/rndc/setup.sh
+@@ -22,7 +22,7 @@ SYSTEMTESTTOP=..
+ 
+ sh clean.sh
+ 
+-../../../tools/genrandom 400 random.data
++../../../tools/genrandom 800 random.data
+ 
+ sh ../genzone.sh 2 >ns2/nil.db
+ sh ../genzone.sh 2 >ns2/other.db
+@@ -37,7 +37,7 @@ make_key () {
+             sed 's/allow { 10.53.0.4/allow { any/' >> ns4/named.conf
+ }
+ 
+-make_key 1 hmac-md5
++$FEATURETEST --md5 && make_key 1 hmac-md5
+ make_key 2 hmac-sha1
+ make_key 3 hmac-sha224
+ make_key 4 hmac-sha256
+diff --git a/bin/tests/system/rndc/tests.sh b/bin/tests/system/rndc/tests.sh
+index 01dbc811ae..20a90850d1 100644
+--- a/bin/tests/system/rndc/tests.sh
++++ b/bin/tests/system/rndc/tests.sh
+@@ -246,14 +246,20 @@ if [ $ret != 0 ]; then echo "I:failed"; fi
+ status=`expr $status + $ret`
+ 
+ echo "I:testing rndc with hmac-md5"
+-ret=0
+-$RNDC -s 10.53.0.4 -p 9951 -c ns4/key1.conf status > /dev/null 2>&1 || ret=1
+-for i in 2 3 4 5 6
+-do
+-        $RNDC -s 10.53.0.4 -p 9951 -c ns4/key${i}.conf status > /dev/null 2>&1 && ret=1
+-done
+-if [ $ret != 0 ]; then echo "I:failed"; fi
+-status=`expr $status + $ret`
++if $FEATURETEST --md5
++then
++        echo "I:testing rndc with hmac-md5"
++        ret=0
++        $RNDC -s 10.53.0.4 -p 9951 -c ns4/key1.conf status > /dev/null 2>&1 || ret=1
++        for i in 2 3 4 5 6
++        do
++                $RNDC -s 10.53.0.4 -p 9951 -c ns4/key${i}.conf status > /dev/null 2>&1 && ret=1
++        done
++        if [ $ret != 0 ]; then echo_i "failed"; fi
++        status=`expr $status + $ret`
++else
++        echo "W:skipping rndc with hmac-md5"
++fi
+ 
+ echo "I:testing rndc with hmac-sha1"
+ ret=0
+diff --git a/bin/tests/system/testcrypto.sh b/bin/tests/system/testcrypto.sh
+new file mode 100644
+index 0000000000..e21f18b5f5
+--- /dev/null
++++ b/bin/tests/system/testcrypto.sh
+@@ -0,0 +1,71 @@
++#!/bin/sh
++#
++# Copyright (C) 2014  Internet Systems Consortium, Inc. ("ISC")
++#
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++#
++# THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH
++# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
++# AND FITNESS.  IN NO EVENT SHALL ISC BE LIABLE FOR ANY SPECIAL, DIRECT,
++# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
++# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
++# OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
++# PERFORMANCE OF THIS SOFTWARE.
++
++SYSTEMTESTTOP=${SYSTEMTESTTOP:=..}
++. $SYSTEMTESTTOP/conf.sh
++
++# Unlike 9.11, keep generated data in current directory
++RANDFILE=random.data
++
++test -r $RANDFILE || $GENRANDOM 800 $RANDFILE
++
++prog=$0
++
++args="-r $RANDFILE"
++alg="-a RSASHA1 -b 2048"
++quiet=0
++
++msg1="cryptography"
++msg2="--with-openssl, or --enable-native-pkcs11 --with-pkcs11"
++while test "$#" -gt 0; do
++        case $1 in
++        -q)
++                args="$args -q"
++                quiet=1
++                ;;
++        rsa|RSA)
++                alg=""
++                msg1="RSA cryptography"
++                ;;
++        gost|GOST)
++                alg="-a eccgost"
++                msg1="GOST cryptography"
++                msg2="--with-gost"
++                ;;
++        ecdsa|ECDSA)
++                alg="-a ecdsap256sha256"
++                msg1="ECDSA cryptography"
++                msg2="--with-ecdsa"
++                ;;
++        *)
++                echo "${prog}: unknown argument"
++                exit 1
++                ;;
++        esac
++        shift
++done
++
++
++if $KEYGEN $args $alg foo > /dev/null 2>&1
++then
++    rm -f Kfoo*
++else
++    if test $quiet -eq 0; then
++        echo "I:This test requires support for $msg1" >&2
++        echo "I:configure with $msg2" >&2
++    fi
++    exit 255
++fi
+diff --git a/bin/tests/system/tkey/keycreate.c b/bin/tests/system/tkey/keycreate.c
+index af17582096..b61b5d0796 100644
+--- a/bin/tests/system/tkey/keycreate.c
++++ b/bin/tests/system/tkey/keycreate.c
+@@ -27,6 +27,7 @@
+ #include <isc/entropy.h>
+ #include <isc/hash.h>
+ #include <isc/log.h>
++#include <isc/md5.h>
+ #include <isc/mem.h>
+ #include <isc/sockaddr.h>
+ #include <isc/socket.h>
+@@ -143,6 +144,8 @@ sendquery(isc_task_t *task, isc_event_t *event) {
+ 	static char keystr[] = "0123456789ab";
+ 
+ 	isc_event_free(&event);
++	if (isc_md5_available() == ISC_FALSE)
++		CHECK("MD5 was disabled", ISC_R_NOTIMPLEMENTED);
+ 
+ 	result = ISC_R_FAILURE;
+ 	if (inet_pton(AF_INET, "10.53.0.1", &inaddr) != 1)
+diff --git a/bin/tests/system/tkey/keydelete.c b/bin/tests/system/tkey/keydelete.c
+index 1bb33e85fe..da4b1c3c09 100644
+--- a/bin/tests/system/tkey/keydelete.c
++++ b/bin/tests/system/tkey/keydelete.c
+@@ -228,12 +228,18 @@ main(int argc, char **argv) {
+ 	type = DST_TYPE_PUBLIC | DST_TYPE_PRIVATE | DST_TYPE_KEY;
+ 	result = dst_key_fromnamedfile(keyname, NULL, type, mctx, &dstkey);
+ 	CHECK("dst_key_fromnamedfile", result);
+-	result = dns_tsigkey_createfromkey(dst_key_name(dstkey),
+-					   DNS_TSIG_HMACMD5_NAME,
+-					   dstkey, ISC_TRUE, NULL, 0, 0,
+-					   mctx, ring, &tsigkey);
+-	dst_key_free(&dstkey);
+-	CHECK("dns_tsigkey_createfromkey", result);
++	if (isc_md5_available()) {
++		result = dns_tsigkey_createfromkey(dst_key_name(dstkey),
++						   DNS_TSIG_HMACMD5_NAME,
++						   dstkey, ISC_TRUE,
++						   NULL, 0, 0,
++						   mctx, ring, &tsigkey);
++		dst_key_free(&dstkey);
++		CHECK("dns_tsigkey_createfromkey", result);
++	} else {
++		dst_key_free(&dstkey);
++		CHECK("MD5 was disabled", ISC_R_NOTIMPLEMENTED);
++	}
+ 
+ 	(void)isc_app_run();
+ 
+diff --git a/bin/tests/system/tkey/prereq.sh b/bin/tests/system/tkey/prereq.sh
+index 66295fee90..310849f08e 100644
+--- a/bin/tests/system/tkey/prereq.sh
++++ b/bin/tests/system/tkey/prereq.sh
+@@ -17,13 +17,4 @@
+ 
+ # $Id: prereq.sh,v 1.12 2009/03/02 23:47:43 tbox Exp $
+ 
+-../../../tools/genrandom 400 random.data
+-
+-if $KEYGEN -a RSAMD5 -b 512 -n zone -r random.data foo > /dev/null 2>&1
+-then
+-    rm -f foo*
+-else
+-    echo "I:This test requires cryptography" >&2
+-    echo "I:--with-openssl, or --with-pkcs11 and --enable-native-pkcs11" >&2
+-    exit 1
+-fi
++exec $SHELL ../testcrypto.sh
+diff --git a/bin/tests/system/tsig/clean.sh b/bin/tests/system/tsig/clean.sh
+index 0e98b4047b..b11a378006 100644
+--- a/bin/tests/system/tsig/clean.sh
++++ b/bin/tests/system/tsig/clean.sh
+@@ -23,3 +23,4 @@
+ rm -f dig.out.*
+ rm -f */named.memstats
+ rm -f */named.run
++rm -f ns1/rndc5.conf
+diff --git a/bin/tests/system/tsig/ns1/named.conf b/bin/tests/system/tsig/ns1/named.conf
+index b48de835f4..e7e568acc7 100644
+--- a/bin/tests/system/tsig/ns1/named.conf
++++ b/bin/tests/system/tsig/ns1/named.conf
+@@ -30,10 +30,7 @@ options {
+ 	notify no;
+ };
+ 
+-key "md5" {
+-	secret "97rnFx24Tfna4mHPfgnerA==";
+-	algorithm hmac-md5;
+-};
++# md5 key included from rndc5.conf
+ 
+ key "sha1" {
+ 	secret "FrSt77yPTFx6hTs4i2tKLB9LmE0=";
+@@ -60,10 +57,7 @@ key "sha512" {
+ 	algorithm hmac-sha512;
+ };
+ 
+-key "md5-trunc" {
+-	secret "97rnFx24Tfna4mHPfgnerA==";
+-	algorithm hmac-md5-80;
+-};
++# md5-trunc key included from rndc5.conf
+ 
+ key "sha1-trunc" {
+ 	secret "FrSt77yPTFx6hTs4i2tKLB9LmE0=";
+@@ -94,3 +88,5 @@ zone "example.nil" {
+ 	type master;
+ 	file "example.db";
+ };
++
++include "rndc5.conf";
+diff --git a/bin/tests/system/tsig/ns1/rndc5.conf.in b/bin/tests/system/tsig/ns1/rndc5.conf.in
+new file mode 100644
+index 0000000000..f9b17d6e8e
+--- /dev/null
++++ b/bin/tests/system/tsig/ns1/rndc5.conf.in
+@@ -0,0 +1,22 @@
++/*
++ * Copyright (C) Internet Systems Consortium, Inc. ("ISC")
++ *
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
++ *
++ * See the COPYRIGHT file distributed with this work for additional
++ * information regarding copyright ownership.
++ */
++
++/* These md5 keys are used only when MD5 is not disabled in build */
++key "md5" {
++	secret "97rnFx24Tfna4mHPfgnerA==";
++	algorithm hmac-md5;
++};
++
++key "md5-trunc" {
++	secret "97rnFx24Tfna4mHPfgnerA==";
++	algorithm hmac-md5-80;
++};
++
+diff --git a/bin/tests/system/tsig/setup.sh b/bin/tests/system/tsig/setup.sh
+new file mode 100644
+index 0000000000..7f9049ae76
+--- /dev/null
++++ b/bin/tests/system/tsig/setup.sh
+@@ -0,0 +1,25 @@
++#!/bin/sh
++#
++# Copyright (C) Internet Systems Consortium, Inc. ("ISC")
++#
++# This Source Code Form is subject to the terms of the Mozilla Public
++# License, v. 2.0. If a copy of the MPL was not distributed with this
++# file, You can obtain one at http://mozilla.org/MPL/2.0/.
++#
++# See the COPYRIGHT file distributed with this work for additional
++# information regarding copyright ownership.
++
++SYSTEMTESTTOP=..
++. $SYSTEMTESTTOP/conf.sh
++
++$SHELL clean.sh
++
++test -r $RANDFILE || $GENRANDOM 800 $RANDFILE
++
++if $FEATURETEST --md5
++then
++	# Include MD5 keys only if it is 
++	cp ns1/rndc5.conf.in ns1/rndc5.conf
++else
++	echo "# MD5 disabled" > ns1/rndc5.conf
++fi
+diff --git a/bin/tests/system/tsig/tests.sh b/bin/tests/system/tsig/tests.sh
+index 50ac8d23e6..bd502dd718 100644
+--- a/bin/tests/system/tsig/tests.sh
++++ b/bin/tests/system/tsig/tests.sh
+@@ -31,22 +31,27 @@ sha512="jI/Pa4qRu96t76Pns5Z/Ndxbn3QCkwcxLOgt9vgvnJw5wqTRvNyk3FtD6yIMd1dWVlqZ+Y4f
+ 
+ status=0
+ 
+-echo "I:fetching using hmac-md5 (old form)"
+-ret=0
+-$DIG +tcp +nosea +nostat +noquest +nocomm +nocmd example.nil.\
+-	-y "md5:$md5" @10.53.0.1 soa -p 5300 > dig.out.md5.old || ret=1
+-grep -i "md5.*TSIG.*NOERROR" dig.out.md5.old > /dev/null || ret=1
+-if [ $ret -eq 1 ] ; then
+-	echo "I: failed"; status=1
+-fi
+-
+-echo "I:fetching using hmac-md5 (new form)"
+-ret=0
+-$DIG +tcp +nosea +nostat +noquest +nocomm +nocmd example.nil.\
+-	-y "hmac-md5:md5:$md5" @10.53.0.1 soa -p 5300 > dig.out.md5.new || ret=1
+-grep -i "md5.*TSIG.*NOERROR" dig.out.md5.new > /dev/null || ret=1
+-if [ $ret -eq 1 ] ; then
+-	echo "I: failed"; status=1
++if $FEATURETEST --md5
++then
++	echo "I:fetching using hmac-md5 (old form)"
++	ret=0
++	$DIG +tcp +nosea +nostat +noquest +nocomm +nocmd example.nil.\
++		-y "md5:$md5" @10.53.0.1 soa -p 5300 > dig.out.md5.old || ret=1
++	grep -i "md5.*TSIG.*NOERROR" dig.out.md5.old > /dev/null || ret=1
++	if [ $ret -eq 1 ] ; then
++		echo "I: failed"; status=1
++	fi
++
++	echo "I:fetching using hmac-md5 (new form)"
++	ret=0
++	$DIG +tcp +nosea +nostat +noquest +nocomm +nocmd example.nil.\
++		-y "hmac-md5:md5:$md5" @10.53.0.1 soa -p 5300 > dig.out.md5.new || ret=1
++	grep -i "md5.*TSIG.*NOERROR" dig.out.md5.new > /dev/null || ret=1
++	if [ $ret -eq 1 ] ; then
++		echo_i "failed"; status=1
++	fi
++else
++	echo_i "skipping using hmac-md5"
+ fi
+ 
+ echo "I:fetching using hmac-sha1"
+@@ -99,13 +104,19 @@ fi
+ #	Truncated TSIG
+ #
+ #
++
++if $FEATURETEST --md5
++then
+ echo "I:fetching using hmac-md5 (trunc)"
+-ret=0
+-$DIG +tcp +nosea +nostat +noquest +nocomm +nocmd example.nil.\
+-	-y "hmac-md5-80:md5-trunc:$md5" @10.53.0.1 soa -p 5300 > dig.out.md5.trunc || ret=1
+-grep -i "md5-trunc.*TSIG.*NOERROR" dig.out.md5.trunc > /dev/null || ret=1
+-if [ $ret -eq 1 ] ; then
+-	echo "I: failed"; status=1
++	ret=0
++	$DIG +tcp +nosea +nostat +noquest +nocomm +nocmd example.nil.\
++		-y "hmac-md5-80:md5-trunc:$md5" @10.53.0.1 soa -p 5300 > dig.out.md5.trunc || ret=1
++	grep -i "md5-trunc.*TSIG.*NOERROR" dig.out.md5.trunc > /dev/null || ret=1
++	if [ $ret -eq 1 ] ; then
++		echo "I: failed"; status=1
++	fi
++else
++	echo "W:skipping using hmac-md5 (trunc)"
+ fi
+ 
+ echo "I:fetching using hmac-sha1 (trunc)"
+@@ -159,13 +170,19 @@ fi
+ #	Check for bad truncation.
+ #
+ #
+-echo "I:fetching using hmac-md5-80 (BADTRUNC)" 
+-ret=0
+-$DIG +tcp +nosea +nostat +noquest +nocomm +nocmd example.nil.\
+-	-y "hmac-md5-80:md5:$md5" @10.53.0.1 soa -p 5300 > dig.out.md5-80 || ret=1
+-grep -i "md5.*TSIG.*BADTRUNC" dig.out.md5-80 > /dev/null || ret=1
+-if [ $ret -eq 1 ] ; then
+-	echo "I: failed"; status=1
++
++if $FEATURETEST --md5
++then
++	echo "I:fetching using hmac-md5-80 (BADTRUNC)"
++	ret=0
++	$DIG +tcp +nosea +nostat +noquest +nocomm +nocmd example.nil.\
++		-y "hmac-md5-80:md5:$md5" @10.53.0.1 soa -p 5300 > dig.out.md5-80 || ret=1
++	grep -i "md5.*TSIG.*BADTRUNC" dig.out.md5-80 > /dev/null || ret=1
++	if [ $ret -eq 1 ] ; then
++		echo "I: failed"; status=1
++	fi
++else
++	echo "W:skipping using hmac-md5-80 (BADTRUNC)" 
+ fi
+ 
+ echo "I:fetching using hmac-sha1-80 (BADTRUNC)"
+diff --git a/bin/tests/system/tsiggss/setup.sh b/bin/tests/system/tsiggss/setup.sh
+index 00222bad05..e795df3bff 100644
+--- a/bin/tests/system/tsiggss/setup.sh
++++ b/bin/tests/system/tsiggss/setup.sh
+@@ -26,5 +26,5 @@ rm -f ns1/*.jnl ns1/K*.key ns1/K*.private ns1/_default.tsigkeys
+ 
+ ../../../tools/genrandom 400 $RANDFILE
+ 
+-key=`$KEYGEN -Cq -K ns1 -a DSA -b 512 -r $RANDFILE -n HOST -T KEY key.example.nil.`
++key=`$KEYGEN -Cq -K ns1 -a DSA -b 1024 -r $RANDFILE -n HOST -T KEY key.example.nil.`
+ cat ns1/example.nil.db.in ns1/${key}.key > ns1/example.nil.db
+diff --git a/bin/tests/system/upforwd/ns1/named.conf b/bin/tests/system/upforwd/ns1/named.conf
+index 8d9d2fa0d9..c3c0238073 100644
+--- a/bin/tests/system/upforwd/ns1/named.conf
++++ b/bin/tests/system/upforwd/ns1/named.conf
+@@ -18,7 +18,7 @@
+ /* $Id: named.conf,v 1.11 2007/06/18 23:47:31 tbox Exp $ */
+ 
+ key "update.example." {
+-	algorithm "hmac-md5";
++	algorithm "hmac-sha256";
+ 	secret "c3Ryb25nIGVub3VnaCBmb3IgYSBtYW4gYnV0IG1hZGUgZm9yIGEgd29tYW4K";
+ };
+ 
+diff --git a/bin/tests/system/upforwd/tests.sh b/bin/tests/system/upforwd/tests.sh
+index a138649ac3..e14a592db6 100644
+--- a/bin/tests/system/upforwd/tests.sh
++++ b/bin/tests/system/upforwd/tests.sh
+@@ -68,7 +68,7 @@ if [ $ret != 0 ] ; then echo "I:failed"; status=`expr $status + $ret`; fi
+ 
+ echo "I:updating zone (signed)"
+ ret=0
+-$NSUPDATE -y update.example:c3Ryb25nIGVub3VnaCBmb3IgYSBtYW4gYnV0IG1hZGUgZm9yIGEgd29tYW4K -- - <<EOF || ret=1
++$NSUPDATE -y hmac-sha256:update.example:c3Ryb25nIGVub3VnaCBmb3IgYSBtYW4gYnV0IG1hZGUgZm9yIGEgd29tYW4K -- - <<EOF || ret=1
+ server 10.53.0.3 5300
+ update add updated.example. 600 A 10.10.10.1
+ update add updated.example. 600 TXT Foo
+-- 
+2.14.4
+
