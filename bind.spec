@@ -21,7 +21,7 @@ Summary:  The Berkeley Internet Name Domain (BIND) DNS (Domain Name System) serv
 Name:     bind
 License:  ISC
 Version:  9.8.2
-Release:  0.62.%{PREVER}%{?dist}.5
+Release:  0.68.%{PREVER}%{?dist}
 Epoch:    32
 Url:      http://www.isc.org/products/BIND/
 Buildroot:%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
@@ -139,11 +139,16 @@ Patch190:bind99-rt44318.patch
 Patch191:bind99-CVE-2017-3136.patch
 # ISC 4578
 Patch192:bind99-CVE-2017-3137.patch
+# ISC 3391
 Patch193:bind99-rh1447407.patch
 # ISC 4643
 Patch194: bind99-CVE-2017-3142+3143.patch
+# ISC 3376
+Patch195:bind98-rh1416035.patch
+# ISC 3970
+Patch196:bind98-rh1426626.patch
 # ISC 4858
-Patch195: bind99-CVE-2017-3145.patch
+Patch197: bind99-CVE-2017-3145.patch
 
 # SDB patches
 Patch11: bind-9.3.2b2-sdbsrc.patch
@@ -340,7 +345,9 @@ Based on the code from Jan "Yenya" Kasprzak <kas@fi.muni.cz>
 %patch192 -p1 -b .CVE-2017-3137
 %patch193 -p1 -b .rh1447407
 %patch194 -p1 -b .CVE-2017-3142+3143
-%patch195 -p1 -b .CVE-2017-3145
+%patch195 -p1 -b .rh1416035
+%patch196 -p1 -b .rh1426626
+%patch197 -p1 -b .CVE-2017-3145
 
 # Override upstream builtin keys
 cp -fp %{SOURCE29} bind.keys
@@ -871,19 +878,23 @@ rm -rf ${RPM_BUILD_ROOT}
 %endif
 
 %changelog
-* Wed Jan 17 2018 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.62.rc1.5
+* Tue Jan 16 2018 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.68.rc1
 - Fix CVE-2017-3145
 
-* Thu Jun 29 2017 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.62.rc1.4
+* Mon Dec 04 2017 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.67.rc1
+- Change EDNS flags only after successful query (#1416035)
+- Fix crash in ldap driver at bind-sdb stop (#1426626)
+
+* Thu Jun 29 2017 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.66.rc1
 - Fix CVE-2017-3142 and CVE-2017-3143
 
-* Thu Jun 01 2017 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.62.rc1.3
-- Update root servers and trust anchors (#1458234)
+* Wed May 31 2017 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.65.rc1
+- Update root servers and trust anchors
 
-* Wed May 03 2017 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.62.rc1.2
-- Fix DNSKEY that encountered a CNAME (#1447869, ISC change 3391)
+* Wed May 03 2017 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.64.rc1
+- Fix DNSKEY that encountered a CNAME (#1447872, ISC change 3391)
 
-* Tue Apr 18 2017 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.62.rc1.1
+* Tue Apr 18 2017 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.63.rc1
 - Fix CVE-2017-3136 (ISC change 4575)
 - Fix CVE-2017-3137 (ISC change 4578)
 

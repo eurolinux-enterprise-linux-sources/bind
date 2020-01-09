@@ -1,0 +1,26 @@
+From 1c182f1516d3d14de6df81f4103ebfe538a519f6 Mon Sep 17 00:00:00 2001
+From: Evan Hunt <each@isc.org>
+Date: Thu, 2 Oct 2014 23:24:07 -0700
+Subject: [PATCH] [master] fix SDB bug
+
+3970.   [contrib]       Fixed a use after free bug in the SDB LDAP driver.
+                        [RT #37237]
+---
+ contrib/sdb/ldap/ldapdb.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/contrib/sdb/ldap/ldapdb.c b/contrib/sdb/ldap/ldapdb.c
+index caade37..c43342c 100644
+--- a/contrib/sdb/ldap/ldapdb.c
++++ b/contrib/sdb/ldap/ldapdb.c
+@@ -133,7 +133,6 @@ ldapdb_getconn(struct ldapdb_data *data)
+ 			free(threaddata->index);
+ 			while (threaddata->data != NULL) {
+ 				conndata = threaddata->data;
+-				free(conndata->index);
+ 				if (conndata->data != NULL)
+ 					ldap_unbind((LDAP *)conndata->data);
+ 				threaddata->data = conndata->next;
+-- 
+2.9.5
+

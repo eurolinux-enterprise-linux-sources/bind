@@ -1,0 +1,64 @@
+From b4ba813a62f6a29e0ead58b82de2133a11e7f883 Mon Sep 17 00:00:00 2001
+From: Mark Andrews <marka@isc.org>
+Date: Fri, 14 Sep 2012 11:01:06 +1000
+Subject: [PATCH] 3376.   [bug]           Lack of EDNS support was being
+ recorded without a                         successful response. [RT #30811]
+
+---
+ lib/dns/resolver.c | 26 ++++----------------------
+ 1 file changed, 4 insertions(+), 22 deletions(-)
+
+diff --git a/lib/dns/resolver.c b/lib/dns/resolver.c
+index 503f1d2..8208afc 100644
+--- a/lib/dns/resolver.c
++++ b/lib/dns/resolver.c
+@@ -6650,13 +6650,7 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
+ 			 */
+ 			options |= DNS_FETCHOPT_NOEDNS0;
+ 			resend = ISC_TRUE;
+-			/*
+-			 * Remember that they don't like EDNS0.
+-			 */
+-			dns_adb_changeflags(fctx->adb,
+-					    query->addrinfo,
+-					    DNS_FETCHOPT_NOEDNS0,
+-					    DNS_FETCHOPT_NOEDNS0);
++			add_bad_edns(fctx, &query->addrinfo->sockaddr);
+ 		} else {
+ 			/*
+ 			 * There's no hope for this query.
+@@ -6723,14 +6717,8 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
+ 					 */
+ 					options |= DNS_FETCHOPT_NOEDNS0;
+ 					resend = ISC_TRUE;
+-					/*
+-					 * Remember that they don't like EDNS0.
+-					 */
+-					dns_adb_changeflags(
+-							fctx->adb,
+-							query->addrinfo,
+-							DNS_FETCHOPT_NOEDNS0,
+-							DNS_FETCHOPT_NOEDNS0);
++					add_bad_edns(fctx,
++						    &query->addrinfo->sockaddr);
+ 					inc_stats(fctx->res,
+ 						 dns_resstatscounter_edns0fail);
+ 				} else {
+@@ -6754,13 +6742,7 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
+ 				 */
+ 				options |= DNS_FETCHOPT_NOEDNS0;
+ 				resend = ISC_TRUE;
+-				/*
+-				 * Remember that they don't like EDNS0.
+-				 */
+-				dns_adb_changeflags(fctx->adb,
+-						    query->addrinfo,
+-						    DNS_FETCHOPT_NOEDNS0,
+-						    DNS_FETCHOPT_NOEDNS0);
++				add_bad_edns(fctx, &query->addrinfo->sockaddr);
+ 				inc_stats(fctx->res,
+ 						 dns_resstatscounter_edns0fail);
+ 			} else {
+-- 
+2.9.3
+
