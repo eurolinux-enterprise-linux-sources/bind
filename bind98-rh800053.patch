@@ -1,0 +1,13 @@
+diff -up bind-9.8.2rc1/config.h.in.rh800053 bind-9.8.2rc1/config.h.in
+--- bind-9.8.2rc1/config.h.in.rh800053	2012-03-06 18:06:26.016981296 +0100
++++ bind-9.8.2rc1/config.h.in	2012-03-06 18:06:35.237985018 +0100
+@@ -393,9 +393,6 @@ int sigwait(const unsigned int *set, int
+    (O_NDELAY/O_NONBLOCK). */
+ #undef PORT_NONBLOCK
+ 
+-/* The size of `void *', as computed by sizeof. */
+-#undef SIZEOF_VOID_P
+-
+ /* Define to 1 if you have the ANSI C header files. */
+ #undef STDC_HEADERS
+ 

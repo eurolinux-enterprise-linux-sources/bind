@@ -1,0 +1,17 @@
+diff -up bind-9.7.3-P3/bin/named/client.c.rh712066-1 bind-9.7.3-P3/bin/named/client.c
+--- bind-9.7.3-P3/bin/named/client.c.rh712066-1	2011-08-12 19:03:19.982542961 +0200
++++ bind-9.7.3-P3/bin/named/client.c	2011-08-12 19:06:33.548529512 +0200
+@@ -1381,9 +1381,9 @@ client_request(isc_task_t *task, isc_eve
+ 	INSIST(client->recursionquota == NULL);
+ 
+ 	INSIST(client->state ==
+-	       TCP_CLIENT(client) ?
+-	       NS_CLIENTSTATE_READING :
+-	       NS_CLIENTSTATE_READY);
++	       (TCP_CLIENT(client) ?
++		NS_CLIENTSTATE_READING :
++		NS_CLIENTSTATE_READY));
+ 
+ 	ns_client_requests++;
+ 
+diff -up bind-9.7.3-P3/bin/named/controlconf.c.rh712066-1 bind-9.7.3-P3/bin/named/controlconf.c

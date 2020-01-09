@@ -1,0 +1,24 @@
+diff -up bind-9.8.2rc1/lib/dns/name.c.rh798978 bind-9.8.2rc1/lib/dns/name.c
+--- bind-9.8.2rc1/lib/dns/name.c.rh798978	2012-03-05 15:50:00.067131801 +0100
++++ bind-9.8.2rc1/lib/dns/name.c	2012-03-05 15:52:18.881818097 +0100
+@@ -2374,6 +2374,8 @@ dns_name_tostring(dns_name_t *name, char
+ 
+ 	isc_buffer_usedregion(&buf, &reg);
+ 	p = isc_mem_allocate(mctx, reg.length + 1);
++	if (p == NULL)
++		return (ISC_R_NOMEMORY);
+ 	memcpy(p, (char *) reg.base, (int) reg.length);
+ 	p[reg.length] = '\0';
+ 
+diff -up bind-9.8.2rc1/lib/dns/ssu_external.c.rh798978 bind-9.8.2rc1/lib/dns/ssu_external.c
+--- bind-9.8.2rc1/lib/dns/ssu_external.c.rh798978	2012-03-05 15:48:48.209760038 +0100
++++ bind-9.8.2rc1/lib/dns/ssu_external.c	2012-03-05 15:49:33.610991515 +0100
+@@ -70,7 +70,7 @@ ux_socket_connect(const char *path) {
+ 
+ 	REQUIRE(path != NULL);
+ 
+-	if (strlen(path) > sizeof(addr.sun_path)) {
++	if (strlen(path) + 1 > sizeof(addr.sun_path)) {
+ 		ssu_e_log(3, "ssu_external: socket path '%s' "
+ 			     "longer than system maximum %u",
+ 			  path, sizeof(addr.sun_path));

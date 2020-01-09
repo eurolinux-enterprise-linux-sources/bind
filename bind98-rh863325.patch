@@ -1,0 +1,26 @@
+From f08c348bc76dd0fb862328f7761c0a0b74ba0ec1 Mon Sep 17 00:00:00 2001
+From: Tomas Hozza <thozza@redhat.com>
+Date: Fri, 14 Feb 2014 16:31:43 +0100
+Subject: [PATCH] Fix nesupade getopt optstring
+
+Signed-off-by: Tomas Hozza <thozza@redhat.com>
+---
+ bin/nsupdate/nsupdate.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/bin/nsupdate/nsupdate.c b/bin/nsupdate/nsupdate.c
+index 2ea5a3e..e120462 100644
+--- a/bin/nsupdate/nsupdate.c
++++ b/bin/nsupdate/nsupdate.c
+@@ -930,7 +930,7 @@ get_address(char *host, in_port_t port, isc_sockaddr_t *sockaddr) {
+ 	INSIST(count == 1);
+ }
+ 
+-#define PARSE_ARGS_FMT "dDML:y:ghlovk:p:rR::t:u:"
++#define PARSE_ARGS_FMT "dDML:y:ghlovk:p:r:R::t:u:"
+ 
+ static void
+ pre_parse_args(int argc, char **argv) {
+-- 
+1.8.5.3
+

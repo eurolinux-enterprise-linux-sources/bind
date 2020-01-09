@@ -1,0 +1,71 @@
+From a229d79fe73de142cb167719de813aab2dfee84a Mon Sep 17 00:00:00 2001
+From: Tomas Hozza <thozza@redhat.com>
+Date: Fri, 11 Dec 2015 14:23:37 +0100
+Subject: [PATCH] Fix
+
+Signed-off-by: Tomas Hozza <thozza@redhat.com>
+---
+ lib/dns/resolver.c | 12 ++++++++----
+ lib/dns/view.c     |  9 ++++++++-
+ 2 files changed, 16 insertions(+), 5 deletions(-)
+
+diff --git a/lib/dns/resolver.c b/lib/dns/resolver.c
+index a701e2c..5479b29 100644
+--- a/lib/dns/resolver.c
++++ b/lib/dns/resolver.c
+@@ -7121,9 +7121,12 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
+ 		 * NXDOMAIN, NXRDATASET, or referral.
+ 		 */
+ 		result = noanswer_response(fctx, NULL, 0);
+-		if (result == DNS_R_CHASEDSSERVERS) {
+-		} else if (result == DNS_R_DELEGATION) {
+-		force_referral:
++		switch (result) {
++		case ISC_R_SUCCESS:
++		case DNS_R_CHASEDSSERVERS:
++			break;
++		case DNS_R_DELEGATION:
++ force_referral:
+ 			/*
+ 			 * We don't have the answer, but we know a better
+ 			 * place to look.
+@@ -7148,7 +7151,8 @@ resquery_response(isc_task_t *task, isc_event_t *event) {
+ 			fctx->adberr = 0;
+ 
+ 			result = ISC_R_SUCCESS;
+-		} else if (result != ISC_R_SUCCESS) {
++			break;
++		default:
+ 			/*
+ 			 * Something has gone wrong.
+ 			 */
+diff --git a/lib/dns/view.c b/lib/dns/view.c
+index c29aa8c..394e55a 100644
+--- a/lib/dns/view.c
++++ b/lib/dns/view.c
+@@ -1169,6 +1169,7 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
+ 	dns_name_t *zfname;
+ 	dns_rdataset_t zrdataset, zsigrdataset;
+ 	dns_fixedname_t zfixedname;
++	unsigned int ztoptions = 0;
+ 
+ 	REQUIRE(DNS_VIEW_VALID(view));
+ 	REQUIRE(view->frozen);
+@@ -1190,7 +1191,13 @@ dns_view_findzonecut2(dns_view_t *view, dns_name_t *name, dns_name_t *fname,
+ 	 * Find the right database.
+ 	 */
+ #ifdef BIND9
+-	result = dns_zt_find(view->zonetable, name, 0, NULL, &zone);
++	if (view->zonetable != NULL) {
++		if ((options & DNS_DBFIND_NOEXACT) != 0)
++			ztoptions |= DNS_ZTFIND_NOEXACT;
++		result = dns_zt_find(view->zonetable, name, ztoptions,
++				     NULL, &zone);
++	} else
++		result = ISC_R_NOTFOUND;
+ 	if (result == ISC_R_SUCCESS || result == DNS_R_PARTIALMATCH)
+ 		result = dns_zone_getdb(zone, &db);
+ #else
+-- 
+2.4.3
+

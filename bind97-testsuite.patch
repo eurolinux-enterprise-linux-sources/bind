@@ -1,0 +1,14 @@
+--- bind-9.7.2-P3/bin/tests/system/run.sh.testsuite	2010-06-09 01:49:11.000000000 +0200
++++ bind-9.7.2-P3/bin/tests/system/run.sh	2011-01-25 16:06:49.182954072 +0100
+@@ -88,6 +88,11 @@ then
+    ( cd $test && sh setup.sh "$@" )
+ fi
+ 
++if [ "$test" = dlz ]; then
++    NAMED=$TOP/bin/named-sdb/named-sdb
++    export NAMED
++fi
++
+ # Start name servers running
+ $PERL start.pl $test || exit 1
+ 

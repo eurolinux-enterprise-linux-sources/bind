@@ -1,0 +1,346 @@
+diff --git a/bin/named/server.c b/bin/named/server.c
+index 9e16e85..43d935a 100644
+--- a/bin/named/server.c
++++ b/bin/named/server.c
+@@ -5776,11 +5776,13 @@ ns_server_create(isc_mem_t *mctx, ns_server_t **serverp) {
+ 
+ 	/*
+ 	 * Setup the server task, which is responsible for coordinating
+-	 * startup and shutdown of the server.
++	 * startup and shutdown of the server, as well as all exclusive
++	 * tasks.
+ 	 */
+ 	CHECKFATAL(isc_task_create(ns_g_taskmgr, 0, &server->task),
+ 		   "creating server task");
+ 	isc_task_setname(server->task, "server", server);
++	isc_taskmgr_setexcltask(ns_g_taskmgr, server->task);
+ 	CHECKFATAL(isc_task_onshutdown(server->task, shutdown_server, server),
+ 		   "isc_task_onshutdown");
+ 	CHECKFATAL(isc_app_onrun(ns_g_mctx, server->task, run_server, server),
+@@ -7712,7 +7714,8 @@ ns_server_add_zone(ns_server_t *server, char *args) {
+ 	CHECK(isc_stdio_open(view->new_zone_file, "a", &fp));
+ 
+ 	/* Mark view unfrozen so that zone can be added */
+-	isc_task_beginexclusive(server->task);
++	result = isc_task_beginexclusive(server->task);
++	RUNTIME_CHECK(result == ISC_R_SUCCESS);
+ 	dns_view_thaw(view);
+ 	result = configure_zone(cfg->config, parms, vconfig,
+ 				server->mctx, view, cfg->actx, ISC_FALSE);
+diff --git a/lib/dns/adb.c b/lib/dns/adb.c
+index 4cc35ef..0143989 100644
+--- a/lib/dns/adb.c
++++ b/lib/dns/adb.c
+@@ -111,6 +111,7 @@ struct dns_adb {
+ 
+ 	isc_taskmgr_t                  *taskmgr;
+ 	isc_task_t                     *task;
++	isc_task_t                     *excl;
+ 
+ 	isc_interval_t                  tick_interval;
+ 	int                             next_cleanbucket;
+@@ -518,7 +519,9 @@ grow_entries(isc_task_t *task, isc_event_t *ev) {
+ 
+ 	isc_event_free(&ev);
+ 
+-	isc_task_beginexclusive(task);
++	result = isc_task_beginexclusive(task);
++	if (result != ISC_R_SUCCESS)
++		goto check_exit;
+ 
+ 	i = 0;
+ 	while (nbuckets[i] != 0 && adb->nentries >= nbuckets[i])
+@@ -646,6 +649,7 @@ grow_entries(isc_task_t *task, isc_event_t *ev) {
+  done:
+ 	isc_task_endexclusive(task);
+ 
++check_exit:
+ 	LOCK(&adb->lock);
+ 	if (dec_adb_irefcnt(adb))
+ 		check_exit(adb);
+@@ -670,7 +674,9 @@ grow_names(isc_task_t *task, isc_event_t *ev) {
+ 
+ 	isc_event_free(&ev);
+ 
+-	isc_task_beginexclusive(task);
++	result = isc_task_beginexclusive(task);
++	if (result != ISC_R_SUCCESS)
++		goto check_exit;
+ 
+ 	i = 0;
+ 	while (nbuckets[i] != 0 && adb->nnames >= nbuckets[i])
+@@ -794,6 +800,7 @@ grow_names(isc_task_t *task, isc_event_t *ev) {
+  done:
+ 	isc_task_endexclusive(task);
+ 
++check_exit:
+ 	LOCK(&adb->lock);
+ 	if (dec_adb_irefcnt(adb))
+ 		check_exit(adb);
+@@ -1628,10 +1635,11 @@ new_adbname(dns_adb_t *adb, dns_name_t *dnsname) {
+ 
+ 	LOCK(&adb->namescntlock);
+ 	adb->namescnt++;
+-	if (!adb->grownames_sent && adb->namescnt > (adb->nnames * 8)) {
++	if (!adb->grownames_sent && adb->excl != NULL &&
++			adb->namescnt > (adb->nnames * 8)) {
+ 		isc_event_t *event = &adb->grownames;
+ 		inc_adb_irefcnt(adb);
+-		isc_task_send(adb->task, &event);
++		isc_task_send(adb->excl, &event);
+ 		adb->grownames_sent = ISC_TRUE;
+ 	}
+ 	UNLOCK(&adb->namescntlock);
+@@ -1752,11 +1760,11 @@ new_adbentry(dns_adb_t *adb) {
+ 	ISC_LINK_INIT(e, plink);
+ 	LOCK(&adb->entriescntlock);
+ 	adb->entriescnt++;
+-	if (!adb->growentries_sent &&
++	if (!adb->growentries_sent && adb->excl != NULL &&
+ 	    adb->entriescnt > (adb->nentries * 8)) {
+ 		isc_event_t *event = &adb->growentries;
+ 		inc_adb_irefcnt(adb);
+-		isc_task_send(adb->task, &event);
++		isc_task_send(adb->excl, &event);
+ 		adb->growentries_sent = ISC_TRUE;
+ 	}
+ 	UNLOCK(&adb->entriescntlock);
+@@ -2328,6 +2336,7 @@ destroy(dns_adb_t *adb) {
+ 	adb->magic = 0;
+ 
+ 	isc_task_detach(&adb->task);
++	isc_task_detach(&adb->excl);
+ 
+ 	isc_mempool_destroy(&adb->nmp);
+ 	isc_mempool_destroy(&adb->nhmp);
+@@ -2411,6 +2420,7 @@ dns_adb_create(isc_mem_t *mem, dns_view_t *view, isc_timermgr_t *timermgr,
+ 	adb->aimp = NULL;
+ 	adb->afmp = NULL;
+ 	adb->task = NULL;
++	adb->excl = NULL;
+ 	adb->mctx = NULL;
+ 	adb->view = view;
+ 	adb->taskmgr = taskmgr;
+@@ -2446,6 +2456,16 @@ dns_adb_create(isc_mem_t *mem, dns_view_t *view, isc_timermgr_t *timermgr,
+ 		       adb, NULL, NULL);
+ 	adb->grownames_sent = ISC_FALSE;
+ 
++	result = isc_taskmgr_excltask(adb->taskmgr, &adb->excl);
++	if (result != ISC_R_SUCCESS) {
++		DP(ISC_LOG_INFO, "adb: task-exclusive mode unavailable, "
++				 "intializing table sizes to %u\n",
++				 nbuckets[11]);
++		adb->nentries = nbuckets[11];
++		adb->nnames= nbuckets[11];
++
++	}
++
+ 	isc_mem_attach(mem, &adb->mctx);
+ 
+ 	result = isc_mutex_init(&adb->lock);
+diff --git a/lib/isc/include/isc/namespace.h b/lib/isc/include/isc/namespace.h
+index 702e4ef..31c2690 100644
+--- a/lib/isc/include/isc/namespace.h
++++ b/lib/isc/include/isc/namespace.h
+@@ -147,6 +147,8 @@
+ #define isc_task_getcurrenttime isc__task_getcurrenttime
+ #define isc_taskmgr_create isc__taskmgr_create
+ #define isc_taskmgr_destroy isc__taskmgr_destroy
++#define isc_taskmgr_setexcltask isc__taskmgr_setexcltask
++#define isc_taskmgr_excltask isc__taskmgr_excltask
+ #define isc_task_beginexclusive isc__task_beginexclusive
+ #define isc_task_endexclusive isc__task_endexclusive
+ 
+diff --git a/lib/isc/include/isc/task.h b/lib/isc/include/isc/task.h
+index b3cdbb6..f6c5e74 100644
+--- a/lib/isc/include/isc/task.h
++++ b/lib/isc/include/isc/task.h
+@@ -106,6 +106,8 @@ typedef struct isc_taskmgrmethods {
+ 	isc_result_t	(*taskcreate)(isc_taskmgr_t *manager,
+ 				      unsigned int quantum,
+ 				      isc_task_t **taskp);
++	void (*setexcltask)(isc_taskmgr_t *mgr, isc_task_t *task);
++	isc_result_t (*excltask)(isc_taskmgr_t *mgr, isc_task_t **taskp);
+ } isc_taskmgrmethods_t;
+ 
+ typedef struct isc_taskmethods {
+@@ -697,6 +699,31 @@ isc_taskmgr_destroy(isc_taskmgr_t **managerp);
+  *	have been freed.
+  */
+ 
++void 
++isc_taskmgr_setexcltask(isc_taskmgr_t *mgr, isc_task_t *task);
++/*%<
++ * Set a task which will be used for all task-exclusive operations.
++ *
++ * Requires:
++ *\li	'manager' is a valid task manager.
++ *
++ *\li	'task' is a valid task.
++ */ 
++
++isc_result_t
++isc_taskmgr_excltask(isc_taskmgr_t *mgr, isc_task_t **taskp);
++/*%<
++ * Attach '*taskp' to the task set by isc_taskmgr_getexcltask().
++ * This task should be used whenever running in task-exclusive mode,
++ * so as to prevent deadlock between two exclusive tasks.
++ *
++ * Requires:
++ *\li	'manager' is a valid task manager.
++
++ *\li	taskp != NULL && *taskp == NULL
++ */
++
++
+ #ifdef HAVE_LIBXML2
+ 
+ void
+diff --git a/lib/isc/task.c b/lib/isc/task.c
+index 913e707..f665201 100644
+--- a/lib/isc/task.c
++++ b/lib/isc/task.c
+@@ -152,6 +152,7 @@ struct isc__taskmgr {
+ 	unsigned int			tasks_running;
+ 	isc_boolean_t			exclusive_requested;
+ 	isc_boolean_t			exiting;
++	isc__task_t			*excl;
+ #ifdef USE_SHARED_MANAGER
+ 	unsigned int			refs;
+ #endif /* ISC_PLATFORM_USETHREADS */
+@@ -221,6 +222,10 @@ isc__taskmgr_create(isc_mem_t *mctx, unsigned int workers,
+ 		    unsigned int default_quantum, isc_taskmgr_t **managerp);
+ ISC_TASKFUNC_SCOPE void
+ isc__taskmgr_destroy(isc_taskmgr_t **managerp);
++ISC_TASKFUNC_SCOPE void
++isc__taskmgr_setexcltask(isc_taskmgr_t *mgr0, isc_task_t *task0);
++ISC_TASKFUNC_SCOPE isc_result_t
++isc__taskmgr_excltask(isc_taskmgr_t *mgr0, isc_task_t **taskp);
+ ISC_TASKFUNC_SCOPE isc_result_t
+ isc__task_beginexclusive(isc_task_t *task);
+ ISC_TASKFUNC_SCOPE void
+@@ -261,7 +266,9 @@ static struct isc__taskmethods {
+ 
+ static isc_taskmgrmethods_t taskmgrmethods = {
+ 	isc__taskmgr_destroy,
+-	isc__task_create
++	isc__task_create,
++	isc__taskmgr_setexcltask,
++	isc__taskmgr_excltask
+ };
+ 
+ /***
+@@ -1262,6 +1269,7 @@ isc__taskmgr_create(isc_mem_t *mctx, unsigned int workers,
+ 	manager->tasks_running = 0;
+ 	manager->exclusive_requested = ISC_FALSE;
+ 	manager->exiting = ISC_FALSE;
++	manager->excl = NULL;
+ 
+ 	isc_mem_attach(mctx, &manager->mctx);
+ 
+@@ -1344,6 +1352,12 @@ isc__taskmgr_destroy(isc_taskmgr_t **managerp) {
+ 	 */
+ 
+ 	/*
++	 * Detach the exclusive task before acquiring the manager lock
++	 */
++	if (manager->excl != NULL)
++		isc__task_detach((isc_task_t **) &manager->excl);
++
++	/*
+ 	 * Unlike elsewhere, we're going to hold this lock a long time.
+ 	 * We need to do so, because otherwise the list of tasks could
+ 	 * change while we were traversing it.
+@@ -1440,12 +1454,40 @@ isc__taskmgr_dispatch(isc_taskmgr_t *manager0) {
+ 
+ #endif /* USE_WORKER_THREADS */
+ 
++ISC_TASKFUNC_SCOPE void
++isc__taskmgr_setexcltask(isc_taskmgr_t *mgr0, isc_task_t *task0) {
++	isc__taskmgr_t *mgr = (isc__taskmgr_t *) mgr0;
++	isc__task_t *task = (isc__task_t *) task0;
++
++	REQUIRE(VALID_MANAGER(mgr));
++	REQUIRE(VALID_TASK(task));
++	if (mgr->excl != NULL)
++		isc__task_detach((isc_task_t **) &mgr->excl);
++	isc__task_attach(task0, (isc_task_t **) &mgr->excl);
++}
++
++ISC_TASKFUNC_SCOPE isc_result_t
++isc__taskmgr_excltask(isc_taskmgr_t *mgr0, isc_task_t **taskp) {
++	isc__taskmgr_t *mgr = (isc__taskmgr_t *) mgr0;
++
++	REQUIRE(VALID_MANAGER(mgr));
++	REQUIRE(taskp != NULL && *taskp == NULL);
++
++	if (mgr->excl == NULL)
++		return (ISC_R_NOTFOUND);
++
++	isc__task_attach((isc_task_t *) mgr->excl, taskp);
++	return (ISC_R_SUCCESS);
++}
++
+ ISC_TASKFUNC_SCOPE isc_result_t
+ isc__task_beginexclusive(isc_task_t *task0) {
+ #ifdef USE_WORKER_THREADS
+ 	isc__task_t *task = (isc__task_t *)task0;
+ 	isc__taskmgr_t *manager = task->manager;
++
+ 	REQUIRE(task->state == task_state_running);
++
+ 	LOCK(&manager->lock);
+ 	if (manager->exclusive_requested) {
+ 		UNLOCK(&manager->lock);
+diff --git a/lib/isc/task_api.c b/lib/isc/task_api.c
+index 4e03db2..a8d8677 100644
+--- a/lib/isc/task_api.c
++++ b/lib/isc/task_api.c
+@@ -187,6 +187,17 @@ isc_task_purge(isc_task_t *task, void *sender, isc_eventtype_t type, void *tag)
+ 	return (task->methods->purgeevents(task, sender, type, tag));
+ }
+ 
++void
++isc_taskmgr_setexcltask(isc_taskmgr_t *mgr, isc_task_t *task) {
++	REQUIRE(ISCAPI_TASK_VALID(task));
++	return (mgr->methods->setexcltask(mgr, task));
++}
++
++isc_result_t
++isc_taskmgr_excltask(isc_taskmgr_t *mgr, isc_task_t **taskp) {
++	return (mgr->methods->excltask(mgr, taskp));
++}
++
+ isc_result_t
+ isc_task_beginexclusive(isc_task_t *task) {
+ 	REQUIRE(ISCAPI_TASK_VALID(task));
+diff --git a/lib/isc/tests/isctest.c b/lib/isc/tests/isctest.c
+index 311987e..309db74 100644
+--- a/lib/isc/tests/isctest.c
++++ b/lib/isc/tests/isctest.c
+@@ -35,6 +35,7 @@ isc_mem_t *mctx = NULL;
+ isc_entropy_t *ectx = NULL;
+ isc_log_t *lctx = NULL;
+ isc_taskmgr_t *taskmgr = NULL;
++isc_task_t *maintask = NULL;
+ int ncpus;
+ 
+ static isc_boolean_t hash_active = ISC_FALSE;
+@@ -91,6 +92,8 @@ isc_test_begin(FILE *logfile) {
+ #endif
+ 
+ 	CHECK(isc_taskmgr_create(mctx, ncpus, 0, &taskmgr));
++	CHECK(isc_task_create(taskmgr, 0, &maintask));
++	isc_taskmgr_setexcltask(taskmgr, maintask);
+ 
+ 	return (ISC_R_SUCCESS);
+ 
+@@ -103,6 +106,8 @@ void
+ isc_test_end() {
+ 	if (taskmgr != NULL)
+ 		isc_taskmgr_destroy(&taskmgr);
++	if (maintask != NULL)
++		isc_task_destroy(&maintask);
+ 	if (lctx != NULL)
+ 		isc_log_destroy(&lctx);
+ 	if (hash_active) {

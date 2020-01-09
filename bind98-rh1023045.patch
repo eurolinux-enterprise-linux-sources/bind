@@ -1,0 +1,29 @@
+From a1a9e598cc2ef129231f6f1d1548541a04545a8c Mon Sep 17 00:00:00 2001
+From: Tomas Hozza <thozza@redhat.com>
+Date: Thu, 4 Apr 2013 16:11:50 +0200
+Subject: [PATCH] Fix IDN related statement in dig.1 manpage
+
+
+Signed-off-by: Tomas Hozza <thozza@redhat.com>
+---
+ bin/dig/dig.docbook | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/bin/dig/dig.docbook b/bin/dig/dig.docbook
+index 1b0f359..2e0fbd5 100644
+--- a/bin/dig/dig.docbook
++++ b/bin/dig/dig.docbook
+@@ -924,8 +924,8 @@ dig +qr www.isc.org any -x 127.0.0.1 isc.org ns +noqr
+       <command>dig</command> appropriately converts character encoding of
+       domain name before sending a request to DNS server or displaying a
+       reply from the server.
+-      If you'd like to turn off the IDN support for some reason, defines
+-      the <envar>IDN_DISABLE</envar> environment variable.
++      If you'd like to turn off the IDN support for some reason, define
++      the <envar>CHARSET=ASCII</envar> environment variable.
+       The IDN support is disabled if the variable is set when 
+       <command>dig</command> runs.
+     </para>
+-- 
+1.8.1.4
+

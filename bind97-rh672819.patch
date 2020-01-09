@@ -1,0 +1,18 @@
+diff -up bind-9.7.2-P3/bin/nsupdate/nsupdate.docbook.rh672819 bind-9.7.2-P3/bin/nsupdate/nsupdate.docbook
+--- bind-9.7.2-P3/bin/nsupdate/nsupdate.docbook.rh672819	2011-01-28 15:01:28.340971222 +0100
++++ bind-9.7.2-P3/bin/nsupdate/nsupdate.docbook	2011-01-28 15:05:45.807078784 +0100
+@@ -122,11 +122,9 @@
+       in RFC 2845 or the SIG(0) record described in RFC 2535 and
+       RFC 2931 or GSS-TSIG as described in RFC 3645.  TSIG relies on
+       a shared secret that should only be known to
+-      <command>nsupdate</command> and the name server.  Currently,
+-      the only supported encryption algorithm for TSIG is HMAC-MD5,
+-      which is defined in RFC 2104.  Once other algorithms are
+-      defined for TSIG, applications will need to ensure they select
+-      the appropriate algorithm as well as the key when authenticating
++      <command>nsupdate</command> and the name server. Ensure that you
++      select the appropriate algorithms for the applications as well as
++      the key when authenticating
+       each other.  For instance, suitable <type>key</type> and
+       <type>server</type> statements would be added to
+       <filename>/etc/named.conf</filename> so that the name server

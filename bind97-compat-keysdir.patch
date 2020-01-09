@@ -1,0 +1,12 @@
+diff -up bind-9.7.2-P3/bin/named/server.c.compat-keysdir bind-9.7.2-P3/bin/named/server.c
+--- bind-9.7.2-P3/bin/named/server.c.compat-keysdir	2010-12-21 15:23:51.863910746 +0100
++++ bind-9.7.2-P3/bin/named/server.c	2010-12-21 15:24:34.741605580 +0100
+@@ -748,7 +748,7 @@ configure_view_dnsseckeys(dns_view_t *vi
+ 	 */
+ 	obj = NULL;
+ 	(void)ns_config_get(maps, "managed-keys-directory", &obj);
+-	directory = obj != NULL ? cfg_obj_asstring(obj) : NULL;
++	directory = obj != NULL ? cfg_obj_asstring(obj) : "dynamic";
+ 	CHECK(add_keydata_zone(view, directory, ns_g_mctx));
+ 
+   cleanup:

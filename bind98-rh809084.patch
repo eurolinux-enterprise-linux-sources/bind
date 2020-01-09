@@ -1,0 +1,14 @@
+diff -up bind-9.8.2rc1/bin/named/logconf.c.rh809084 bind-9.8.2rc1/bin/named/logconf.c
+--- bind-9.8.2rc1/bin/named/logconf.c.rh809084	2012-04-04 12:29:10.825259115 +0200
++++ bind-9.8.2rc1/bin/named/logconf.c	2012-04-04 12:29:29.445127068 +0200
+@@ -246,6 +246,10 @@ channel_fromconf(const cfg_obj_t *channe
+ 					isc_result_totext(result));
+ 			} else
+ 				(void)isc_stdio_close(fp);
++			/*
++			 * Allow named to continue by returning success.
++			 */
++			result = ISC_R_SUCCESS;
+ 		} else {
+ 			syslog(LOG_ERR, "isc_file_isplainfile '%s' failed: %s",
+ 				dest.file.name, isc_result_totext(result));

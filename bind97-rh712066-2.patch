@@ -1,0 +1,47 @@
+diff -up bind-9.7.3-P3/bin/named-sdb/ldapdb.c.rh712066-2 bind-9.7.3-P3/bin/named-sdb/ldapdb.c
+--- bind-9.7.3-P3/bin/named-sdb/ldapdb.c.rh712066-2	2011-08-12 19:19:36.394475134 +0200
++++ bind-9.7.3-P3/bin/named-sdb/ldapdb.c	2011-08-12 19:19:36.617475117 +0200
+@@ -106,7 +106,7 @@ static void ldapdb_lock(int what) {
+ 
+ 	switch (what) {
+ 	case 0:
+-		isc_mutex_init(&lock);
++		RUNTIME_CHECK(isc_mutex_init(&lock) == ISC_R_SUCCESS);
+ 		break;
+ 	case 1:
+ 		LOCK(&lock);
+diff -up bind-9.7.3-P3/bin/sdb_tools/ldap2zone.c.rh712066-2 bind-9.7.3-P3/bin/sdb_tools/ldap2zone.c
+--- bind-9.7.3-P3/bin/sdb_tools/ldap2zone.c.rh712066-2	2009-05-19 23:38:34.000000000 +0200
++++ bind-9.7.3-P3/bin/sdb_tools/ldap2zone.c	2011-08-12 19:27:20.764442877 +0200
+@@ -9,6 +9,8 @@
+ 
+ #define LDAP_DEPRECATED 1
+ 
++#include <assert.h>
++
+ #include <sys/types.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -141,6 +143,7 @@ void printrrs(char *defaultttl, struct a
+     for (stack = (struct assstack_entry *) item->val.data; stack; stack = stack->next) {
+ 	ttl = (char *)stack->key.data;
+ 	s = strchr(ttl, ' ');
++	assert(s != NULL);
+ 	*s++ = '\0';
+ 	type = s;
+ 	
+@@ -328,11 +331,14 @@ int main(int argc, char **argv) {
+ 	/* We have a SOA, compare serial numbers */
+ 	/* Only checkinf first value, should be only one */
+ 	s = strchr(soavals[0], ' ');
++	assert(s != NULL);
+ 	s++;
+ 	s = strchr(s, ' ');
++	assert(s != NULL);
+ 	s++;
+ 	serial = s;
+ 	s = strchr(s, ' ');
++	assert(s != NULL);
+ 	*s = '\0';
+ 	if (!strcmp(serial, argv[4])) {
+ 	    ldap_value_free(soavals);

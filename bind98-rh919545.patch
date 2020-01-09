@@ -1,0 +1,30 @@
+From 53b00d012dd185e68a639c931404ab1707615a65 Mon Sep 17 00:00:00 2001
+From: Tomas Hozza <thozza@redhat.com>
+Date: Wed, 15 May 2013 20:37:04 +0200
+Subject: [PATCH] Use the HEAD of queries list in lookup structure
+
+Use the HEAD of queries list in lookup structure
+instead of current_query, which might be NULL in
+some situations. This prevents a Segfault.
+
+Signed-off-by: Tomas Hozza <thozza@redhat.com>
+---
+ bin/dig/dighost.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/bin/dig/dighost.c b/bin/dig/dighost.c
+index 125ca81..63caf8e 100644
+--- a/bin/dig/dighost.c
++++ b/bin/dig/dighost.c
+@@ -2717,7 +2717,7 @@ connect_timeout(isc_task_t *task, isc_event_t *event) {
+ 		}
+ 	} else {
+ 		fputs(l->cmdline, stdout);
+-		if (!next_origin(query)) {
++		if (!next_origin(ISC_LIST_HEAD(l->q))) {
+ 			printf(";; connection timed out; no servers could be "
+ 			       "reached\n");
+ 		} else {
+-- 
+1.8.1.4
+

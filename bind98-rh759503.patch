@@ -1,0 +1,11 @@
+diff -up bind-9.8.2rc1/lib/dns/zone.c.rh759503 bind-9.8.2rc1/lib/dns/zone.c
+--- bind-9.8.2rc1/lib/dns/zone.c.rh759503	2012-02-15 13:09:29.693599818 +0100
++++ bind-9.8.2rc1/lib/dns/zone.c	2012-02-15 13:09:39.885579496 +0100
+@@ -4423,6 +4423,7 @@ dns_zone_setmasterswithkeys(dns_zone_t *
+ 	/*
+ 	 * Everything is ok so attach to the zone.
+ 	 */
++	zone->curmaster = 0;
+ 	zone->masters = new;
+ 	zone->mastersok = newok;
+ 	zone->masterkeynames = newname;

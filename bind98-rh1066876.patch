@@ -1,0 +1,23 @@
+diff -up bind-9.8.2rc1/lib/isc/unix/errno2result.c.enoprotoopt bind-9.8.2rc1/lib/isc/unix/errno2result.c
+--- bind-9.8.2rc1/lib/isc/unix/errno2result.c.enoprotoopt	2014-04-24 09:59:01.705963627 +0200
++++ bind-9.8.2rc1/lib/isc/unix/errno2result.c	2014-04-24 10:01:03.546057287 +0200
+@@ -106,6 +106,8 @@ isc___errno2result(int posixerrno, const
+ 		return (ISC_R_ADDRNOTAVAIL);
+ 	case ECONNREFUSED:
+ 		return (ISC_R_CONNREFUSED);
++	case ENOPROTOOPT:
++		return (ISC_R_HOSTUNREACH);
+ 	default:
+ 		isc__strerror(posixerrno, strbuf, sizeof(strbuf));
+ 		UNEXPECTED_ERROR(file, line, "unable to convert errno "
+diff -up bind-9.8.2rc1/lib/isc/unix/socket.c.enoprotoopt bind-9.8.2rc1/lib/isc/unix/socket.c
+--- bind-9.8.2rc1/lib/isc/unix/socket.c.enoprotoopt	2014-04-24 09:59:01.698963622 +0200
++++ bind-9.8.2rc1/lib/isc/unix/socket.c	2014-04-24 09:59:01.706963628 +0200
+@@ -1698,6 +1698,7 @@ doio_recv(isc__socket_t *sock, isc_socke
+ 		SOFT_OR_HARD(EPROTO, ISC_R_HOSTUNREACH);
+ #endif
+ 		SOFT_OR_HARD(EINVAL, ISC_R_HOSTUNREACH);
++		SOFT_OR_HARD(ENOPROTOOPT, ISC_R_HOSTUNREACH);
+ 
+ #undef SOFT_OR_HARD
+ #undef ALWAYS_HARD

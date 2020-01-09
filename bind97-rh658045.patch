@@ -1,0 +1,30 @@
+diff -up bind-9.7.2-P3/configure.in.rh658045 bind-9.7.2-P3/configure.in
+--- bind-9.7.2-P3/configure.in.rh658045	2011-01-06 14:00:02.292078115 +0100
++++ bind-9.7.2-P3/configure.in	2011-01-06 14:00:09.862796786 +0100
+@@ -2564,6 +2564,10 @@ main() {
+ 	AC_MSG_RESULT($arch)
+ fi
+ 
++if test ! "$arch" = "x86_64" -a "$have_xaddq" = "yes"; then
++	AC_MSG_ERROR([XADDQ present but disabled by Red Hat patch!])
++fi
++
+ if test "$have_atomic" = "yes"; then
+ 	AC_MSG_CHECKING([compiler support for inline assembly code])
+ 
+diff -up bind-9.7.2-P3/lib/isc/include/isc/platform.h.in.rh658045 bind-9.7.2-P3/lib/isc/include/isc/platform.h.in
+--- bind-9.7.2-P3/lib/isc/include/isc/platform.h.in.rh658045	2010-06-04 01:49:23.000000000 +0200
++++ bind-9.7.2-P3/lib/isc/include/isc/platform.h.in	2011-01-06 14:00:09.862796786 +0100
+@@ -261,7 +261,11 @@
+  * If the "xaddq" operation (64bit xadd) is available on this architecture,
+  * ISC_PLATFORM_HAVEXADDQ will be defined.
+  */
+-@ISC_PLATFORM_HAVEXADDQ@
++#ifdef __x86_64__
++#define ISC_PLATFORM_HAVEXADDQ 1
++#else
++#undef ISC_PLATFORM_HAVEXADDQ
++#endif
+ 
+ /*
+  * If the "atomic swap" operation is available on this architecture,

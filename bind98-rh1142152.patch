@@ -1,0 +1,96 @@
+diff -up bind-9.8.2rc1/bin/named/server.c.dyndb_gssapi_error bind-9.8.2rc1/bin/named/server.c
+--- bind-9.8.2rc1/bin/named/server.c.dyndb_gssapi_error	2014-12-08 15:46:36.441576145 +0100
++++ bind-9.8.2rc1/bin/named/server.c	2014-12-08 15:49:29.421706998 +0100
+@@ -1210,6 +1210,12 @@ configure_dynamic_db(const cfg_obj_t *dy
+ 	CHECK(dns_dynamic_db_load(libname, name, mctx, argv, dyndb_args));
+ 
+ cleanup:
++
++	if (result != ISC_R_SUCCESS)
++		isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL,
++		              NS_LOGMODULE_SERVER, ISC_LOG_ERROR,
++		              "dynamic database '%s' configuration failed: %s",
++		              name, isc_result_totext(result));
+ 	if (argv != NULL)
+ 		isc_mem_free(mctx, argv);
+ 
+@@ -1894,6 +1900,7 @@ configure_view(dns_view_t *view, cfg_obj
+ 	dns_acl_t *clients = NULL, *mapped = NULL, *excluded = NULL;
+ 	unsigned int query_timeout;
+ 	struct cfg_context *nzctx;
++    dns_dyndb_arguments_t *args = NULL;
+ 
+ 	REQUIRE(DNS_VIEW_VALID(view));
+ 
+@@ -2991,8 +2998,6 @@ configure_view(dns_view_t *view, cfg_obj
+ 		(void)cfg_map_get(config, "dynamic-db", &dynamic_db_list);
+ 	element = cfg_list_first(dynamic_db_list);
+ 	if (element != NULL) {
+-		dns_dyndb_arguments_t *args;
+-
+ 		args = dns_dyndb_arguments_create(mctx);
+ 		if (args == NULL) {
+ 			result = ISC_R_NOMEMORY;
+@@ -3005,11 +3010,8 @@ configure_view(dns_view_t *view, cfg_obj
+ 		while (element != NULL) {
+ 			obj = cfg_listelt_value(element);
+ 			CHECK(configure_dynamic_db(obj, mctx, args));
+-		
+ 			element = cfg_list_next(element);
+ 		}
+-
+-		dns_dyndb_arguments_destroy(mctx, args);
+ 	}
+ 
+ 	/*
+@@ -3257,6 +3259,8 @@ configure_view(dns_view_t *view, cfg_obj
+ 
+ 	if (cache != NULL)
+ 		dns_cache_detach(&cache);
++	if (args != NULL)
++		dns_dyndb_arguments_destroy(mctx, &args);
+ 
+ 	return (result);
+ }
+diff -up bind-9.8.2rc1/lib/dns/dynamic_db.c.dyndb_gssapi_error bind-9.8.2rc1/lib/dns/dynamic_db.c
+--- bind-9.8.2rc1/lib/dns/dynamic_db.c.dyndb_gssapi_error	2014-12-08 15:46:36.387576104 +0100
++++ bind-9.8.2rc1/lib/dns/dynamic_db.c	2014-12-08 15:46:36.471576168 +0100
+@@ -280,9 +280,15 @@ dns_dyndb_arguments_create(isc_mem_t *mc
+ }
+ 
+ void
+-dns_dyndb_arguments_destroy(isc_mem_t *mctx, dns_dyndb_arguments_t *args)
++dns_dyndb_arguments_destroy(isc_mem_t *mctx, dns_dyndb_arguments_t **argsp)
+ {
+-	REQUIRE(args != NULL);
++	dns_dyndb_arguments_t *args;
++
++	REQUIRE(argsp != NULL);
++
++	args = *argsp;
++	if (args == NULL)
++		return;
+ 
+ 	dns_dyndb_set_view(args, NULL);
+ 	dns_dyndb_set_zonemgr(args, NULL);
+@@ -290,6 +296,8 @@ dns_dyndb_arguments_destroy(isc_mem_t *m
+ 	dns_dyndb_set_timermgr(args, NULL);
+ 
+ 	isc_mem_put(mctx, args, sizeof(*args));
++
++	*argsp = NULL;
+ }
+ 
+ void
+diff -up bind-9.8.2rc1/lib/dns/include/dns/dynamic_db.h.dyndb_gssapi_error bind-9.8.2rc1/lib/dns/include/dns/dynamic_db.h
+--- bind-9.8.2rc1/lib/dns/include/dns/dynamic_db.h.dyndb_gssapi_error	2014-12-08 15:46:36.387576104 +0100
++++ bind-9.8.2rc1/lib/dns/include/dns/dynamic_db.h	2014-12-08 15:46:36.471576168 +0100
+@@ -35,7 +35,7 @@ isc_result_t dns_dynamic_db_load(const c
+ void dns_dynamic_db_cleanup(isc_boolean_t exiting);
+ 
+ dns_dyndb_arguments_t *dns_dyndb_arguments_create(isc_mem_t *mctx);
+-void dns_dyndb_arguments_destroy(isc_mem_t *mctx, dns_dyndb_arguments_t *args);
++void dns_dyndb_arguments_destroy(isc_mem_t *mctx, dns_dyndb_arguments_t **argsp);
+ 
+ void dns_dyndb_set_view(dns_dyndb_arguments_t *args, dns_view_t *view);
+ dns_view_t *dns_dyndb_get_view(dns_dyndb_arguments_t *args);

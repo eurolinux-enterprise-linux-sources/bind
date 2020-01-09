@@ -1,0 +1,24 @@
+diff -up bind-9.7.3-P3/bin/named/main.c.rh725577 bind-9.7.3-P3/bin/named/main.c
+--- bind-9.7.3-P3/bin/named/main.c.rh725577	2011-08-12 14:41:42.165633397 +0200
++++ bind-9.7.3-P3/bin/named/main.c	2011-08-12 14:41:52.275632694 +0200
+@@ -858,8 +858,6 @@ setup(void) {
+ 
+ static void
+ cleanup(void) {
+-	dns_dynamic_db_cleanup(ISC_TRUE);
+-
+ 	destroy_managers();
+ 
+ 	ns_server_destroy(&ns_g_server);
+diff -up bind-9.7.3-P3/bin/named/server.c.rh725577 bind-9.7.3-P3/bin/named/server.c
+--- bind-9.7.3-P3/bin/named/server.c.rh725577	2011-08-12 14:41:58.773632243 +0200
++++ bind-9.7.3-P3/bin/named/server.c	2011-08-12 14:42:19.972630770 +0200
+@@ -4849,6 +4849,8 @@ shutdown_server(isc_task_t *task, isc_ev
+ 			dns_view_detach(&view);
+ 	}
+ 
++	dns_dynamic_db_cleanup(ISC_TRUE);
++
+ 	while ((nsc = ISC_LIST_HEAD(server->cachelist)) != NULL) {
+ 		ISC_LIST_UNLINK(server->cachelist, nsc, link);
+ 		dns_cache_detach(&nsc->cache);

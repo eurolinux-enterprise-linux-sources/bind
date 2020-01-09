@@ -1,0 +1,16 @@
+diff -up bind-9.8.2rc1/lib/bind9/check.c.rh853806 bind-9.8.2rc1/lib/bind9/check.c
+--- bind-9.8.2rc1/lib/bind9/check.c.rh853806	2012-09-18 15:57:36.761871651 +0200
++++ bind-9.8.2rc1/lib/bind9/check.c	2012-09-18 15:58:28.229228634 +0200
+@@ -1288,8 +1288,10 @@ check_zoneconf(const cfg_obj_t *zconfig,
+ 	{ "also-notify", MASTERZONE | SLAVEZONE },
+ 	{ "dialup", MASTERZONE | SLAVEZONE | STUBZONE },
+ 	{ "delegation-only", HINTZONE | STUBZONE | DELEGATIONZONE },
+-	{ "forward", MASTERZONE | SLAVEZONE | STUBZONE | FORWARDZONE },
+-	{ "forwarders", MASTERZONE | SLAVEZONE | STUBZONE | FORWARDZONE },
++	{ "forward", MASTERZONE | SLAVEZONE | STUBZONE |
++	  STATICSTUBZONE | FORWARDZONE },
++	{ "forwarders", MASTERZONE | SLAVEZONE | STUBZONE |
++	  STATICSTUBZONE | FORWARDZONE },
+ 	{ "maintain-ixfr-base", MASTERZONE | SLAVEZONE },
+ 	{ "max-ixfr-log-size", MASTERZONE | SLAVEZONE },
+ 	{ "notify-source", MASTERZONE | SLAVEZONE },

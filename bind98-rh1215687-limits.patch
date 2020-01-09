@@ -1,0 +1,78 @@
+--- bind-9.8.2rc1/lib/dns/resolver.c.orig	2015-05-06 13:28:16.000000000 +0800
++++ bind-9.8.2rc1/lib/dns/resolver.c	2015-05-06 13:28:18.000000000 +0800
+@@ -1503,7 +1503,7 @@
+ 			result = dns_dispatch_getudp(res->dispatchmgr,
+ 						     res->socketmgr,
+ 						     res->taskmgr, &addr,
+-						     4096, 1000, 32768, 16411,
++						     4096, 20000, 32768, 16411,
+ 						     16433, attrs, attrmask,
+ 						     &query->dispatch);
+ 			if (result != ISC_R_SUCCESS)
+--- bind-9.8.2rc1/bin/named/interfacemgr.c.orig	2015-05-06 18:06:53.000000000 +0800
++++ bind-9.8.2rc1/bin/named/interfacemgr.c	2015-05-06 18:06:57.000000000 +0800
+@@ -260,7 +260,7 @@
+ 	attrmask |= DNS_DISPATCHATTR_IPV4 | DNS_DISPATCHATTR_IPV6;
+ 	result = dns_dispatch_getudp(ifp->mgr->dispatchmgr, ns_g_socketmgr,
+ 				     ns_g_taskmgr, &ifp->addr,
+-				     4096, 1000, 32768, 8219, 8237,
++				     4096, 32768, 32768, 8219, 8237,
+ 				     attrs, attrmask, &ifp->udpdispatch);
+ 	if (result != ISC_R_SUCCESS) {
+ 		isc_log_write(IFMGR_COMMON_LOGARGS, ISC_LOG_ERROR,
+--- bind-9.8.2rc1/lib/dns/request.c.orig	2015-05-06 18:08:16.000000000 +0800
++++ bind-9.8.2rc1/lib/dns/request.c	2015-05-06 18:08:22.000000000 +0800
+@@ -601,7 +601,7 @@
+ 				    requestmgr->socketmgr,
+ 				    requestmgr->taskmgr,
+ 				    srcaddr, 4096,
+-				    1000, 32768, 16411, 16433,
++				    32768, 32768, 16411, 16433,
+ 				    attrs, attrmask,
+ 				    dispatchp));
+ }
+--- bind-9.8.2rc1/bin/named/server.c.orig	2015-05-06 17:54:18.000000000 +0800
++++ bind-9.8.2rc1/bin/named/server.c	2015-05-06 18:34:22.000000000 +0800
+@@ -900,7 +900,7 @@
+ 	}
+ 	if (isc_sockaddr_getport(&sa) == 0) {
+ 		attrs |= DNS_DISPATCHATTR_EXCLUSIVE;
+-		maxdispatchbuffers = 4096;
++		maxdispatchbuffers = 32768;
+ 	} else {
+ 		INSIST(obj != NULL);
+ 		if (is_firstview) {
+@@ -909,7 +909,7 @@
+ 				    "suppresses port randomization and can be "
+ 				    "insecure.");
+ 		}
+-		maxdispatchbuffers = 1000;
++		maxdispatchbuffers = 32768;
+ 	}
+ 
+ 	attrmask = 0;
+@@ -6019,7 +6019,7 @@
+ 
+ 	result = dns_dispatch_getudp(ns_g_dispatchmgr, ns_g_socketmgr,
+ 				     ns_g_taskmgr, &dispatch->addr, 4096,
+-				     1000, 32768, 16411, 16433,
++				     32768, 32768, 16411, 16433,
+ 				     attrs, attrmask, &dispatch->dispatch);
+ 	if (result != ISC_R_SUCCESS)
+ 		goto cleanup;
+--- bind-9.8.2rc1/lib/dns/dispatch.c.orig	2015-05-07 07:57:08.000000000 +0800
++++ bind-9.8.2rc1/lib/dns/dispatch.c	2015-05-07 07:57:10.000000000 +0800
+@@ -2140,9 +2140,12 @@
+ 		isc_mempool_associatelock(mgr->bpool, &mgr->pool_lock);
+ 	}
+ 
++	if (maxrequests < DNS_DISPATCH_POOLSOCKS * 2)
++		maxrequests = DNS_DISPATCH_POOLSOCKS * 2;
++
+ 	/* Create or adjust socket pool */
+ 	if (mgr->spool != NULL) {
+-		isc_mempool_setmaxalloc(mgr->spool, DNS_DISPATCH_POOLSOCKS * 2);
++		isc_mempool_setmaxalloc(mgr->spool, maxrequests);
+ 		UNLOCK(&mgr->buffer_lock);
+ 		return (ISC_R_SUCCESS);
+ 	}

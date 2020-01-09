@@ -1,0 +1,66 @@
+diff --git a/lib/dns/rbtdb.c b/lib/dns/rbtdb.c
+index 8e43823..d7f8c6f 100644
+--- a/lib/dns/rbtdb.c
++++ b/lib/dns/rbtdb.c
+@@ -1513,14 +1513,19 @@ delete_node(dns_rbtdb_t *rbtdb, dns_rbtnode_t *node)
+ 	switch (node->nsec) {
+ 	case DNS_RBT_NSEC_NORMAL:
+ #ifdef BIND9
+-		if (rbtdb->rpz_cidr != NULL) {
+-			dns_fixedname_init(&fname);
+-			name = dns_fixedname_name(&fname);
+-			dns_rbt_fullnamefromnode(node, name);
+-			dns_rpz_cidr_deleteip(rbtdb->rpz_cidr, name);
+-		}
++		/*
++		 * Though this may be wasteful, it has to be done before
++		 * node is deleted.
++		 */
++		dns_fixedname_init(&fname);
++		name = dns_fixedname_name(&fname);
++		dns_rbt_fullnamefromnode(node, name);
+ #endif
+ 		result = dns_rbt_deletenode(rbtdb->tree, node, ISC_FALSE);
++#ifdef BIND9
++		if (result == ISC_R_SUCCESS && rbtdb->rpz_cidr != NULL)
++			dns_rpz_cidr_deleteip(rbtdb->rpz_cidr, name);
++#endif
+ 		break;
+ 	case DNS_RBT_NSEC_HAS_NSEC:
+ 		dns_fixedname_init(&fname);
+@@ -1555,7 +1560,8 @@ delete_node(dns_rbtdb_t *rbtdb, dns_rbtnode_t *node)
+ 		}
+ 		result = dns_rbt_deletenode(rbtdb->tree, node, ISC_FALSE);
+ #ifdef BIND9
+-		dns_rpz_cidr_deleteip(rbtdb->rpz_cidr, name);
++		if (result == ISC_R_SUCCESS && rbtdb->rpz_cidr != NULL)
++			dns_rpz_cidr_deleteip(rbtdb->rpz_cidr, name);
+ #endif
+ 		break;
+ 	case DNS_RBT_NSEC_NSEC:
+@@ -6880,7 +6886,7 @@ loadnode(dns_rbtdb_t *rbtdb, dns_name_t *name, dns_rbtnode_t **nodep,
+ 	}
+ 
+ 	nsecresult = dns_rbt_deletenode(rbtdb->tree, *nodep, ISC_FALSE);
+-	if (nsecresult != ISC_R_SUCCESS)
++	if (nsecresult != ISC_R_SUCCESS) {
+ 		isc_log_write(dns_lctx,
+ 			      DNS_LOGCATEGORY_DATABASE,
+ 			      DNS_LOGMODULE_CACHE,
+@@ -6890,6 +6896,16 @@ loadnode(dns_rbtdb_t *rbtdb, dns_name_t *name, dns_rbtnode_t **nodep,
+ 			      "dns_rbt_addnode(NSEC): %s",
+ 			      isc_result_totext(nsecresult),
+ 			      isc_result_totext(noderesult));
++	}
++#ifdef BIND9
++	else {
++		/*
++		 * Clean rpz entries added above.
++		 */
++		if (rbtdb->rpz_cidr != NULL)
++			dns_rpz_cidr_deleteip(rbtdb->rpz_cidr, name);
++	}
++#endif
+ 	return (noderesult);
+ }
+ 

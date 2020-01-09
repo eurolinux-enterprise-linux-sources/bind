@@ -1,0 +1,12 @@
+diff -up bind-9.8.2rc1/lib/dns/include/dns/Makefile.in.rh927914 bind-9.8.2rc1/lib/dns/include/dns/Makefile.in
+--- bind-9.8.2rc1/lib/dns/include/dns/Makefile.in.rh927914	2013-03-27 17:01:26.073323053 +0100
++++ bind-9.8.2rc1/lib/dns/include/dns/Makefile.in	2013-03-27 17:01:39.243291775 +0100
+@@ -32,7 +32,7 @@ HEADERS =	acl.h adb.h byaddr.h cache.h c
+ 		rootns.h rpz.h sdb.h sdlz.h secalg.h secproto.h soa.h ssu.h \
+ 		tcpmsg.h time.h tkey.h tsig.h ttl.h types.h \
+ 		validator.h version.h view.h xfrin.h zone.h zonekey.h zt.h \
+-		forward.h
++		forward.h rrl.h
+ 
+ GENHEADERS =	enumclass.h enumtype.h rdatastruct.h
+ 

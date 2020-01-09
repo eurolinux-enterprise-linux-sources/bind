@@ -1,0 +1,39 @@
+diff --git a/bin/named/query.c b/bin/named/query.c
+index fd76e8c..9b7a8f8 100644
+--- a/bin/named/query.c
++++ b/bin/named/query.c
+@@ -3336,6 +3336,11 @@ query_addwildcardproof(ns_client_t *client, dns_db_t *db,
+ 		dns_name_copy(name, cname, NULL);
+ 		while (result == DNS_R_NXDOMAIN) {
+ 			labels = dns_name_countlabels(cname) - 1;
++			/*
++			 * Sanity check.
++			 */
++			if (labels == 0U)
++				goto cleanup;
+ 			dns_name_split(cname, labels, NULL, cname);
+ 			result = dns_db_find(db, cname, version,
+ 					     dns_rdatatype_nsec,
+diff --git a/lib/dns/sdb.c b/lib/dns/sdb.c
+index f644991..0209e1d 100644
+--- a/lib/dns/sdb.c
++++ b/lib/dns/sdb.c
+@@ -841,10 +841,17 @@ find(dns_db_t *db, dns_name_t *name, dns_dbversion_t *version,
+ 		 */
+ 		dns_name_getlabelsequence(name, nlabels - i, i, xname);
+ 		result = findnode(db, xname, ISC_FALSE, &node);
+-		if (result != ISC_R_SUCCESS) {
++		if (result == ISC_R_NOTFOUND) {
++			/*
++			 * No data at zone apex?
++			 */
++			if (i == olabels)
++				return (DNS_R_BADDB);
+ 			result = DNS_R_NXDOMAIN;
+ 			continue;
+ 		}
++		if (result != ISC_R_SUCCESS)
++			return (result);
+ 
+ 		/*
+ 		 * Look for a DNAME at the current label, unless this is

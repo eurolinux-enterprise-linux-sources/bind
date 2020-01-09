@@ -1,0 +1,238 @@
+From 10a793b63ab848a836758e19f79b8a18dbeb64cb Mon Sep 17 00:00:00 2001
+From: Tomas Hozza <thozza@redhat.com>
+Date: Tue, 18 Mar 2014 14:24:46 +0100
+Subject: [PATCH] Patch adding referrals-per-second and nodata-per-second
+ option.
+
+Patch is based on initial patch from Martin Osvald.
+This patch removed the patching of named-sdb, as it
+is not needed. It also adds docummenation for the
+new options into the ARM.
+
+Signed-off-by: Tomas Hozza <thozza@redhat.com>
+---
+ bin/named/server.c        | 30 ++++++++++++++++++++++++++++++
+ doc/arm/Bv9ARM-book.xml   | 11 +++++++++++
+ lib/dns/include/dns/rrl.h |  5 +++++
+ lib/dns/rrl.c             | 32 ++++++++++++++++++++++++++++----
+ lib/isccfg/namedconf.c    |  3 ++-
+ 5 files changed, 76 insertions(+), 5 deletions(-)
+
+diff --git a/bin/named/server.c b/bin/named/server.c
+index f709fca..f1dc228 100644
+--- a/bin/named/server.c
++++ b/bin/named/server.c
+@@ -1663,6 +1663,36 @@ configure_rrl(dns_view_t *view, const cfg_obj_t *config, const cfg_obj_t *map) {
+ 	rrl->scaled_responses_per_second = rrl->responses_per_second;
+ 
+ 	/*
++	 * The default referrals rate is the response rate,
++	 *  and so off by default.
++	 */
++	i = rrl->responses_per_second;
++	obj = NULL;
++	result = cfg_map_get(map, "referrals-per-second", &obj);
++	if (result == ISC_R_SUCCESS) {
++		i = cfg_obj_asuint32(obj);
++		CHECK_RRL(obj, i <= DNS_RRL_MAX_RATE,
++			  "referrals-per-second %d > %d",
++			  i, DNS_RRL_MAX_RATE);
++	}
++	rrl->referrals_per_second = i;
++	rrl->scaled_referrals_per_second = rrl->referrals_per_second;
++        /*
++	 * The default nodata rate is the response rate,
++	 * and so off by default.
++	 */
++	i = rrl->responses_per_second;
++	obj = NULL;
++	result = cfg_map_get(map, "nodata-per-second", &obj);
++	if (result == ISC_R_SUCCESS) {
++		i = cfg_obj_asuint32(obj);
++		CHECK_RRL(obj, i <= DNS_RRL_MAX_RATE,
++			  "nodata-per-second %d > %d",
++			  i, DNS_RRL_MAX_RATE);
++	}
++	rrl->nodata_per_second = i;
++	rrl->scaled_nodata_per_second = rrl->nodata_per_second;
++	/*
+ 	 * The default error rate is the response rate,
+ 	 * and so off by default.
+ 	 */
+diff --git a/doc/arm/Bv9ARM-book.xml b/doc/arm/Bv9ARM-book.xml
+index 3f1e671..007a33c 100644
+--- a/doc/arm/Bv9ARM-book.xml
++++ b/doc/arm/Bv9ARM-book.xml
+@@ -5241,6 +5241,8 @@ badresp:1,adberr:0,findfail:0,valfail:0]
+     <optional> deny-answer-aliases { <replaceable>namelist</replaceable> } <optional> except-from { <replaceable>namelist</replaceable> } </optional>;</optional>
+     <optional> rate-limit {
+        <optional> responses-per-second <replaceable>number</replaceable> ; </optional>
++       <optional> referrals-per-second <replaceable>number</replaceable> ; </optional>
++       <optional> nodata-per-second <replaceable>number</replaceable> ; </optional>
+        <optional> errors-per-second <replaceable>number</replaceable> ; </optional>
+        <optional> nxdomains-per-second <replaceable>number</replaceable> ; </optional>
+        <optional> all-per-second <replaceable>number</replaceable> ; </optional>
+@@ -9575,6 +9577,11 @@ ns.domain.com.rpz-nsdname   CNAME   .
+            length specified with <command>IPv4-prefix-length</command>
+            (default 24) or <command>IPv6-prefix-length</command>
+            (default 56) are assumed to come from a single DNS client.
++           All empty (NODATA) responses for a valid domain,
++           regardless of query type, are identical.
++           Responses in the NODATA class are limited by
++           <command>nodata-per-second</command>
++           (default <command>responses-per-second</command>).
+            Requests for a name that result in DNS NXDOMAIN
+            errors are considered identical.
+            This controls some attacks using random names, but
+@@ -9584,6 +9591,10 @@ ns.domain.com.rpz-nsdname   CNAME   .
+            <command>responses-per-second</command> value,
+            but it can be set separately with
+            <command>nxdomains-per-second</command>.
++           Referrals or delegations to the server of a given
++           domain are identical and are limited by
++           <command>referrals-per-second</command>
++           (default <command>responses-per-second</command>).
+            All requests for all names or types that result in DNS errors
+            such as SERVFAIL and FORMERR (but not NXDOMAIN) are considered
+            identical.
+diff --git a/lib/dns/include/dns/rrl.h b/lib/dns/include/dns/rrl.h
+index 4a9d8a7..c62b75c 100644
+--- a/lib/dns/include/dns/rrl.h
++++ b/lib/dns/include/dns/rrl.h
+@@ -72,6 +72,7 @@ typedef enum {
+ 	DNS_RRL_RTYPE_FREE = 0,
+ 	DNS_RRL_RTYPE_QUERY,
+ 	DNS_RRL_RTYPE_DELEGATION,
++	DNS_RRL_RTYPE_NODATA,
+ 	DNS_RRL_RTYPE_NXDOMAIN,
+ 	DNS_RRL_RTYPE_ERROR,
+ 	DNS_RRL_RTYPE_ALL,
+@@ -200,6 +201,8 @@ struct dns_rrl {
+ 
+ 	isc_boolean_t	log_only;
+ 	int		responses_per_second;
++	int		referrals_per_second;
++	int		nodata_per_second;
+ 	int		errors_per_second;
+ 	int		nxdomains_per_second;
+ 	int		all_per_second;
+@@ -216,6 +219,8 @@ struct dns_rrl {
+ 	isc_stdtime_t	qps_time;
+ 	double		qps;
+ 	int		scaled_responses_per_second;
++	int		scaled_referrals_per_second;
++	int		scaled_nodata_per_second;
+ 	int		scaled_errors_per_second;
+ 	int		scaled_nxdomains_per_second;
+ 	int		scaled_all_per_second;
+diff --git a/lib/dns/rrl.c b/lib/dns/rrl.c
+index 9cd2ff8..bd4c276 100644
+--- a/lib/dns/rrl.c
++++ b/lib/dns/rrl.c
+@@ -401,7 +401,8 @@ make_key(const dns_rrl_t *rrl, dns_rrl_key_t *key,
+ 
+ 	key->s.rtype = rtype;
+ 	if (rtype == DNS_RRL_RTYPE_QUERY ||
+-	    rtype == DNS_RRL_RTYPE_DELEGATION) {
++	    rtype == DNS_RRL_RTYPE_DELEGATION ||
++	    rtype == DNS_RRL_RTYPE_NODATA) {
+ 		key->s.qclass = qclass;
+ 		key->s.qtype = qtype;
+ 	}
+@@ -445,9 +446,14 @@ response_balance(const dns_rrl_t *rrl, const dns_rrl_entry_t *e, int age) {
+ 	if (balance < 0)
+ 		switch (e->key.s.rtype) {
+ 		case DNS_RRL_RTYPE_QUERY:
+-		case DNS_RRL_RTYPE_DELEGATION:
+ 			rate = rrl->scaled_responses_per_second;
+ 			break;
++		case DNS_RRL_RTYPE_DELEGATION:
++			rate = rrl->scaled_referrals_per_second;
++			break;
++		case DNS_RRL_RTYPE_NODATA:
++			rate = rrl->scaled_nodata_per_second;
++			break;
+ 		case DNS_RRL_RTYPE_NXDOMAIN:
+ 			rate = rrl->scaled_nxdomains_per_second;
+ 			break;
+@@ -602,10 +608,17 @@ debit_rrl_entry(dns_rrl_t *rrl, dns_rrl_entry_t *e, double qps, double scale,
+ 	 */
+ 	switch (e->key.s.rtype) {
+ 	case DNS_RRL_RTYPE_QUERY:
+-	case DNS_RRL_RTYPE_DELEGATION:
+ 		rate = rrl->responses_per_second;
+ 		ratep = &rrl->scaled_responses_per_second;
+ 		break;
++	case DNS_RRL_RTYPE_DELEGATION:
++		rate = rrl->referrals_per_second;
++		ratep = &rrl->scaled_referrals_per_second;
++		break;
++	case DNS_RRL_RTYPE_NODATA:
++		rate = rrl->nodata_per_second;
++		ratep = &rrl->scaled_nodata_per_second;
++		break;
+ 	case DNS_RRL_RTYPE_NXDOMAIN:
+ 		rate = rrl->nxdomains_per_second;
+ 		ratep = &rrl->scaled_nxdomains_per_second;
+@@ -646,9 +659,14 @@ debit_rrl_entry(dns_rrl_t *rrl, dns_rrl_entry_t *e, double qps, double scale,
+ 			if (isc_log_wouldlog(dns_lctx, DNS_RRL_LOG_DEBUG1)) {
+ 				switch (e->key.s.rtype) {
+ 				case DNS_RRL_RTYPE_QUERY:
+-				case DNS_RRL_RTYPE_DELEGATION:
+ 					rate_str = "responses-per-second";
+ 					break;
++				case DNS_RRL_RTYPE_DELEGATION:
++					rate_str = "referrals-per-second";
++					break;
++				case DNS_RRL_RTYPE_NODATA:
++					rate_str = "nodata-per-second";
++					break;
+ 				case DNS_RRL_RTYPE_NXDOMAIN:
+ 					rate_str = "nxdomains-per-second";
+ 					break;
+@@ -848,6 +866,9 @@ make_log_buf(dns_rrl_t *rrl, dns_rrl_entry_t *e,
+ 	case DNS_RRL_RTYPE_DELEGATION:
+ 		ADD_LOG_CSTR(&lb, "referral");
+ 		break;
++	case DNS_RRL_RTYPE_NODATA:
++		ADD_LOG_CSTR(&lb, "NODATA response");
++		break;
+ 	case DNS_RRL_RTYPE_NXDOMAIN:
+ 		ADD_LOG_CSTR(&lb, "NXDOMAIN response");
+ 		break;
+@@ -889,6 +910,7 @@ make_log_buf(dns_rrl_t *rrl, dns_rrl_entry_t *e,
+ 
+ 	if (e->key.s.rtype == DNS_RRL_RTYPE_QUERY ||
+ 	    e->key.s.rtype == DNS_RRL_RTYPE_DELEGATION ||
++	    e->key.s.rtype == DNS_RRL_RTYPE_NODATA ||
+ 	    e->key.s.rtype == DNS_RRL_RTYPE_NXDOMAIN) {
+ 		qbuf = get_qname(rrl, e);
+ 		if (save_qname && qbuf == NULL &&
+@@ -1109,6 +1131,8 @@ dns_rrl(dns_view_t *view,
+ 		rtype = DNS_RRL_RTYPE_QUERY;
+ 	else if (resp_result == DNS_R_DELEGATION)
+ 		rtype = DNS_RRL_RTYPE_DELEGATION;
++	else if (resp_result == DNS_R_NXRRSET)
++		rtype = DNS_RRL_RTYPE_NODATA;
+ 	else if (resp_result == DNS_R_NXDOMAIN)
+ 		rtype = DNS_RRL_RTYPE_NXDOMAIN;
+ 	else
+diff --git a/lib/isccfg/namedconf.c b/lib/isccfg/namedconf.c
+index 992a9ce..cb788c9 100644
+--- a/lib/isccfg/namedconf.c
++++ b/lib/isccfg/namedconf.c
+@@ -1133,9 +1133,10 @@ static cfg_type_t cfg_type_rpz = {
+  */
+ static cfg_clausedef_t rrl_clauses[] = {
+ 	{ "responses-per-second", &cfg_type_uint32, 0 },
++	{ "referrals-per-second", &cfg_type_uint32, 0 },
++	{ "nodata-per-second", &cfg_type_uint32, 0 },
+ 	{ "errors-per-second", &cfg_type_uint32, 0 },
+ 	{ "nxdomains-per-second", &cfg_type_uint32, 0 },
+-	{ "responses-per-second", &cfg_type_uint32, 0 },
+ 	{ "all-per-second", &cfg_type_uint32, 0 },
+ 	{ "slip", &cfg_type_uint32, 0 },
+ 	{ "window", &cfg_type_uint32, 0 },
+-- 
+1.8.5.3
+

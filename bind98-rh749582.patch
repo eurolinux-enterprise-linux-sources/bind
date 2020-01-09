@@ -1,0 +1,12 @@
+diff -up bind-9.8.2rc1/bin/named/controlconf.c.rh749582 bind-9.8.2rc1/bin/named/controlconf.c
+--- bind-9.8.2rc1/bin/named/controlconf.c.rh749582	2012-02-15 14:44:12.643342563 +0100
++++ bind-9.8.2rc1/bin/named/controlconf.c	2012-02-15 14:44:56.102270835 +0100
+@@ -381,6 +381,8 @@ control_recvmessage(isc_task_t *task, is
+ 			if (request != NULL)
+ 				isccc_sexpr_free(&request);
+ 		} else {
++			if (request != NULL)
++				isccc_sexpr_free(&request);
+ 			log_invalid(&conn->ccmsg, result);
+ 			goto cleanup;
+ 		}

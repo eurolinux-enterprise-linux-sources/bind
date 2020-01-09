@@ -1,0 +1,45 @@
+diff -up bind-9.7.2-P3/bin/named-sdb/query.c.rh623190 bind-9.7.2-P3/bin/named-sdb/query.c
+--- bind-9.7.2-P3/bin/named-sdb/query.c.rh623190	2011-01-05 14:06:27.914595204 +0100
++++ bind-9.7.2-P3/bin/named-sdb/query.c	2011-01-05 14:08:11.201100688 +0100
+@@ -771,9 +771,16 @@ query_getzonedb(ns_client_t *client, dns
+ 			     &zone);
+ 	if (result == DNS_R_PARTIALMATCH)
+ 		partial = ISC_TRUE;
++retry:
+ 	if (result == ISC_R_SUCCESS || result == DNS_R_PARTIALMATCH)
+ 		result = dns_zone_getdb(zone, &db);
+ 
++	/* Try to reconnect to database if zone is stored via SDB */
++	if (result == DNS_R_NOTLOADED && dns_zone_getfile(zone) == NULL) {
++		result = dns_zone_load(zone);
++		goto retry;
++	}
++
+ 	if (result != ISC_R_SUCCESS)
+ 		goto fail;
+ 
+diff -up bind-9.7.2-P3/contrib/sdb/pgsql/pgsqldb.c.rh623190 bind-9.7.2-P3/contrib/sdb/pgsql/pgsqldb.c
+--- bind-9.7.2-P3/contrib/sdb/pgsql/pgsqldb.c.rh623190	2011-01-05 14:06:27.924593897 +0100
++++ bind-9.7.2-P3/contrib/sdb/pgsql/pgsqldb.c	2011-01-05 14:07:03.629927831 +0100
+@@ -34,6 +34,7 @@
+ #include <dns/result.h>
+ 
+ #include <named/globals.h>
++#include <named/log.h>
+ 
+ #include "pgsqldb.h"
+ 
+@@ -275,9 +276,12 @@ pgsqldb_create(const char *zone, int arg
+ 	if (argc > 4)
+ 		STRDUP_OR_FAIL(dbi->passwd, argv[4]);
+ 
++	/* If connection fails then retry in _allnodes or _lookup functions */
+ 	result = db_connect(dbi);
+ 	if (result != ISC_R_SUCCESS)
+-		goto cleanup;
++		isc_log_write(ns_g_lctx, NS_LOGCATEGORY_GENERAL,
++			      NS_LOGMODULE_SERVER, ISC_LOG_ERROR,
++			      "Failed to connect to PostgreSQL database");
+ 
+ 	*dbdata = dbi;
+ 	return (ISC_R_SUCCESS);
