@@ -21,7 +21,7 @@ Summary:  The Berkeley Internet Name Domain (BIND) DNS (Domain Name System) serv
 Name:     bind
 License:  ISC
 Version:  9.8.2
-Release:  0.68.%{PREVER}%{?dist}
+Release:  0.68.%{PREVER}%{?dist}.1
 Epoch:    32
 Url:      http://www.isc.org/products/BIND/
 Buildroot:%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
@@ -149,6 +149,8 @@ Patch195:bind98-rh1416035.patch
 Patch196:bind98-rh1426626.patch
 # ISC 4858
 Patch197: bind99-CVE-2017-3145.patch
+# ISC 4997
+Patch198: bind99-CVE-2018-5740.patch
 
 # SDB patches
 Patch11: bind-9.3.2b2-sdbsrc.patch
@@ -348,6 +350,7 @@ Based on the code from Jan "Yenya" Kasprzak <kas@fi.muni.cz>
 %patch195 -p1 -b .rh1416035
 %patch196 -p1 -b .rh1426626
 %patch197 -p1 -b .CVE-2017-3145
+%patch198 -p1 -b .CVE-2018-5740
 
 # Override upstream builtin keys
 cp -fp %{SOURCE29} bind.keys
@@ -878,6 +881,9 @@ rm -rf ${RPM_BUILD_ROOT}
 %endif
 
 %changelog
+* Thu Aug 09 2018 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.68.rc1.1
+- Fix CVE-2018-5740
+
 * Tue Jan 16 2018 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.68.rc1
 - Fix CVE-2017-3145
 
