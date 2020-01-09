@@ -21,7 +21,7 @@ Summary:  The Berkeley Internet Name Domain (BIND) DNS (Domain Name System) serv
 Name:     bind
 License:  ISC
 Version:  9.8.2
-Release:  0.68.%{PREVER}%{?dist}.1
+Release:  0.68.%{PREVER}%{?dist}.3
 Epoch:    32
 Url:      http://www.isc.org/products/BIND/
 Buildroot:%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
@@ -151,6 +151,8 @@ Patch196:bind98-rh1426626.patch
 Patch197: bind99-CVE-2017-3145.patch
 # ISC 4997
 Patch198: bind99-CVE-2018-5740.patch
+# https://bugzilla.redhat.com/show_bug.cgi?id=1702554
+Patch199: bind98-CVE-2018-5743.patch
 
 # SDB patches
 Patch11: bind-9.3.2b2-sdbsrc.patch
@@ -351,6 +353,7 @@ Based on the code from Jan "Yenya" Kasprzak <kas@fi.muni.cz>
 %patch196 -p1 -b .rh1426626
 %patch197 -p1 -b .CVE-2017-3145
 %patch198 -p1 -b .CVE-2018-5740
+%patch199 -p1 -b .CVE-2018-5743
 
 # Override upstream builtin keys
 cp -fp %{SOURCE29} bind.keys
@@ -496,11 +499,7 @@ make Bv9ARM.html
 popd
 
 # Remove this backup file to avoid be picked by %%doc directive
-rm -f doc/arm/Bv9ARM-book.xml.rh873624
-rm -f doc/arm/Bv9ARM-book.xml.rrl_rebase_fix
-rm -f doc/arm/Bv9ARM-book.xml.lwres_tasks_clients
-rm -f doc/arm/Bv9ARM-book.xml.CVE-2014-8500
-rm -f doc/arm/Bv9ARM-book.xml.rh1325081
+rm -f doc/arm/Bv9ARM-book.xml.*
 
 %if %{test}
 %check
@@ -881,6 +880,12 @@ rm -rf ${RPM_BUILD_ROOT}
 %endif
 
 %changelog
+* Fri Jun 07 2019 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.68.rc1.3
+- Use only selected documentation files
+
+* Wed May 15 2019 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.68.rc1.2
+- Fix CVE-2018-5743
+
 * Thu Aug 09 2018 Petr Menšík <pemensik@redhat.com> - 32:9.8.2-0.68.rc1.1
 - Fix CVE-2018-5740
 
